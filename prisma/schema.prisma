@@ -1,0 +1,202 @@
+// Habitat Attendance App - Prisma Schema
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// Auth.js Models
+// ============================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// Application Models
+// ============================================
+
+enum UserRole {
+  PARENT
+  TEACHER
+  DIRECTOR
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(PARENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Auth.js relations
+  accounts Account[]
+  sessions Session[]
+
+  // Application relations
+  children           ParentChild[]
+  submittedExcuses   Excuse[]      @relation("ExcuseSubmittedBy")
+  recordedAttendance Attendance[]  @relation("AttendanceRecordedBy")
+  auditLogs          AuditLog[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Child {
+  id        String   @id @default(cuid())
+  firstName String
+  lastName  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  parents    ParentChild[]
+  attendance Attendance[]
+  excuses    Excuse[]
+
+  @@index([active])
+}
+
+model ParentChild {
+  id        String   @id @default(cuid())
+  parentId  String
+  childId   String
+  createdAt DateTime @default(now())
+
+  parent User  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child  Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId])
+  @@index([parentId])
+  @@index([childId])
+}
+
+enum Presence {
+  PRESENT
+  ABSENT
+}
+
+enum ExcuseStatus {
+  NONE
+  EXCUSED
+  UNEXCUSED
+}
+
+model Attendance {
+  id           String       @id @default(cuid())
+  childId      String
+  date         DateTime     @db.Date
+  presence     Presence
+  excuseStatus ExcuseStatus @default(NONE)
+  excuseId     String?
+  recordedById String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  child      Child   @relation(fields: [childId], references: [id], onDelete: Cascade)
+  excuse     Excuse? @relation(fields: [excuseId], references: [id], onDelete: SetNull)
+  recordedBy User?   @relation("AttendanceRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([childId, date])
+  @@index([childId])
+  @@index([date])
+  @@index([excuseId])
+}
+
+model Excuse {
+  id           String   @id @default(cuid())
+  childId      String
+  fromDate     DateTime @db.Date
+  toDate       DateTime @db.Date
+  reason       String?
+  submittedById String
+  submittedAt  DateTime @default(now())
+  autoApproved Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  child       Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  submittedBy User         @relation("ExcuseSubmittedBy", fields: [submittedById], references: [id], onDelete: Cascade)
+  attendance  Attendance[]
+
+  @@index([childId])
+  @@index([submittedById])
+  @@index([fromDate, toDate])
+}
+
+model ClosedDay {
+  id          String   @id @default(cuid())
+  date        DateTime @unique @db.Date
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+model AuditLog {
+  id            String      @id @default(cuid())
+  userId        String?
+  action        AuditAction
+  entityType    String
+  entityId      String
+  previousValue Json?
+  newValue      Json?
+  createdAt     DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
