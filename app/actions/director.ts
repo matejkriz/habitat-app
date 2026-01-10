@@ -2,7 +2,13 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { UserRole, Presence, ExcuseStatus, AuditAction, Prisma } from "@prisma/client";
+import {
+  UserRole,
+  Presence,
+  ExcuseStatus,
+  AuditAction,
+  Prisma,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 // Type for audit log with included user relation
@@ -18,6 +24,31 @@ type AuditLogWithUser = Prisma.AuditLogGetPayload<{
   };
 }>;
 
+// Return type for dashboard stats
+export type DashboardStats = {
+  today: {
+    present: number;
+    absent: number;
+    total: number;
+    recorded: boolean;
+  };
+  month: {
+    totalRecords: number;
+    presentCount: number;
+    absentCount: number;
+    excusedCount: number;
+    unexcusedCount: number;
+  };
+  recentExcuses: Array<{
+    id: string;
+    childName: string;
+    fromDate: Date;
+    toDate: Date;
+    reason: string | null;
+    submittedAt: Date;
+  }>;
+};
+
 /**
  * Ensure user is director
  */
@@ -32,7 +63,7 @@ async function requireDirector() {
 /**
  * Get dashboard overview stats
  */
-export async function getDashboardStats() {
+export async function getDashboardStats(): Promise<DashboardStats> {
   await requireDirector();
 
   const today = new Date();
@@ -58,7 +89,9 @@ export async function getDashboardStats() {
 
   // Get unexcused absences this month
   const unexcusedCount = monthAttendance.filter(
-    (a) => a.presence === Presence.ABSENT && a.excuseStatus === ExcuseStatus.UNEXCUSED
+    (a) =>
+      a.presence === Presence.ABSENT &&
+      a.excuseStatus === ExcuseStatus.UNEXCUSED
   ).length;
 
   // Get recent excuses pending review
@@ -86,15 +119,20 @@ export async function getDashboardStats() {
 
   return {
     today: {
-      present: todayAttendance.filter((a) => a.presence === Presence.PRESENT).length,
-      absent: todayAttendance.filter((a) => a.presence === Presence.ABSENT).length,
+      present: todayAttendance.filter((a) => a.presence === Presence.PRESENT)
+        .length,
+      absent: todayAttendance.filter((a) => a.presence === Presence.ABSENT)
+        .length,
       total: childrenCount,
       recorded: todayAttendance.length > 0,
     },
     month: {
       totalRecords: monthAttendance.length,
-      presentCount: monthAttendance.filter((a) => a.presence === Presence.PRESENT).length,
-      absentCount: monthAttendance.filter((a) => a.presence === Presence.ABSENT).length,
+      presentCount: monthAttendance.filter(
+        (a) => a.presence === Presence.PRESENT
+      ).length,
+      absentCount: monthAttendance.filter((a) => a.presence === Presence.ABSENT)
+        .length,
       excusedCount: monthAttendance.filter(
         (a) => a.excuseStatus === ExcuseStatus.EXCUSED
       ).length,
@@ -194,7 +232,9 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
       presence: Presence.ABSENT,
     },
     data: {
-      excuseStatus: autoApproved ? ExcuseStatus.EXCUSED : ExcuseStatus.UNEXCUSED,
+      excuseStatus: autoApproved
+        ? ExcuseStatus.EXCUSED
+        : ExcuseStatus.UNEXCUSED,
     },
   });
 
@@ -363,7 +403,14 @@ export async function exportAttendanceCSV(
   });
 
   // Build CSV
-  const headers = ["Datum", "Jméno", "Příjmení", "Přítomnost", "Stav omluvy", "Důvod"];
+  const headers = [
+    "Datum",
+    "Jméno",
+    "Příjmení",
+    "Přítomnost",
+    "Stav omluvy",
+    "Důvod",
+  ];
   const rows = attendance.map((a) => [
     a.date.toLocaleDateString("cs-CZ"),
     a.child.firstName,
