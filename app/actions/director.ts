@@ -2,8 +2,21 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { UserRole, Presence, ExcuseStatus, AuditAction } from "@prisma/client";
+import { UserRole, Presence, ExcuseStatus, AuditAction, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+
+// Type for audit log with included user relation
+type AuditLogWithUser = Prisma.AuditLogGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        name: true;
+        email: true;
+      };
+    };
+  };
+}>;
 
 /**
  * Ensure user is director
@@ -284,7 +297,7 @@ export async function removeClosedDay(id: string) {
 /**
  * Get audit logs
  */
-export async function getAuditLogs(limit = 50) {
+export async function getAuditLogs(limit = 50): Promise<AuditLogWithUser[]> {
   await requireDirector();
 
   const logs = await prisma.auditLog.findMany({
