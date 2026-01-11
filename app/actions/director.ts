@@ -431,3 +431,331 @@ export async function exportAttendanceCSV(
 
   return csvContent;
 }
+
+// ============================================
+// Children Management
+// ============================================
+
+/**
+ * Type for child with parents
+ */
+export type ChildWithParents = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  active: boolean;
+  createdAt: Date;
+  parents: Array<{
+    id: string;
+    name: string | null;
+    email: string | null;
+  }>;
+};
+
+/**
+ * Get all children with their assigned parents
+ */
+export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
+  await requireDirector();
+
+  const children = await prisma.child.findMany({
+    include: {
+      parents: {
+        include: {
+          parent: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ active: "desc" }, { lastName: "asc" }, { firstName: "asc" }],
+  });
+
+  return children.map((child) => ({
+    id: child.id,
+    firstName: child.firstName,
+    lastName: child.lastName,
+    active: child.active,
+    createdAt: child.createdAt,
+    parents: child.parents.map((pc) => ({
+      id: pc.parent.id,
+      name: pc.parent.name,
+      email: pc.parent.email,
+    })),
+  }));
+}
+
+/**
+ * Get all parents (users with PARENT role)
+ */
+export async function getAllParents() {
+  await requireDirector();
+
+  const parents = await prisma.user.findMany({
+    where: { role: UserRole.PARENT },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+    orderBy: [{ name: "asc" }, { email: "asc" }],
+  });
+
+  return parents;
+}
+
+/**
+ * Create a new child
+ */
+export async function createChild(firstName: string, lastName: string) {
+  const user = await requireDirector();
+
+  if (!firstName.trim() || !lastName.trim()) {
+    throw new Error("Jméno a příjmení jsou povinné");
+  }
+
+  const child = await prisma.child.create({
+    data: {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      active: true,
+    },
+  });
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: AuditAction.CREATE,
+      entityType: "Child",
+      entityId: child.id,
+      newValue: { firstName: child.firstName, lastName: child.lastName },
+    },
+  });
+
+  revalidatePath("/reditel/deti");
+  revalidatePath("/ucitel/dochazka");
+
+  return child;
+}
+
+/**
+ * Update a child's information
+ */
+export async function updateChild(
+  childId: string,
+  data: { firstName?: string; lastName?: string }
+) {
+  const user = await requireDirector();
+
+  const child = await prisma.child.findUnique({
+    where: { id: childId },
+  });
+
+  if (!child) {
+    throw new Error("Dítě nebylo nalezeno");
+  }
+
+  const updateData: { firstName?: string; lastName?: string } = {};
+  if (data.firstName !== undefined) {
+    if (!data.firstName.trim()) {
+      throw new Error("Jméno je povinné");
+    }
+    updateData.firstName = data.firstName.trim();
+  }
+  if (data.lastName !== undefined) {
+    if (!data.lastName.trim()) {
+      throw new Error("Příjmení je povinné");
+    }
+    updateData.lastName = data.lastName.trim();
+  }
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: AuditAction.UPDATE,
+      entityType: "Child",
+      entityId: childId,
+      previousValue: { firstName: child.firstName, lastName: child.lastName },
+      newValue: updateData,
+    },
+  });
+
+  const updated = await prisma.child.update({
+    where: { id: childId },
+    data: updateData,
+  });
+
+  revalidatePath("/reditel/deti");
+  revalidatePath("/ucitel/dochazka");
+  revalidatePath("/rodic");
+
+  return updated;
+}
+
+/**
+ * Toggle child active status
+ */
+export async function toggleChildActive(childId: string, active: boolean) {
+  const user = await requireDirector();
+
+  const child = await prisma.child.findUnique({
+    where: { id: childId },
+  });
+
+  if (!child) {
+    throw new Error("Dítě nebylo nalezeno");
+  }
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: AuditAction.UPDATE,
+      entityType: "Child",
+      entityId: childId,
+      previousValue: { active: child.active },
+      newValue: { active },
+    },
+  });
+
+  const updated = await prisma.child.update({
+    where: { id: childId },
+    data: { active },
+  });
+
+  revalidatePath("/reditel/deti");
+  revalidatePath("/ucitel/dochazka");
+
+  return updated;
+}
+
+/**
+ * Assign a parent to a child
+ */
+export async function assignParentToChild(parentId: string, childId: string) {
+  const user = await requireDirector();
+
+  // Verify parent exists and is a PARENT role
+  const parent = await prisma.user.findUnique({
+    where: { id: parentId },
+  });
+
+  if (!parent || parent.role !== UserRole.PARENT) {
+    throw new Error("Rodič nebyl nalezen nebo není rodičovský účet");
+  }
+
+  // Verify child exists
+  const child = await prisma.child.findUnique({
+    where: { id: childId },
+  });
+
+  if (!child) {
+    throw new Error("Dítě nebylo nalezeno");
+  }
+
+  // Check if relationship already exists
+  const existingRelation = await prisma.parentChild.findUnique({
+    where: {
+      parentId_childId: {
+        parentId,
+        childId,
+      },
+    },
+  });
+
+  if (existingRelation) {
+    throw new Error("Rodič je již přiřazen k tomuto dítěti");
+  }
+
+  const parentChild = await prisma.parentChild.create({
+    data: {
+      parentId,
+      childId,
+    },
+  });
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: AuditAction.CREATE,
+      entityType: "ParentChild",
+      entityId: parentChild.id,
+      newValue: {
+        parentId,
+        parentName: parent.name,
+        parentEmail: parent.email,
+        childId,
+        childName: `${child.firstName} ${child.lastName}`,
+      },
+    },
+  });
+
+  revalidatePath("/reditel/deti");
+  revalidatePath("/rodic");
+
+  return parentChild;
+}
+
+/**
+ * Remove a parent from a child
+ */
+export async function removeParentFromChild(parentId: string, childId: string) {
+  const user = await requireDirector();
+
+  const parentChild = await prisma.parentChild.findUnique({
+    where: {
+      parentId_childId: {
+        parentId,
+        childId,
+      },
+    },
+    include: {
+      parent: {
+        select: { name: true, email: true },
+      },
+      child: {
+        select: { firstName: true, lastName: true },
+      },
+    },
+  });
+
+  if (!parentChild) {
+    throw new Error("Vztah rodič-dítě nebyl nalezen");
+  }
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: AuditAction.DELETE,
+      entityType: "ParentChild",
+      entityId: parentChild.id,
+      previousValue: {
+        parentId,
+        parentName: parentChild.parent.name,
+        parentEmail: parentChild.parent.email,
+        childId,
+        childName: `${parentChild.child.firstName} ${parentChild.child.lastName}`,
+      },
+    },
+  });
+
+  await prisma.parentChild.delete({
+    where: {
+      parentId_childId: {
+        parentId,
+        childId,
+      },
+    },
+  });
+
+  revalidatePath("/reditel/deti");
+  revalidatePath("/rodic");
+}

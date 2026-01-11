@@ -182,7 +182,7 @@ async function DashboardContent() {
       </Card>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Link href="/ucitel/dochazka">
           <Card hover className="h-full">
             <CardContent className="pt-6 flex flex-col items-center text-center">
@@ -193,6 +193,20 @@ async function DashboardContent() {
               </div>
               <h3 className="font-semibold text-charcoal">Zapsat docházku</h3>
               <p className="text-sm text-charcoal-light mt-1">Denní zápis přítomnosti</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/reditel/deti">
+          <Card hover className="h-full">
+            <CardContent className="pt-6 flex flex-col items-center text-center">
+              <div className="w-12 h-12 rounded-full bg-gold/10 flex items-center justify-center mb-3">
+                <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              </div>
+              <h3 className="font-semibold text-charcoal">Správa dětí</h3>
+              <p className="text-sm text-charcoal-light mt-1">Děti a rodiče</p>
             </CardContent>
           </Card>
         </Link>
