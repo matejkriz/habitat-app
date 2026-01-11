@@ -88,7 +88,7 @@ export default function ExcuseManagementPage() {
           options={[
             { value: "all", label: "Všechny omluvenky" },
             { value: "pending", label: "Ke schválení" },
-            { value: "approved", label: "Schválené" },
+            { value: "approved", label: "Včas" },
           ]}
           className="w-[200px]"
         />
@@ -105,7 +105,7 @@ export default function ExcuseManagementPage() {
               {filter === "pending"
                 ? "Žádné omluvenky ke schválení"
                 : filter === "approved"
-                ? "Žádné schválené omluvenky"
+                ? "Žádné omluvenky odeslané včas"
                 : "Žádné omluvenky"}
             </p>
           ) : (
@@ -124,7 +124,7 @@ export default function ExcuseManagementPage() {
                         <Badge
                           variant={excuse.autoApproved ? "excused" : "unexcused"}
                         >
-                          {excuse.autoApproved ? "Schváleno" : "Neschváleno"}
+                          {excuse.autoApproved ? "Včas" : "Pozdě"}
                         </Badge>
                       </div>
                       <p className="text-sm text-charcoal-light">

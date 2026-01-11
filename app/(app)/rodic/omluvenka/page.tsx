@@ -121,9 +121,9 @@ export default function NewExcusePage() {
                   <span className="font-semibold">Omluvenka odeslána</span>
                 </div>
                 {success.autoApproved ? (
-                  <p>Omluvenka byla automaticky schválena.</p>
+                  <p>Omluvenka byla odeslána včas – oběd bude odhlášen.</p>
                 ) : (
-                  <p>Omluvenka byla zaznamenána jako neomluvená absence (pozdní odeslání).</p>
+                  <p>Omluvenka byla odeslána pozdě – oběd nebude automaticky odhlášen.</p>
                 )}
               </div>
             )}
@@ -196,20 +196,20 @@ export default function NewExcusePage() {
                     {willAutoApprove ? (
                       <>
                         <p className="font-semibold text-sage-dark">
-                          Omluvenka bude automaticky schválena
+                          Omluvenka bude odeslána včas
                         </p>
                         <p className="text-sm text-charcoal-light mt-1">
-                          Odesláno včas (do {deadline})
+                          Oběd bude automaticky odhlášen (termín do {deadline})
                         </p>
                       </>
                     ) : (
                       <>
                         <p className="font-semibold text-gold-dark">
-                          Omluvenka bude zaznamenána jako neomluvená
+                          Omluvenka bude odeslána pozdě
                         </p>
                         <p className="text-sm text-charcoal-light mt-1">
-                          Termín pro automatické schválení již uplynul ({deadline}).
-                          Bětka může omluvenku dodatečně schválit.
+                          Termín pro odhlášení oběda již uplynul ({deadline}).
+                          Bětka může oběd dodatečně odhlásit.
                         </p>
                       </>
                     )}
