@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@/components/ui";
 import { Suspense } from "react";
 
@@ -21,11 +22,14 @@ function LoginContent() {
       <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-charcoal tracking-wide">
-            H<span className="text-gold">A</span>BIT
-            <span className="text-gold">A</span>T
-          </h1>
-          <p className="text-charcoal-light mt-2">Docházka</p>
+          <Image
+            src="/habitat-logo.webp"
+            alt="Habitat"
+            width={308}
+            height={100}
+            className="h-16 w-auto mx-auto"
+          />
+          <p className="text-charcoal-light mt-4">Docházka</p>
         </div>
 
         {/* Login Card */}
