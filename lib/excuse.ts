@@ -6,6 +6,7 @@ import { prisma } from "./db";
 import { ExcuseStatus, type Excuse } from "@prisma/client";
 import { isAutoApproved, validateExcuseDates } from "./excuse-rules";
 import { getSchoolDaysInRange } from "./school-days";
+import { sendExcuseNotification } from "./slack";
 
 export type ExcuseWithChild = Excuse & {
   child: {
@@ -90,6 +91,33 @@ export async function createExcuse(
       },
     },
   });
+
+  // Send Slack notification (non-blocking)
+  // Fetch child and parent details for the notification
+  const [child, parent] = await Promise.all([
+    prisma.child.findUnique({
+      where: { id: childId },
+      select: { firstName: true, lastName: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: submittedById },
+      select: { name: true },
+    }),
+  ]);
+
+  if (child && parent) {
+    // Fire and forget - don't block the response
+    sendExcuseNotification({
+      childName: `${child.firstName} ${child.lastName}`,
+      parentName: parent.name || "Neznámý rodič",
+      fromDate: normalizedFrom,
+      toDate: normalizedTo,
+      reason,
+      isOnTime: autoApproved,
+    }).catch((error) => {
+      console.error("Failed to send Slack notification:", error);
+    });
+  }
 
   return excuse;
 }
