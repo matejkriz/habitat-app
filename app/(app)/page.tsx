@@ -1,15 +1,15 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getDbUser } from "@/lib/auth";
 import { getRoleDashboard } from "@/lib/auth-utils";
 
 export default async function HomePage() {
-  const session = await auth();
+  const user = await getDbUser();
 
-  if (!session?.user) {
+  if (!user) {
     redirect("/login");
   }
 
   // Redirect to role-specific dashboard
-  const dashboard = getRoleDashboard(session.user.role);
+  const dashboard = getRoleDashboard(user.role);
   redirect(dashboard);
 }

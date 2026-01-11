@@ -10,48 +10,6 @@ datasource db {
 }
 
 // ============================================
-// Auth.js Models
-// ============================================
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-// ============================================
 // Application Models
 // ============================================
 
@@ -62,18 +20,14 @@ enum UserRole {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  role          UserRole  @default(PARENT)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // Auth.js relations
-  accounts Account[]
-  sessions Session[]
+  id        String   @id @default(cuid())
+  clerkId   String   @unique // Clerk user ID
+  name      String?
+  email     String?  @unique
+  image     String?
+  role      UserRole @default(PARENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Application relations
   children           ParentChild[]
@@ -81,6 +35,7 @@ model User {
   recordedAttendance Attendance[]  @relation("AttendanceRecordedBy")
   auditLogs          AuditLog[]
 
+  @@index([clerkId])
   @@index([email])
   @@index([role])
 }

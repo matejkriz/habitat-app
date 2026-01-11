@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getDbUser } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
 import {
   getParentChildren,
@@ -232,8 +232,8 @@ export default async function ParentDashboard({
 }: {
   searchParams: Promise<{ child?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== UserRole.PARENT) {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.PARENT) {
     redirect("/login");
   }
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { getDbUser, type SessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
   UserRole,
@@ -52,12 +52,12 @@ export type DashboardStats = {
 /**
  * Ensure user is director
  */
-async function requireDirector() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== UserRole.DIRECTOR) {
+async function requireDirector(): Promise<SessionUser> {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.DIRECTOR) {
     throw new Error("Unauthorized");
   }
-  return session.user;
+  return user;
 }
 
 /**

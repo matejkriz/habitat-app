@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { getDbUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { UserRole, Presence, ExcuseStatus } from "@prisma/client";
 import { isClosedDay } from "@/lib/school-days";
@@ -11,13 +11,13 @@ import { revalidatePath } from "next/cache";
  * Get children for the current parent
  */
 export async function getParentChildren() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== UserRole.PARENT) {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
   }
 
   const parentChildren = await prisma.parentChild.findMany({
-    where: { parentId: session.user.id },
+    where: { parentId: user.id },
     include: {
       child: true,
     },
@@ -30,14 +30,14 @@ export async function getParentChildren() {
  * Get today's status for a child
  */
 export async function getChildTodayStatus(childId: string) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getDbUser();
+  if (!user) {
     throw new Error("Unauthorized");
   }
 
   // Verify parent has access to this child
-  if (session.user.role === UserRole.PARENT) {
-    const hasAccess = await canSubmitExcuse(session.user.id, childId);
+  if (user.role === UserRole.PARENT) {
+    const hasAccess = await canSubmitExcuse(user.id, childId);
     if (!hasAccess) {
       throw new Error("Access denied");
     }
@@ -86,14 +86,14 @@ export async function getChildAttendanceHistory(
   childId: string,
   limit = 14
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getDbUser();
+  if (!user) {
     throw new Error("Unauthorized");
   }
 
   // Verify parent has access to this child
-  if (session.user.role === UserRole.PARENT) {
-    const hasAccess = await canSubmitExcuse(session.user.id, childId);
+  if (user.role === UserRole.PARENT) {
+    const hasAccess = await canSubmitExcuse(user.id, childId);
     if (!hasAccess) {
       throw new Error("Access denied");
     }
@@ -139,14 +139,14 @@ export async function getChildAttendanceHistory(
  * Get excuses for a child
  */
 export async function getChildExcuses(childId: string, limit = 10) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getDbUser();
+  if (!user) {
     throw new Error("Unauthorized");
   }
 
   // Verify parent has access to this child
-  if (session.user.role === UserRole.PARENT) {
-    const hasAccess = await canSubmitExcuse(session.user.id, childId);
+  if (user.role === UserRole.PARENT) {
+    const hasAccess = await canSubmitExcuse(user.id, childId);
     if (!hasAccess) {
       throw new Error("Access denied");
     }
@@ -172,8 +172,8 @@ export async function getChildExcuses(childId: string, limit = 10) {
  * Submit a new excuse for a child
  */
 export async function submitExcuse(formData: FormData) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== UserRole.PARENT) {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
   }
 
@@ -187,7 +187,7 @@ export async function submitExcuse(formData: FormData) {
   }
 
   // Verify parent has access to this child
-  const hasAccess = await canSubmitExcuse(session.user.id, childId);
+  const hasAccess = await canSubmitExcuse(user.id, childId);
   if (!hasAccess) {
     throw new Error("Access denied");
   }
@@ -200,7 +200,7 @@ export async function submitExcuse(formData: FormData) {
     fromDate,
     toDate,
     reason || null,
-    session.user.id
+    user.id
   );
 
   revalidatePath("/rodic");
@@ -221,14 +221,14 @@ export async function submitExcuse(formData: FormData) {
  * Get attendance statistics for a child
  */
 export async function getChildStats(childId: string) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getDbUser();
+  if (!user) {
     throw new Error("Unauthorized");
   }
 
   // Verify parent has access to this child
-  if (session.user.role === UserRole.PARENT) {
-    const hasAccess = await canSubmitExcuse(session.user.id, childId);
+  if (user.role === UserRole.PARENT) {
+    const hasAccess = await canSubmitExcuse(user.id, childId);
     if (!hasAccess) {
       throw new Error("Access denied");
     }

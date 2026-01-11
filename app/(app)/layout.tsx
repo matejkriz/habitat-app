@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getDbUser } from "@/lib/auth";
 import { AppShell } from "@/components/layout/app-shell";
 
 export default async function AppLayout({
@@ -7,11 +7,11 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const user = await getDbUser();
 
-  if (!session?.user) {
+  if (!user) {
     redirect("/login");
   }
 
-  return <AppShell user={session.user}>{children}</AppShell>;
+  return <AppShell user={user}>{children}</AppShell>;
 }

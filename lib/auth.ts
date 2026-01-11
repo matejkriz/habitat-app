@@ -1,102 +1,177 @@
-import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
-import Apple from "next-auth/providers/apple";
-import { PrismaAdapter } from "@auth/prisma-adapter";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { prisma } from "./db";
 import type { UserRole } from "@prisma/client";
 
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      name?: string | null;
-      email?: string | null;
-      image?: string | null;
-      role: UserRole;
-    };
+export type SessionUser = {
+  id: string;
+  clerkId: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  role: UserRole;
+};
+
+/**
+ * Get or create user from Clerk authentication
+ * Returns the database user with role information
+ *
+ * This function handles three cases:
+ * 1. User exists with matching clerkId - return them
+ * 2. User exists with matching email but different/no clerkId - link the Clerk account
+ * 3. New user - create with default PARENT role
+ */
+export async function getDbUser(): Promise<SessionUser | null> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return null;
   }
 
-  interface User {
-    role: UserRole;
-  }
-}
+  // Try to find existing user by clerkId
+  let user = await prisma.user.findUnique({
+    where: { clerkId: userId },
+  });
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adapter: PrismaAdapter(prisma) as any,
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID!,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-    }),
-    Apple({
-      clientId: process.env.AUTH_APPLE_ID!,
-      clientSecret: process.env.AUTH_APPLE_SECRET!,
-    }),
-  ],
-  session: {
-    strategy: "jwt",
-  },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = user.role;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
-      }
-      return session;
-    },
-    async signIn({ user, account }) {
-      // Allow sign in if user exists or if this is a new account
-      if (!user.email) return false;
+  // If user doesn't exist by clerkId, try to find by email and link
+  if (!user) {
+    const clerkUser = await currentUser();
+    if (!clerkUser) {
+      return null;
+    }
 
-      // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email: user.email },
+    const email = clerkUser.emailAddresses[0]?.emailAddress;
+
+    if (email) {
+      // Check if a user with this email exists (e.g., from seed data)
+      const existingUserByEmail = await prisma.user.findUnique({
+        where: { email },
       });
 
-      // If user exists but with different provider, link the account
-      if (existingUser && account) {
-        const existingAccount = await prisma.account.findUnique({
-          where: {
-            provider_providerAccountId: {
-              provider: account.provider,
-              providerAccountId: account.providerAccountId,
-            },
+      if (existingUserByEmail) {
+        // Link the Clerk account to the existing user
+        user = await prisma.user.update({
+          where: { id: existingUserByEmail.id },
+          data: {
+            clerkId: userId,
+            name:
+              clerkUser.firstName && clerkUser.lastName
+                ? `${clerkUser.firstName} ${clerkUser.lastName}`
+                : existingUserByEmail.name,
+            image: clerkUser.imageUrl ?? existingUserByEmail.image,
           },
         });
-
-        if (!existingAccount) {
-          // Link this new provider to the existing user
-          await prisma.account.create({
-            data: {
-              userId: existingUser.id,
-              type: account.type,
-              provider: account.provider,
-              providerAccountId: account.providerAccountId,
-              refresh_token: account.refresh_token,
-              access_token: account.access_token,
-              expires_at: account.expires_at,
-              token_type: account.token_type,
-              scope: account.scope,
-              id_token: account.id_token,
-              session_state: account.session_state as string | null,
-            },
-          });
-        }
       }
+    }
 
-      return true;
-    },
-  },
-});
+    // If still no user, create a new one
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          clerkId: userId,
+          email: clerkUser.emailAddresses[0]?.emailAddress ?? null,
+          name:
+            clerkUser.firstName && clerkUser.lastName
+              ? `${clerkUser.firstName} ${clerkUser.lastName}`
+              : clerkUser.firstName ?? clerkUser.lastName ?? null,
+          image: clerkUser.imageUrl ?? null,
+          role: "PARENT", // Default role for new users
+        },
+      });
+    }
+  }
+
+  return {
+    id: user.id,
+    clerkId: user.clerkId,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    role: user.role,
+  };
+}
+
+/**
+ * Sync user data from Clerk (call on sign-in to update profile info)
+ */
+export async function syncUserFromClerk(): Promise<SessionUser | null> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return null;
+  }
+
+  const clerkUser = await currentUser();
+  if (!clerkUser) {
+    return null;
+  }
+
+  const email = clerkUser.emailAddresses[0]?.emailAddress ?? null;
+  const name =
+    clerkUser.firstName && clerkUser.lastName
+      ? `${clerkUser.firstName} ${clerkUser.lastName}`
+      : clerkUser.firstName ?? clerkUser.lastName ?? null;
+
+  // First try to find by clerkId
+  let user = await prisma.user.findUnique({
+    where: { clerkId: userId },
+  });
+
+  if (user) {
+    // Update existing user
+    user = await prisma.user.update({
+      where: { clerkId: userId },
+      data: {
+        email,
+        name,
+        image: clerkUser.imageUrl ?? null,
+      },
+    });
+  } else if (email) {
+    // Try to find by email and link
+    const existingUserByEmail = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUserByEmail) {
+      user = await prisma.user.update({
+        where: { id: existingUserByEmail.id },
+        data: {
+          clerkId: userId,
+          name: name ?? existingUserByEmail.name,
+          image: clerkUser.imageUrl ?? existingUserByEmail.image,
+        },
+      });
+    } else {
+      // Create new user
+      user = await prisma.user.create({
+        data: {
+          clerkId: userId,
+          email,
+          name,
+          image: clerkUser.imageUrl ?? null,
+          role: "PARENT",
+        },
+      });
+    }
+  } else {
+    // No email, create new user
+    user = await prisma.user.create({
+      data: {
+        clerkId: userId,
+        email: null,
+        name,
+        image: clerkUser.imageUrl ?? null,
+        role: "PARENT",
+      },
+    });
+  }
+
+  return {
+    id: user.id,
+    clerkId: user.clerkId,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    role: user.role,
+  };
+}

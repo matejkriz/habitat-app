@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { useClerk } from "@clerk/nextjs";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Avatar, Button } from "@/components/ui";
@@ -213,6 +213,11 @@ const roleLabels: Record<UserRole, string> = {
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const navItems = roleNavItems[user.role];
+  const { signOut } = useClerk();
+
+  const handleSignOut = () => {
+    signOut({ redirectUrl: "/login" });
+  };
 
   return (
     <div className="min-h-screen bg-cream">
@@ -227,7 +232,7 @@ export function AppShell({ children, user }: AppShellProps) {
                 alt="Habitat"
                 width={1232}
                 height={400}
-                className="h-8"
+                className="h-8 w-auto"
               />
             </Link>
 
@@ -268,7 +273,7 @@ export function AppShell({ children, user }: AppShellProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={handleSignOut}
                 className="hidden sm:flex"
               >
                 Odhlásit
@@ -295,7 +300,7 @@ export function AppShell({ children, user }: AppShellProps) {
             </Link>
           ))}
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={handleSignOut}
             className="flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium text-charcoal-light"
           >
             <svg

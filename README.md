@@ -12,7 +12,7 @@ Systém docházky a omluvenek pro Dětskou vzdělávací skupinu Habitat Zbrasla
 
 - **Framework**: Next.js 16 (App Router)
 - **UI**: React 19, Tailwind CSS v4
-- **Auth**: Auth.js v5 (Google, Apple)
+- **Auth**: Clerk (Google OAuth, Email OTP)
 - **Databáze**: Vercel Postgres / PostgreSQL
 - **ORM**: Prisma 7
 - **PWA**: Serwist
@@ -32,10 +32,10 @@ cd habitat-app
 bun install
 ```
 
-3. Vytvořte `.env` soubor:
+3. Vytvořte `.env.local` soubor:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 4. Nastavte proměnné prostředí:
@@ -44,37 +44,41 @@ cp .env.example .env
 # Database
 DATABASE_URL="postgres://..."
 
-# Auth.js
-AUTH_SECRET="your-auth-secret"
+# Clerk (https://dashboard.clerk.com)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
+CLERK_SECRET_KEY="sk_test_..."
 
-# Google OAuth
-AUTH_GOOGLE_ID="your-google-client-id"
-AUTH_GOOGLE_SECRET="your-google-client-secret"
-
-# Apple OAuth (optional)
-AUTH_APPLE_ID="your-apple-client-id"
-AUTH_APPLE_SECRET="your-apple-client-secret"
+# Clerk URLs
+NEXT_PUBLIC_CLERK_SIGN_IN_URL="/login"
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/"
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
 ```
 
-5. Vygenerujte Prisma klienta:
+5. Nastavení Clerk:
+
+   - Vytvořte aplikaci na [dashboard.clerk.com](https://dashboard.clerk.com)
+   - Povolte **Email** (s OTP) a **Google** jako metody přihlášení
+   - Zkopírujte API klíče do `.env.local`
+
+6. Vygenerujte Prisma klienta:
 
 ```bash
 bun run db:generate
 ```
 
-6. Pushněte schéma do databáze:
+7. Pushněte schéma do databáze:
 
 ```bash
 bun run db:push
 ```
 
-7. (Volitelně) Naplňte testovacími daty:
+8. (Volitelně) Naplňte testovacími daty:
 
 ```bash
 bun run db:seed
 ```
 
-8. Spusťte vývojový server:
+9. Spusťte vývojový server:
 
 ```bash
 bun run dev
@@ -101,7 +105,7 @@ Aplikace bude dostupná na [http://localhost:3000](http://localhost:3000).
 ```
 app/
 ├── (auth)/
-│   └── login/          # Přihlašovací stránka
+│   └── login/          # Přihlašovací stránka (Clerk SignIn)
 ├── (app)/
 │   ├── rodic/          # Rozhraní pro rodiče
 │   │   └── omluvenka/  # Formulář omluvenky
@@ -112,15 +116,15 @@ app/
 │       ├── volne-dny/  # Správa volných dnů
 │       ├── export/     # Export dat
 │       └── audit/      # Audit log
-├── actions/            # Server actions
-└── api/auth/           # Auth.js API routes
+└── actions/            # Server actions
 
 components/
 ├── ui/                 # Reusable UI komponenty
 └── layout/             # Layout komponenty
 
 lib/
-├── auth.ts             # Auth.js konfigurace
+├── auth.ts             # Clerk auth helpers + DB user sync
+├── auth-utils.ts       # Role-based auth utilities
 ├── db.ts               # Prisma klient
 ├── attendance.ts       # Business logika docházky
 ├── excuse.ts           # Business logika omluvenek
@@ -131,6 +135,15 @@ prisma/
 ├── schema.prisma       # Databázové schéma
 └── seed.ts             # Testovací data
 ```
+
+## Autentizace
+
+Aplikace používá [Clerk](https://clerk.com) pro autentizaci:
+
+- **Email OTP**: Uživatel zadá email a obdrží jednorázový kód
+- **Google OAuth**: Přihlášení přes Google účet
+
+Uživatelé jsou při prvním přihlášení automaticky synchronizováni do databáze. Role (PARENT, TEACHER, DIRECTOR) je potřeba nastavit manuálně v databázi nebo přes Prisma Studio.
 
 ## Pravidla pro omluvenky
 
@@ -146,7 +159,12 @@ prisma/
 
 ## Testovací účty (po spuštění seed)
 
-- **Ředitel**: betka@habitatzbraslav.cz
+Po spuštění seed scriptu jsou v databázi vytvořeni uživatelé s placeholder Clerk ID. Pro správné fungování je potřeba:
+
+1. Vytvořit uživatele v Clerk dashboardu se stejnými emaily
+2. Nebo upravit `clerkId` v databázi na skutečné Clerk user ID po prvním přihlášení
+
+- **Ředitel**: krizmate@gmail.com
 - **Učitel**: ucitel1@habitatzbraslav.cz
 - **Rodič**: rodic1@example.com (2 děti: Anička, Tomáš)
 

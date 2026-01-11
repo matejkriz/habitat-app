@@ -29,17 +29,16 @@ async function main() {
   await prisma.closedDay.deleteMany();
   await prisma.parentChild.deleteMany();
   await prisma.child.deleteMany();
-  await prisma.account.deleteMany();
-  await prisma.session.deleteMany();
   await prisma.user.deleteMany();
 
   // Create Director (Bětka)
+  // Note: clerkId will be updated when the user first logs in via Clerk
   const director = await prisma.user.create({
     data: {
+      clerkId: "clerk_director_placeholder",
       email: "krizmate@gmail.com",
       name: "Bětka",
       role: UserRole.DIRECTOR,
-      emailVerified: new Date(),
     },
   });
   console.log("✅ Created director:", director.name);
@@ -47,19 +46,19 @@ async function main() {
   // Create Teachers
   const teacher1 = await prisma.user.create({
     data: {
+      clerkId: "clerk_teacher1_placeholder",
       email: "ucitel1@habitatzbraslav.cz",
       name: "Jana Nováková",
       role: UserRole.TEACHER,
-      emailVerified: new Date(),
     },
   });
 
   const teacher2 = await prisma.user.create({
     data: {
+      clerkId: "clerk_teacher2_placeholder",
       email: "krizmate+ucitel@gmail.com",
       name: "Matěj",
       role: UserRole.TEACHER,
-      emailVerified: new Date(),
     },
   });
   console.log("✅ Created teachers:", teacher1.name, teacher2.name);
@@ -67,37 +66,37 @@ async function main() {
   // Create Parents
   const parent1 = await prisma.user.create({
     data: {
+      clerkId: "clerk_parent1_placeholder",
       email: "rodic1@example.com",
       name: "Marie Dvořáková",
       role: UserRole.PARENT,
-      emailVerified: new Date(),
     },
   });
 
   const parent2 = await prisma.user.create({
     data: {
+      clerkId: "clerk_parent2_placeholder",
       email: "krizmate+rodic@gmail.com",
       name: "Jan Dvořák",
       role: UserRole.PARENT,
-      emailVerified: new Date(),
     },
   });
 
   const parent3 = await prisma.user.create({
     data: {
+      clerkId: "clerk_parent3_placeholder",
       email: "rodic3@example.com",
       name: "Eva Černá",
       role: UserRole.PARENT,
-      emailVerified: new Date(),
     },
   });
 
   const parent4 = await prisma.user.create({
     data: {
+      clerkId: "clerk_parent4_placeholder",
       email: "rodic4@example.com",
       name: "Tomáš Malý",
       role: UserRole.PARENT,
-      emailVerified: new Date(),
     },
   });
   console.log("✅ Created parents");
@@ -273,11 +272,17 @@ async function main() {
   console.log(`✅ Created ${attendanceRecords.length} attendance records`);
 
   console.log("\n🎉 Database seeded successfully!");
-  console.log("\n📋 Test accounts:");
-  console.log("  Director: skola@habitatzbraslav.cz");
+  console.log(
+    "\n📋 Test accounts (Clerk IDs will be assigned on first login):"
+  );
+  console.log("  Director: krizmate@gmail.com");
   console.log("  Teacher: ucitel1@habitatzbraslav.cz");
   console.log("  Parent: rodic1@example.com (2 children: Anička, Tomáš)");
   console.log("  Parent: rodic3@example.com (1 child: Eliška)");
+  console.log(
+    "\n⚠️  Note: Users need to be pre-registered in Clerk, or you can"
+  );
+  console.log("    use webhooks to sync users automatically.");
 }
 
 main()

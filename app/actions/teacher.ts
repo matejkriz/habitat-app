@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { getDbUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { UserRole, Presence } from "@prisma/client";
 import { isClosedDay } from "@/lib/school-days";
@@ -11,8 +11,8 @@ import { revalidatePath } from "next/cache";
  * Get all active children for attendance entry
  */
 export async function getAllChildren() {
-  const session = await auth();
-  if (!session?.user || (session.user.role !== UserRole.TEACHER && session.user.role !== UserRole.DIRECTOR)) {
+  const user = await getDbUser();
+  if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
   }
 
@@ -28,8 +28,8 @@ export async function getAllChildren() {
  * Get attendance for a specific date
  */
 export async function getAttendanceForDate(dateStr: string) {
-  const session = await auth();
-  if (!session?.user || (session.user.role !== UserRole.TEACHER && session.user.role !== UserRole.DIRECTOR)) {
+  const user = await getDbUser();
+  if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
   }
 
@@ -76,8 +76,8 @@ export async function checkDateClosed(dateStr: string) {
  * Save attendance for all children on a specific date
  */
 export async function saveAttendance(formData: FormData) {
-  const session = await auth();
-  if (!session?.user || (session.user.role !== UserRole.TEACHER && session.user.role !== UserRole.DIRECTOR)) {
+  const user = await getDbUser();
+  if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
   }
 
@@ -105,12 +105,12 @@ export async function saveAttendance(formData: FormData) {
   }
 
   // Save all attendance records
-  await recordBulkAttendance(records, date, session.user.id);
+  await recordBulkAttendance(records, date, user.id);
 
   // Create audit log
   await prisma.auditLog.create({
     data: {
-      userId: session.user.id,
+      userId: user.id,
       action: "CREATE",
       entityType: "Attendance",
       entityId: `bulk-${dateStr}`,

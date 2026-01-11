@@ -1,48 +1,23 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Routes that don't require authentication
-const publicRoutes = ["/login", "/api/auth"];
+// Define public routes that don't require authentication
+const isPublicRoute = createRouteMatcher([
+  "/login(.*)",
+  "/sign-up(.*)",
+  "/api/webhooks(.*)",
+]);
 
-// Simple middleware that redirects to login if no session cookie exists
-// Full authentication check happens in the layout/page level
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Allow public routes
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next();
+export default clerkMiddleware(async (auth, request) => {
+  if (!isPublicRoute(request)) {
+    await auth.protect();
   }
-
-  // Allow static files
-  if (pathname.startsWith("/_next") || pathname.includes(".")) {
-    return NextResponse.next();
-  }
-
-  // Check for auth session cookie (Auth.js uses this cookie name)
-  const sessionCookie =
-    request.cookies.get("authjs.session-token") ||
-    request.cookies.get("__Secure-authjs.session-token");
-
-  // Redirect to login if no session cookie
-  if (!sessionCookie) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Skip Next.js internals and all static files, unless found in search params
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes
+    "/(api|trpc)(.*)",
   ],
 };
