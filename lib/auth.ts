@@ -1,6 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { prisma } from "./db";
-import type { UserRole } from "@prisma/client";
+import { db } from "./db";
+import type { UserRole } from "./types";
 
 export type SessionUser = {
   id: string;
@@ -28,7 +28,7 @@ export async function getDbUser(): Promise<SessionUser | null> {
   }
 
   // Try to find existing user by clerkId
-  let user = await prisma.user.findUnique({
+  let user = await db.users.get({
     where: { clerkId: userId },
   });
 
@@ -43,13 +43,13 @@ export async function getDbUser(): Promise<SessionUser | null> {
 
     if (email) {
       // Check if a user with this email exists (e.g., from seed data)
-      const existingUserByEmail = await prisma.user.findUnique({
+      const existingUserByEmail = await db.users.get({
         where: { email },
       });
 
       if (existingUserByEmail) {
         // Link the Clerk account to the existing user
-        user = await prisma.user.update({
+        user = await db.users.update({
           where: { id: existingUserByEmail.id },
           data: {
             clerkId: userId,
@@ -65,7 +65,7 @@ export async function getDbUser(): Promise<SessionUser | null> {
 
     // If still no user, create a new one
     if (!user) {
-      user = await prisma.user.create({
+      user = await db.users.create({
         data: {
           clerkId: userId,
           email: clerkUser.emailAddresses[0]?.emailAddress ?? null,
@@ -112,13 +112,13 @@ export async function syncUserFromClerk(): Promise<SessionUser | null> {
       : clerkUser.firstName ?? clerkUser.lastName ?? null;
 
   // First try to find by clerkId
-  let user = await prisma.user.findUnique({
+  let user = await db.users.get({
     where: { clerkId: userId },
   });
 
   if (user) {
     // Update existing user
-    user = await prisma.user.update({
+    user = await db.users.update({
       where: { clerkId: userId },
       data: {
         email,
@@ -128,12 +128,12 @@ export async function syncUserFromClerk(): Promise<SessionUser | null> {
     });
   } else if (email) {
     // Try to find by email and link
-    const existingUserByEmail = await prisma.user.findUnique({
+    const existingUserByEmail = await db.users.get({
       where: { email },
     });
 
     if (existingUserByEmail) {
-      user = await prisma.user.update({
+      user = await db.users.update({
         where: { id: existingUserByEmail.id },
         data: {
           clerkId: userId,
@@ -143,7 +143,7 @@ export async function syncUserFromClerk(): Promise<SessionUser | null> {
       });
     } else {
       // Create new user
-      user = await prisma.user.create({
+      user = await db.users.create({
         data: {
           clerkId: userId,
           email,
@@ -155,7 +155,7 @@ export async function syncUserFromClerk(): Promise<SessionUser | null> {
     }
   } else {
     // No email, create new user
-    user = await prisma.user.create({
+    user = await db.users.create({
       data: {
         clerkId: userId,
         email: null,

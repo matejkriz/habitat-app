@@ -2,8 +2,8 @@
  * Attendance Business Logic for Habitat
  */
 
-import { prisma } from "./db";
-import { Presence, ExcuseStatus, type Attendance } from "@prisma/client";
+import { db } from "./db";
+import { Presence, ExcuseStatus, type Attendance } from "./types";
 import { isClosedDay, getSchoolDaysInRange } from "./school-days";
 
 export type AttendanceWithChild = Attendance & {
@@ -22,7 +22,7 @@ export async function getChildAttendance(
   startDate: Date,
   endDate: Date
 ): Promise<Attendance[]> {
-  return prisma.attendance.findMany({
+  return db.attendance.list({
     where: {
       childId,
       date: {
@@ -41,7 +41,7 @@ export async function getDailyAttendance(date: Date): Promise<AttendanceWithChil
   const normalizedDate = new Date(date);
   normalizedDate.setHours(0, 0, 0, 0);
 
-  return prisma.attendance.findMany({
+  return db.attendance.list({
     where: {
       date: normalizedDate,
     },
@@ -75,7 +75,7 @@ export async function recordAttendance(
   normalizedDate.setHours(0, 0, 0, 0);
 
   // Check if there's an existing excuse covering this date
-  const excuse = await prisma.excuse.findFirst({
+  const excuse = await db.excuses.first({
     where: {
       childId,
       fromDate: { lte: normalizedDate },
@@ -95,7 +95,7 @@ export async function recordAttendance(
     }
   }
 
-  return prisma.attendance.upsert({
+  return db.attendance.save({
     where: {
       childId_date: {
         childId,
@@ -243,7 +243,7 @@ export async function getTodayStatus(childId: string): Promise<{
     };
   }
 
-  const attendance = await prisma.attendance.findUnique({
+  const attendance = await db.attendance.get({
     where: {
       childId_date: {
         childId,
@@ -267,7 +267,7 @@ export async function overrideExcuseStatus(
   newStatus: ExcuseStatus,
   userId: string
 ): Promise<Attendance> {
-  const current = await prisma.attendance.findUnique({
+  const current = await db.attendance.get({
     where: { id: attendanceId },
   });
 
@@ -276,7 +276,7 @@ export async function overrideExcuseStatus(
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId,
       action: "UPDATE",
@@ -287,7 +287,7 @@ export async function overrideExcuseStatus(
     },
   });
 
-  return prisma.attendance.update({
+  return db.attendance.update({
     where: { id: attendanceId },
     data: { excuseStatus: newStatus },
   });

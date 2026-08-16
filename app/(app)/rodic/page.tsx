@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getDbUser } from "@/lib/auth";
-import { UserRole } from "@prisma/client";
+import { UserRole } from "@/lib/types";
 import {
   getParentChildren,
   getChildTodayStatus,
@@ -23,6 +23,22 @@ import { ChildSelector } from "./child-selector";
 
 export const metadata = {
   title: "Přehled dítěte",
+};
+
+type ParentChildItem = {
+  readonly id: string;
+  readonly firstName: string;
+  readonly lastName: string;
+};
+
+type AttendanceHistoryItem = {
+  readonly id: string;
+  readonly date: Date;
+  readonly presence: "PRESENT" | "ABSENT";
+  readonly excuseStatus: "NONE" | "EXCUSED" | "UNEXCUSED";
+  readonly excuse?: {
+    readonly reason?: string | null;
+  } | null;
 };
 
 async function TodayCard({ childId }: { childId: string }) {
@@ -57,11 +73,10 @@ async function TodayCard({ childId }: { childId: string }) {
         ) : status.attendance ? (
           <div className="flex items-center justify-between p-4 bg-white rounded-lg">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                status.attendance.presence === "PRESENT"
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${status.attendance.presence === "PRESENT"
                   ? "bg-sage/20"
                   : "bg-coral/20"
-              }`}>
+                }`}>
                 {status.attendance.presence === "PRESENT" ? (
                   <svg className="w-5 h-5 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -140,7 +155,8 @@ async function StatsCard({ childId }: { childId: string }) {
 }
 
 async function AttendanceHistory({ childId }: { childId: string }) {
-  const history = await getChildAttendanceHistory(childId);
+  const history =
+    (await getChildAttendanceHistory(childId)) as ReadonlyArray<AttendanceHistoryItem>;
 
   if (history.length === 0) {
     return (
@@ -175,11 +191,10 @@ async function AttendanceHistory({ childId }: { childId: string }) {
               className="flex items-center justify-between p-3 bg-cream rounded-lg"
             >
               <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  record.presence === "PRESENT"
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${record.presence === "PRESENT"
                     ? "bg-sage/20"
                     : "bg-coral/20"
-                }`}>
+                  }`}>
                   {record.presence === "PRESENT" ? (
                     <svg className="w-4 h-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -238,7 +253,8 @@ export default async function ParentDashboard({
   }
 
   const params = await searchParams;
-  const children = await getParentChildren();
+  const children =
+    (await getParentChildren()) as ReadonlyArray<ParentChildItem>;
 
   if (children.length === 0) {
     return (

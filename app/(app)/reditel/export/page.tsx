@@ -28,7 +28,7 @@ export default function ExportPage() {
     async function loadChildren() {
       try {
         const data = await getAllChildren();
-        setChildren(data);
+        setChildren([...data]);
       } catch (error) {
         console.error("Failed to load children:", error);
       }

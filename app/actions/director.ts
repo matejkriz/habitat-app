@@ -1,28 +1,74 @@
 "use server";
 
 import { getDbUser, type SessionUser } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import {
   UserRole,
   Presence,
   ExcuseStatus,
   AuditAction,
-  Prisma,
-} from "@prisma/client";
+  type Attendance,
+  type AuditLog,
+  type Child,
+  type Excuse,
+  type ParentChild,
+  type User,
+} from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
 // Type for audit log with included user relation
-type AuditLogWithUser = Prisma.AuditLogGetPayload<{
-  include: {
-    user: {
-      select: {
-        id: true;
-        name: true;
-        email: true;
-      };
-    };
+export type AuditLogWithUser = AuditLog & {
+  readonly user: {
+    readonly id: string;
+    readonly name: string | null;
+    readonly email: string | null;
+  } | null;
+};
+
+type AttendanceWithChild = Attendance & {
+  readonly child: {
+    readonly id: string;
+    readonly firstName: string;
+    readonly lastName: string;
   };
-}>;
+  readonly excuse?: {
+    readonly reason?: string | null;
+  } | null;
+};
+
+type ExcuseWithChildAndSubmitter = Excuse & {
+  readonly child: {
+    readonly id: string;
+    readonly firstName: string;
+    readonly lastName: string;
+  };
+  readonly submittedBy: {
+    readonly id: string;
+    readonly name: string | null;
+    readonly email: string | null;
+  };
+};
+
+type ChildWithParentsRow = Child & {
+  readonly parents: ReadonlyArray<{
+    readonly parent: {
+      readonly id: string;
+      readonly name: string | null;
+      readonly email: string | null;
+    };
+  }>;
+};
+
+type ParentChildWithParentAndChild = ParentChild & {
+  readonly parent: {
+    readonly name: string | null;
+    readonly email: string | null;
+  };
+  readonly child: {
+    readonly firstName: string;
+    readonly lastName: string;
+  };
+};
 
 // Return type for dashboard stats
 export type DashboardStats = {
@@ -73,19 +119,19 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
   // Get today's attendance
-  const todayAttendance = await prisma.attendance.findMany({
+  const todayAttendance = (await db.attendance.list({
     where: { date: today },
-  });
+  })) as ReadonlyArray<Attendance>;
 
   // Get this month's stats
-  const monthAttendance = await prisma.attendance.findMany({
+  const monthAttendance = (await db.attendance.list({
     where: {
       date: {
         gte: startOfMonth,
         lte: endOfMonth,
       },
     },
-  });
+  })) as ReadonlyArray<Attendance>;
 
   // Get unexcused absences this month
   const unexcusedCount = monthAttendance.filter(
@@ -95,7 +141,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   ).length;
 
   // Get recent excuses pending review
-  const recentExcuses = await prisma.excuse.findMany({
+  const recentExcuses = (await db.excuses.list({
     where: {
       autoApproved: false,
       submittedAt: {
@@ -112,10 +158,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     },
     orderBy: { submittedAt: "desc" },
     take: 5,
-  });
+  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string } }>;
 
   // Get children count
-  const childrenCount = await prisma.child.count({ where: { active: true } });
+  const childrenCount = await db.children.count({ where: { active: true } });
 
   return {
     today: {
@@ -168,7 +214,7 @@ export async function getExcuses(options?: {
     where.autoApproved = false;
   }
 
-  const excuses = await prisma.excuse.findMany({
+  const excuses = (await db.excuses.list({
     where,
     include: {
       child: {
@@ -188,7 +234,7 @@ export async function getExcuses(options?: {
     },
     orderBy: { submittedAt: "desc" },
     take: 100,
-  });
+  })) as ReadonlyArray<ExcuseWithChildAndSubmitter>;
 
   return excuses;
 }
@@ -199,7 +245,7 @@ export async function getExcuses(options?: {
 export async function updateExcuse(excuseId: string, autoApproved: boolean) {
   const user = await requireDirector();
 
-  const excuse = await prisma.excuse.findUnique({
+  const excuse = await db.excuses.get({
     where: { id: excuseId },
   });
 
@@ -208,7 +254,7 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.UPDATE,
@@ -220,13 +266,13 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
   });
 
   // Update excuse
-  const updated = await prisma.excuse.update({
+  const updated = await db.excuses.update({
     where: { id: excuseId },
     data: { autoApproved },
   });
 
   // Update related attendance records
-  await prisma.attendance.updateMany({
+  await db.attendance.bulkUpdate({
     where: {
       excuseId,
       presence: Presence.ABSENT,
@@ -254,7 +300,7 @@ export async function getClosedDays(year?: number) {
   const startOfYear = new Date(targetYear, 0, 1);
   const endOfYear = new Date(targetYear, 11, 31);
 
-  const closedDays = await prisma.closedDay.findMany({
+  const closedDays = await db.closedDays.list({
     where: {
       date: {
         gte: startOfYear,
@@ -276,7 +322,7 @@ export async function addClosedDay(dateStr: string, description?: string) {
   const date = new Date(dateStr);
   date.setHours(0, 0, 0, 0);
 
-  const closedDay = await prisma.closedDay.create({
+  const closedDay = await db.closedDays.create({
     data: {
       date,
       description: description || null,
@@ -284,7 +330,7 @@ export async function addClosedDay(dateStr: string, description?: string) {
   });
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.CREATE,
@@ -305,7 +351,7 @@ export async function addClosedDay(dateStr: string, description?: string) {
 export async function removeClosedDay(id: string) {
   const user = await requireDirector();
 
-  const closedDay = await prisma.closedDay.findUnique({
+  const closedDay = await db.closedDays.get({
     where: { id },
   });
 
@@ -314,7 +360,7 @@ export async function removeClosedDay(id: string) {
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.DELETE,
@@ -327,7 +373,7 @@ export async function removeClosedDay(id: string) {
     },
   });
 
-  await prisma.closedDay.delete({
+  await db.closedDays.remove({
     where: { id },
   });
 
@@ -337,10 +383,12 @@ export async function removeClosedDay(id: string) {
 /**
  * Get audit logs
  */
-export async function getAuditLogs(limit = 50): Promise<AuditLogWithUser[]> {
+export async function getAuditLogs(
+  limit = 50,
+): Promise<ReadonlyArray<AuditLogWithUser>> {
   await requireDirector();
 
-  const logs = await prisma.auditLog.findMany({
+  const logs = (await db.auditLogs.list({
     include: {
       user: {
         select: {
@@ -352,7 +400,7 @@ export async function getAuditLogs(limit = 50): Promise<AuditLogWithUser[]> {
     },
     orderBy: { createdAt: "desc" },
     take: limit,
-  });
+  })) as ReadonlyArray<AuditLogWithUser>;
 
   return logs;
 }
@@ -384,7 +432,7 @@ export async function exportAttendanceCSV(
     where.childId = childId;
   }
 
-  const attendance = await prisma.attendance.findMany({
+  const attendance = (await db.attendance.list({
     where,
     include: {
       child: {
@@ -400,7 +448,7 @@ export async function exportAttendanceCSV(
       },
     },
     orderBy: [{ date: "asc" }, { child: { lastName: "asc" } }],
-  });
+  })) as ReadonlyArray<AttendanceWithChild>;
 
   // Build CSV
   const headers = [
@@ -458,7 +506,7 @@ export type ChildWithParents = {
 export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
   await requireDirector();
 
-  const children = await prisma.child.findMany({
+  const children = (await db.children.list({
     include: {
       parents: {
         include: {
@@ -473,7 +521,7 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
       },
     },
     orderBy: [{ active: "desc" }, { lastName: "asc" }, { firstName: "asc" }],
-  });
+  })) as ReadonlyArray<ChildWithParentsRow>;
 
   return children.map((child) => ({
     id: child.id,
@@ -495,7 +543,7 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
 export async function getAllParents() {
   await requireDirector();
 
-  const parents = await prisma.user.findMany({
+  const parents = (await db.users.list({
     where: { role: UserRole.PARENT },
     select: {
       id: true,
@@ -503,7 +551,7 @@ export async function getAllParents() {
       email: true,
     },
     orderBy: [{ name: "asc" }, { email: "asc" }],
-  });
+  })) as ReadonlyArray<Pick<User, "id" | "name" | "email">>;
 
   return parents;
 }
@@ -518,7 +566,7 @@ export async function createChild(firstName: string, lastName: string) {
     throw new Error("Jméno a příjmení jsou povinné");
   }
 
-  const child = await prisma.child.create({
+  const child = await db.children.create({
     data: {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
@@ -527,7 +575,7 @@ export async function createChild(firstName: string, lastName: string) {
   });
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.CREATE,
@@ -552,7 +600,7 @@ export async function updateChild(
 ) {
   const user = await requireDirector();
 
-  const child = await prisma.child.findUnique({
+  const child = await db.children.get({
     where: { id: childId },
   });
 
@@ -575,7 +623,7 @@ export async function updateChild(
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.UPDATE,
@@ -586,7 +634,7 @@ export async function updateChild(
     },
   });
 
-  const updated = await prisma.child.update({
+  const updated = await db.children.update({
     where: { id: childId },
     data: updateData,
   });
@@ -604,7 +652,7 @@ export async function updateChild(
 export async function toggleChildActive(childId: string, active: boolean) {
   const user = await requireDirector();
 
-  const child = await prisma.child.findUnique({
+  const child = await db.children.get({
     where: { id: childId },
   });
 
@@ -613,7 +661,7 @@ export async function toggleChildActive(childId: string, active: boolean) {
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.UPDATE,
@@ -624,7 +672,7 @@ export async function toggleChildActive(childId: string, active: boolean) {
     },
   });
 
-  const updated = await prisma.child.update({
+  const updated = await db.children.update({
     where: { id: childId },
     data: { active },
   });
@@ -642,7 +690,7 @@ export async function assignParentToChild(parentId: string, childId: string) {
   const user = await requireDirector();
 
   // Verify parent exists and is a PARENT role
-  const parent = await prisma.user.findUnique({
+  const parent = await db.users.get({
     where: { id: parentId },
   });
 
@@ -651,7 +699,7 @@ export async function assignParentToChild(parentId: string, childId: string) {
   }
 
   // Verify child exists
-  const child = await prisma.child.findUnique({
+  const child = await db.children.get({
     where: { id: childId },
   });
 
@@ -660,7 +708,7 @@ export async function assignParentToChild(parentId: string, childId: string) {
   }
 
   // Check if relationship already exists
-  const existingRelation = await prisma.parentChild.findUnique({
+  const existingRelation = await db.parentLinks.get({
     where: {
       parentId_childId: {
         parentId,
@@ -673,7 +721,7 @@ export async function assignParentToChild(parentId: string, childId: string) {
     throw new Error("Rodič je již přiřazen k tomuto dítěti");
   }
 
-  const parentChild = await prisma.parentChild.create({
+  const parentChild = await db.parentLinks.create({
     data: {
       parentId,
       childId,
@@ -681,7 +729,7 @@ export async function assignParentToChild(parentId: string, childId: string) {
   });
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.CREATE,
@@ -709,7 +757,7 @@ export async function assignParentToChild(parentId: string, childId: string) {
 export async function removeParentFromChild(parentId: string, childId: string) {
   const user = await requireDirector();
 
-  const parentChild = await prisma.parentChild.findUnique({
+  const parentChild = (await db.parentLinks.get({
     where: {
       parentId_childId: {
         parentId,
@@ -724,14 +772,14 @@ export async function removeParentFromChild(parentId: string, childId: string) {
         select: { firstName: true, lastName: true },
       },
     },
-  });
+  })) as ParentChildWithParentAndChild | null;
 
   if (!parentChild) {
     throw new Error("Vztah rodič-dítě nebyl nalezen");
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: AuditAction.DELETE,
@@ -747,7 +795,7 @@ export async function removeParentFromChild(parentId: string, childId: string) {
     },
   });
 
-  await prisma.parentChild.delete({
+  await db.parentLinks.remove({
     where: {
       parentId_childId: {
         parentId,

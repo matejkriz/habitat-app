@@ -47,7 +47,7 @@ export default function ExcuseManagementPage() {
             ? { autoApprovedOnly: true }
             : undefined;
         const data = await getExcuses(options);
-        setExcuses(data);
+        setExcuses([...data]);
       } catch (error) {
         console.error("Failed to load excuses:", error);
       } finally {

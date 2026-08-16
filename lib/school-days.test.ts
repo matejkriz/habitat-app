@@ -1,64 +1,10 @@
 import { describe, it, expect } from "vitest";
-
-// These are pure functions that don't require database connection
-// Re-implementing them here for testing purposes
-
-/**
- * Check if a date is a default closed day (Friday, Saturday, Sunday)
- */
-function isDefaultClosedDay(date: Date): boolean {
-  const dayOfWeek = date.getDay();
-  // Sunday = 0, Friday = 5, Saturday = 6
-  return dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6;
-}
-
-/**
- * Check if a date is a school day (Mon-Thu)
- */
-function isSchoolDay(date: Date): boolean {
-  return !isDefaultClosedDay(date);
-}
-
-/**
- * Get the day name in Czech
- */
-function getDayNameCzech(date: Date): string {
-  const days = [
-    "Neděle",
-    "Pondělí",
-    "Úterý",
-    "Středa",
-    "Čtvrtek",
-    "Pátek",
-    "Sobota",
-  ];
-  return days[date.getDay()];
-}
-
-/**
- * Get dates for the current week (Mon-Thu)
- */
-function getCurrentWeekSchoolDays(): Date[] {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-
-  // Find Monday of current week
-  const monday = new Date(today);
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  monday.setDate(today.getDate() - daysFromMonday);
-  monday.setHours(0, 0, 0, 0);
-
-  const schoolDays: Date[] = [];
-
-  // Add Mon-Thu
-  for (let i = 0; i < 4; i++) {
-    const day = new Date(monday);
-    day.setDate(monday.getDate() + i);
-    schoolDays.push(day);
-  }
-
-  return schoolDays;
-}
+import {
+  getCurrentWeekSchoolDays,
+  getDayNameCzech,
+  isDefaultClosedDay,
+  isSchoolDay,
+} from "./school-days";
 
 describe("School Days Logic", () => {
   describe("isDefaultClosedDay", () => {

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { UserRole } from "./types";
 import { getDbUser, type SessionUser } from "./auth";
 
 /**

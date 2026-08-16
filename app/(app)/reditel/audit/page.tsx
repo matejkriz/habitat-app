@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getAuditLogs } from "@/app/actions/director";
+import { getAuditLogs, type AuditLogWithUser } from "@/app/actions/director";
 import {
   Card,
   CardContent,
@@ -32,7 +32,8 @@ const entityLabels: Record<string, string> = {
 };
 
 async function AuditLogContent() {
-  const logs = await getAuditLogs(100);
+  const logs =
+    (await getAuditLogs(100)) as ReadonlyArray<AuditLogWithUser>;
 
   return (
     <div className="space-y-6">
@@ -75,12 +76,11 @@ async function AuditLogContent() {
                       </p>
                     </div>
                   </div>
-
                   {/* Show changes */}
-                  {(log.previousValue || log.newValue) && (
+                  {(log.previousValue != null || log.newValue != null) && (
                     <div className="mt-3 pt-3 border-t border-cream-dark">
                       <div className="grid gap-2 sm:grid-cols-2 text-sm">
-                        {log.previousValue && (
+                        {log.previousValue != null && (
                           <div className="p-2 bg-coral/5 rounded">
                             <p className="text-xs font-medium text-coral mb-1">
                               Původní hodnota
@@ -90,7 +90,7 @@ async function AuditLogContent() {
                             </pre>
                           </div>
                         )}
-                        {log.newValue && (
+                        {log.newValue != null && (
                           <div className="p-2 bg-sage/5 rounded">
                             <p className="text-xs font-medium text-sage mb-1">
                               Nová hodnota

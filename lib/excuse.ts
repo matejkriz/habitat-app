@@ -2,8 +2,8 @@
  * Excuse Management for Habitat
  */
 
-import { prisma } from "./db";
-import { ExcuseStatus, type Excuse } from "@prisma/client";
+import { db } from "./db";
+import { ExcuseStatus, type Excuse } from "./types";
 import { isAutoApproved, validateExcuseDates } from "./excuse-rules";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
@@ -47,7 +47,7 @@ export async function createExcuse(
   const autoApproved = isAutoApproved(now, normalizedFrom);
 
   // Create the excuse
-  const excuse = await prisma.excuse.create({
+  const excuse = await db.excuses.create({
     data: {
       childId,
       fromDate: normalizedFrom,
@@ -62,7 +62,7 @@ export async function createExcuse(
   const schoolDays = await getSchoolDaysInRange(normalizedFrom, normalizedTo);
 
   for (const day of schoolDays) {
-    await prisma.attendance.updateMany({
+    await db.attendance.bulkUpdate({
       where: {
         childId,
         date: day,
@@ -76,7 +76,7 @@ export async function createExcuse(
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: submittedById,
       action: "CREATE",
@@ -95,11 +95,11 @@ export async function createExcuse(
   // Send Slack notification (non-blocking)
   // Fetch child and parent details for the notification
   const [child, parent] = await Promise.all([
-    prisma.child.findUnique({
+    db.children.get({
       where: { id: childId },
       select: { firstName: true, lastName: true },
     }),
-    prisma.user.findUnique({
+    db.users.get({
       where: { id: submittedById },
       select: { name: true },
     }),
@@ -129,7 +129,7 @@ export async function getChildExcuses(
   childId: string,
   limit = 10
 ): Promise<Excuse[]> {
-  return prisma.excuse.findMany({
+  return db.excuses.list({
     where: { childId },
     orderBy: { submittedAt: "desc" },
     take: limit,
@@ -165,7 +165,7 @@ export async function getAllExcuses(options?: {
     where.autoApproved = options.autoApproved;
   }
 
-  return prisma.excuse.findMany({
+  return db.excuses.list({
     where,
     include: {
       child: {
@@ -199,7 +199,7 @@ export async function updateExcuse(
   },
   userId: string
 ): Promise<Excuse> {
-  const current = await prisma.excuse.findUnique({
+  const current = await db.excuses.get({
     where: { id: excuseId },
   });
 
@@ -216,7 +216,7 @@ export async function updateExcuse(
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId,
       action: "UPDATE",
@@ -247,7 +247,7 @@ export async function updateExcuse(
   const normalizedTo = new Date(newToDate);
   normalizedTo.setHours(0, 0, 0, 0);
 
-  const updatedExcuse = await prisma.excuse.update({
+  const updatedExcuse = await db.excuses.update({
     where: { id: excuseId },
     data: {
       fromDate: normalizedFrom,
@@ -267,7 +267,7 @@ export async function updateExcuse(
   const schoolDays = await getSchoolDaysInRange(normalizedFrom, normalizedTo);
 
   for (const day of schoolDays) {
-    await prisma.attendance.updateMany({
+    await db.attendance.bulkUpdate({
       where: {
         childId: current.childId,
         date: day,
@@ -287,7 +287,7 @@ export async function updateExcuse(
  * Delete an excuse (Director only)
  */
 export async function deleteExcuse(excuseId: string, userId: string): Promise<void> {
-  const excuse = await prisma.excuse.findUnique({
+  const excuse = await db.excuses.get({
     where: { id: excuseId },
   });
 
@@ -296,7 +296,7 @@ export async function deleteExcuse(excuseId: string, userId: string): Promise<vo
   }
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId,
       action: "DELETE",
@@ -313,7 +313,7 @@ export async function deleteExcuse(excuseId: string, userId: string): Promise<vo
   });
 
   // Update related attendance records to UNEXCUSED
-  await prisma.attendance.updateMany({
+  await db.attendance.bulkUpdate({
     where: { excuseId },
     data: {
       excuseId: null,
@@ -322,7 +322,7 @@ export async function deleteExcuse(excuseId: string, userId: string): Promise<vo
   });
 
   // Delete the excuse
-  await prisma.excuse.delete({
+  await db.excuses.remove({
     where: { id: excuseId },
   });
 }
@@ -334,7 +334,7 @@ export async function canSubmitExcuse(
   userId: string,
   childId: string
 ): Promise<boolean> {
-  const parentChild = await prisma.parentChild.findUnique({
+  const parentChild = await db.parentLinks.get({
     where: {
       parentId_childId: {
         parentId: userId,

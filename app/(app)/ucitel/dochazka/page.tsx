@@ -48,12 +48,15 @@ export default function TeacherAttendancePage() {
       setIsLoading(true);
       setError("");
       try {
-        const [childrenData, attendanceData] = await Promise.all([
+        const [childrenData, attendanceData] = (await Promise.all([
           getAllChildren(),
           getAttendanceForDate(selectedDate),
-        ]);
+        ])) as [
+          ReadonlyArray<Child>,
+          { readonly isClosed: boolean; readonly attendance: ReadonlyArray<AttendanceRecord> },
+        ];
 
-        setChildren(childrenData);
+        setChildren([...childrenData]);
         setIsClosed(attendanceData.isClosed);
 
         // Initialize attendance state

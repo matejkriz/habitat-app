@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Generated service worker
     "public/sw.js",
+    // Generated Convex files
+    "convex/_generated/**",
   ]),
 ]);
 

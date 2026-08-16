@@ -69,8 +69,8 @@ export default function ChildrenManagementPage() {
         getAllChildrenWithParents(),
         getAllParents(),
       ]);
-      setChildren(childrenData);
-      setParents(parentsData);
+      setChildren([...childrenData]);
+      setParents([...parentsData]);
     } catch (error) {
       console.error("Failed to load data:", error);
     } finally {

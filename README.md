@@ -13,8 +13,7 @@ Systém docházky a omluvenek pro Dětskou vzdělávací skupinu Habitat Zbrasla
 - **Framework**: Next.js 16 (App Router)
 - **UI**: React 19, Tailwind CSS v4
 - **Auth**: Clerk (Google OAuth, Email OTP)
-- **Databáze**: Vercel Postgres / PostgreSQL
-- **ORM**: Prisma 7
+- **Backend databáze**: Convex
 - **PWA**: Serwist
 
 ## Instalace
@@ -29,7 +28,7 @@ cd habitat-app
 2. Nainstalujte závislosti:
 
 ```bash
-bun install
+pnpm install
 ```
 
 3. Vytvořte `.env.local` soubor:
@@ -41,8 +40,8 @@ cp .env.example .env.local
 4. Nastavte proměnné prostředí:
 
 ```env
-# Database
-DATABASE_URL="postgres://..."
+# Convex
+CONVEX_URL="https://your-deployment.convex.cloud"
 
 # Clerk (https://dashboard.clerk.com)
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
@@ -55,50 +54,35 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
 ```
 
 5. Nastavení Clerk:
-
    - Vytvořte aplikaci na [dashboard.clerk.com](https://dashboard.clerk.com)
    - Povolte **Email** (s OTP) a **Google** jako metody přihlášení
    - Zkopírujte API klíče do `.env.local`
 
-6. Vygenerujte Prisma klienta:
+6. Připravte Convex deployment:
 
 ```bash
-bun run db:generate
+pnpm convex:dev
 ```
 
-7. Pushněte schéma do databáze:
+7. Spusťte vývojový server:
 
 ```bash
-bun run db:push
-```
-
-8. (Volitelně) Naplňte testovacími daty:
-
-```bash
-bun run db:seed
-```
-
-9. Spusťte vývojový server:
-
-```bash
-bun run dev
+pnpm dev
 ```
 
 Aplikace bude dostupná na [http://localhost:3000](http://localhost:3000).
 
 ## Skripty
 
-- `bun run dev` - Spustí vývojový server
-- `bun run build` - Vytvoří produkční build
-- `bun run start` - Spustí produkční server
-- `bun run lint` - Spustí ESLint
-- `bun run test` - Spustí testy (watch mode)
-- `bun run test:run` - Spustí testy jednou
-- `bun run db:generate` - Vygeneruje Prisma klienta
-- `bun run db:push` - Pushne schéma do databáze
-- `bun run db:migrate` - Spustí migraci
-- `bun run db:seed` - Naplní databázi testovacími daty
-- `bun run db:studio` - Otevře Prisma Studio
+- `pnpm dev` - Spustí vývojový server
+- `pnpm build` - Vytvoří produkční build
+- `pnpm start` - Spustí produkční server
+- `pnpm lint` - Spustí ESLint
+- `pnpm test` - Spustí testy (watch mode)
+- `pnpm test:run` - Spustí testy jednou
+- `pnpm convex:dev` - Spustí Convex vývojové prostředí
+- `pnpm convex:deploy` - Nasadí Convex backend
+- `pnpm convex:codegen` - Vygeneruje Convex typy
 
 ## Struktura projektu
 
@@ -125,15 +109,15 @@ components/
 lib/
 ├── auth.ts             # Clerk auth helpers + DB user sync
 ├── auth-utils.ts       # Role-based auth utilities
-├── db.ts               # Prisma klient
+├── db.ts               # Convex kompatibilní DB vrstva
 ├── attendance.ts       # Business logika docházky
 ├── excuse.ts           # Business logika omluvenek
 ├── excuse-rules.ts     # Pravidla pro automatické schvalování
 └── school-days.ts      # Logika školních dnů
 
-prisma/
-├── schema.prisma       # Databázové schéma
-└── seed.ts             # Testovací data
+convex/
+├── schema.ts           # Convex databázové schéma
+└── db.ts               # Nízkoúrovňové Convex CRUD funkce
 ```
 
 ## Autentizace
@@ -143,7 +127,7 @@ Aplikace používá [Clerk](https://clerk.com) pro autentizaci:
 - **Email OTP**: Uživatel zadá email a obdrží jednorázový kód
 - **Google OAuth**: Přihlášení přes Google účet
 
-Uživatelé jsou při prvním přihlášení automaticky synchronizováni do databáze. Role (PARENT, TEACHER, DIRECTOR) je potřeba nastavit manuálně v databázi nebo přes Prisma Studio.
+Uživatelé jsou při prvním přihlášení automaticky synchronizováni do databáze. Role (PARENT, TEACHER, DIRECTOR) je potřeba nastavit manuálně v datech uživatele.
 
 ## Pravidla pro omluvenky
 
@@ -156,18 +140,3 @@ Uživatelé jsou při prvním přihlášení automaticky synchronizováni do dat
 - Pondělí až čtvrtek = výukové dny
 - Pátek, sobota, neděle = automaticky zavřeno
 - Ředitel může přidat další volné dny (prázdniny, svátky)
-
-## Testovací účty (po spuštění seed)
-
-Po spuštění seed scriptu jsou v databázi vytvořeni uživatelé s placeholder Clerk ID. Pro správné fungování je potřeba:
-
-1. Vytvořit uživatele v Clerk dashboardu se stejnými emaily
-2. Nebo upravit `clerkId` v databázi na skutečné Clerk user ID po prvním přihlášení
-
-- **Ředitel**: krizmate@gmail.com
-- **Učitel**: ucitel1@habitatzbraslav.cz
-- **Rodič**: rodic1@example.com (2 děti: Anička, Tomáš)
-
-## Licence
-
-Proprietární - Habitat Zbraslav

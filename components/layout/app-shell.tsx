@@ -6,7 +6,7 @@ import { useClerk } from "@clerk/nextjs";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Avatar, Button } from "@/components/ui";
-import type { UserRole } from "@prisma/client";
+import type { UserRole } from "@/lib/types";
 
 interface AppShellProps {
   children: React.ReactNode;

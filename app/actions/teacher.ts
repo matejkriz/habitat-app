@@ -1,33 +1,47 @@
 "use server";
 
 import { getDbUser } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { UserRole, Presence } from "@prisma/client";
+import { db } from "@/lib/db";
+import {
+  UserRole,
+  Presence,
+  ExcuseStatus,
+  type Child,
+  type Attendance,
+} from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
 import { recordBulkAttendance, canEnterAttendance } from "@/lib/attendance";
 import { revalidatePath } from "next/cache";
 
+type AttendanceRecord = {
+  readonly childId: string;
+  readonly presence: Presence;
+  readonly excuseStatus: ExcuseStatus;
+};
+
 /**
  * Get all active children for attendance entry
  */
-export async function getAllChildren() {
+export const getAllChildren = async (): Promise<ReadonlyArray<Child>> => {
   const user = await getDbUser();
   if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
   }
 
-  const children = await prisma.child.findMany({
+  const children = (await db.children.list({
     where: { active: true },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-  });
+  })) as ReadonlyArray<Child>;
 
   return children;
-}
+};
 
 /**
  * Get attendance for a specific date
  */
-export async function getAttendanceForDate(dateStr: string) {
+export const getAttendanceForDate = async (
+  dateStr: string,
+): Promise<{ readonly isClosed: boolean; readonly attendance: ReadonlyArray<AttendanceRecord> }> => {
   const user = await getDbUser();
   if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
@@ -41,7 +55,7 @@ export async function getAttendanceForDate(dateStr: string) {
     return { isClosed: true, attendance: [] };
   }
 
-  const attendance = await prisma.attendance.findMany({
+  const attendance = (await db.attendance.list({
     where: { date },
     include: {
       child: {
@@ -52,7 +66,7 @@ export async function getAttendanceForDate(dateStr: string) {
         },
       },
     },
-  });
+  })) as ReadonlyArray<Attendance>;
 
   return {
     isClosed: false,
@@ -62,20 +76,22 @@ export async function getAttendanceForDate(dateStr: string) {
       excuseStatus: a.excuseStatus,
     })),
   };
-}
+};
 
 /**
  * Check if a date is a closed day
  */
-export async function checkDateClosed(dateStr: string) {
+export const checkDateClosed = async (dateStr: string): Promise<boolean> => {
   const date = new Date(dateStr);
   return isClosedDay(date);
-}
+};
 
 /**
  * Save attendance for all children on a specific date
  */
-export async function saveAttendance(formData: FormData) {
+export const saveAttendance = async (
+  formData: FormData,
+): Promise<{ readonly success: true; readonly recordCount: number }> => {
   const user = await getDbUser();
   if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
@@ -108,7 +124,7 @@ export async function saveAttendance(formData: FormData) {
   await recordBulkAttendance(records, date, user.id);
 
   // Create audit log
-  await prisma.auditLog.create({
+  await db.auditLogs.create({
     data: {
       userId: user.id,
       action: "CREATE",
@@ -126,4 +142,4 @@ export async function saveAttendance(formData: FormData) {
   revalidatePath("/rodic");
 
   return { success: true, recordCount: records.length };
-}
+};

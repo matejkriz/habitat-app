@@ -1,9 +1,9 @@
 {
   "name": "habitat-app",
   "version": "0.1.0",
+  "packageManager": "pnpm@11.21.0",
   "private": true,
   "scripts": {
-    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -12,28 +12,20 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:seed": "bun run prisma/seed.ts",
-    "db:studio": "prisma studio"
-  },
-  "prisma": {
-    "seed": "bun run prisma/seed.ts"
+    "convex:dev": "CONVEX_DISABLE_TELEMETRY=1 convex dev",
+    "convex:deploy": "CONVEX_DISABLE_TELEMETRY=1 convex deploy",
+    "convex:codegen": "CONVEX_DISABLE_TELEMETRY=1 convex codegen --typecheck disable"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.16.0",
-    "@prisma/adapter-pg": "^7.2.0",
-    "@prisma/client": "^7.2.0",
     "@serwist/next": "^9.5.0",
-    "@vercel/postgres": "^0.10.0",
     "clsx": "^2.1.1",
+    "convex": "^1.31.7",
     "dotenv": "^17.2.3",
     "next": "16.1.1",
-    "pg": "^8.16.3",
-    "prisma": "^7.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "serwist": "^9.5.5",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {

@@ -1,35 +1,83 @@
 "use server";
 
 import { getDbUser } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { UserRole, Presence, ExcuseStatus } from "@prisma/client";
+import { db } from "@/lib/db";
+import {
+  UserRole,
+  Presence,
+  ExcuseStatus,
+  type Attendance,
+  type Child,
+  type Excuse,
+} from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
 import { createExcuse, canSubmitExcuse } from "@/lib/excuse";
 import { revalidatePath } from "next/cache";
 
+type ParentChildWithChild = {
+  readonly child: Child;
+};
+
+type ChildTodayStatus = {
+  readonly date: Date;
+  readonly isSchoolDay: boolean;
+  readonly isClosed: boolean;
+  readonly attendance: {
+    readonly presence: Presence;
+    readonly excuseStatus: ExcuseStatus;
+  } | null;
+};
+
+type AttendanceWithOptionalExcuse = Attendance & {
+  readonly excuse?: {
+    readonly id: string;
+    readonly reason: string | null;
+    readonly autoApproved: boolean;
+  } | null;
+};
+
+type AttendanceHistoryItem = {
+  readonly id: string;
+  readonly date: Date;
+  readonly presence: Presence;
+  readonly excuseStatus: ExcuseStatus;
+  readonly excuse: AttendanceWithOptionalExcuse["excuse"];
+};
+
+type ChildExcuseItem = {
+  readonly id: string;
+  readonly fromDate: Date;
+  readonly toDate: Date;
+  readonly reason: string | null;
+  readonly autoApproved: boolean;
+  readonly submittedAt: Date;
+};
+
 /**
  * Get children for the current parent
  */
-export async function getParentChildren() {
+export const getParentChildren = async (): Promise<ReadonlyArray<Child>> => {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
   }
 
-  const parentChildren = await prisma.parentChild.findMany({
+  const parentChildren = (await db.parentLinks.list({
     where: { parentId: user.id },
     include: {
       child: true,
     },
-  });
+  })) as ReadonlyArray<ParentChildWithChild>;
 
   return parentChildren.map((pc) => pc.child);
-}
+};
 
 /**
  * Get today's status for a child
  */
-export async function getChildTodayStatus(childId: string) {
+export const getChildTodayStatus = async (
+  childId: string,
+): Promise<ChildTodayStatus> => {
   const user = await getDbUser();
   if (!user) {
     throw new Error("Unauthorized");
@@ -57,14 +105,14 @@ export async function getChildTodayStatus(childId: string) {
     };
   }
 
-  const attendance = await prisma.attendance.findUnique({
+  const attendance = (await db.attendance.get({
     where: {
       childId_date: {
         childId,
         date: today,
       },
     },
-  });
+  })) as Attendance | null;
 
   return {
     date: today,
@@ -77,15 +125,15 @@ export async function getChildTodayStatus(childId: string) {
         }
       : null,
   };
-}
+};
 
 /**
  * Get attendance history for a child
  */
-export async function getChildAttendanceHistory(
+export const getChildAttendanceHistory = async (
   childId: string,
-  limit = 14
-) {
+  limit = 14,
+): Promise<ReadonlyArray<AttendanceHistoryItem>> => {
   const user = await getDbUser();
   if (!user) {
     throw new Error("Unauthorized");
@@ -106,7 +154,7 @@ export async function getChildAttendanceHistory(
   startDate.setDate(startDate.getDate() - limit);
   startDate.setHours(0, 0, 0, 0);
 
-  const attendance = await prisma.attendance.findMany({
+  const attendance = (await db.attendance.list({
     where: {
       childId,
       date: {
@@ -124,7 +172,7 @@ export async function getChildAttendanceHistory(
         },
       },
     },
-  });
+  })) as ReadonlyArray<AttendanceWithOptionalExcuse>;
 
   return attendance.map((a) => ({
     id: a.id,
@@ -133,12 +181,15 @@ export async function getChildAttendanceHistory(
     excuseStatus: a.excuseStatus,
     excuse: a.excuse,
   }));
-}
+};
 
 /**
  * Get excuses for a child
  */
-export async function getChildExcuses(childId: string, limit = 10) {
+export const getChildExcuses = async (
+  childId: string,
+  limit = 10,
+): Promise<ReadonlyArray<ChildExcuseItem>> => {
   const user = await getDbUser();
   if (!user) {
     throw new Error("Unauthorized");
@@ -152,11 +203,11 @@ export async function getChildExcuses(childId: string, limit = 10) {
     }
   }
 
-  const excuses = await prisma.excuse.findMany({
+  const excuses = (await db.excuses.list({
     where: { childId },
     orderBy: { submittedAt: "desc" },
     take: limit,
-  });
+  })) as ReadonlyArray<Excuse>;
 
   return excuses.map((e) => ({
     id: e.id,
@@ -166,12 +217,12 @@ export async function getChildExcuses(childId: string, limit = 10) {
     autoApproved: e.autoApproved,
     submittedAt: e.submittedAt,
   }));
-}
+};
 
 /**
  * Submit a new excuse for a child
  */
-export async function submitExcuse(formData: FormData) {
+export const submitExcuse = async (formData: FormData) => {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
@@ -215,12 +266,20 @@ export async function submitExcuse(formData: FormData) {
       autoApproved: excuse.autoApproved,
     },
   };
-}
+};
 
 /**
  * Get attendance statistics for a child
  */
-export async function getChildStats(childId: string) {
+export const getChildStats = async (
+  childId: string,
+): Promise<{
+  readonly totalRecords: number;
+  readonly present: number;
+  readonly absent: number;
+  readonly excused: number;
+  readonly unexcused: number;
+}> => {
   const user = await getDbUser();
   if (!user) {
     throw new Error("Unauthorized");
@@ -239,7 +298,7 @@ export async function getChildStats(childId: string) {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  const attendance = await prisma.attendance.findMany({
+  const attendance = (await db.attendance.list({
     where: {
       childId,
       date: {
@@ -247,7 +306,7 @@ export async function getChildStats(childId: string) {
         lte: endOfMonth,
       },
     },
-  });
+  })) as ReadonlyArray<Attendance>;
 
   const stats = {
     totalRecords: attendance.length,
@@ -262,4 +321,4 @@ export async function getChildStats(childId: string) {
   };
 
   return stats;
-}
+};

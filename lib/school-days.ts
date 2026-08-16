@@ -5,7 +5,7 @@
  * Closed days: Friday, Saturday, Sunday (5, 6, 0) + custom closed days
  */
 
-import { prisma } from "./db";
+import { db } from "./db";
 
 /**
  * Check if a date is a default closed day (Friday, Saturday, Sunday)
@@ -30,7 +30,7 @@ export async function getClosedDaysInRange(
   startDate: Date,
   endDate: Date
 ): Promise<Date[]> {
-  const closedDays = await prisma.closedDay.findMany({
+  const closedDays = await db.closedDays.list({
     where: {
       date: {
         gte: startDate,
@@ -40,7 +40,7 @@ export async function getClosedDaysInRange(
     select: { date: true },
   });
 
-  return closedDays.map((cd) => cd.date);
+  return closedDays.map((cd: { date: Date }) => cd.date);
 }
 
 /**
@@ -56,7 +56,7 @@ export async function isClosedDay(date: Date): Promise<boolean> {
   const normalizedDate = new Date(date);
   normalizedDate.setHours(0, 0, 0, 0);
 
-  const closedDay = await prisma.closedDay.findUnique({
+  const closedDay = await db.closedDays.get({
     where: { date: normalizedDate },
   });
 

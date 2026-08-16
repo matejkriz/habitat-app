@@ -36,7 +36,7 @@ export default function NewExcusePage() {
     async function loadChildren() {
       try {
         const loadedChildren = await getParentChildren();
-        setChildren(loadedChildren);
+        setChildren([...loadedChildren]);
         if (!selectedChildId && loadedChildren.length > 0) {
           setSelectedChildId(loadedChildren[0].id);
         }
