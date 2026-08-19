@@ -1,5 +1,13 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { db } from "./db";
+import {
+  DEV_PERSONA_COOKIE,
+  isDevPersonaEmail,
+  isDevPersonaModeAllowed,
+  resolveDevPersonaId,
+  type DevPersonaId,
+} from "./dev-persona";
 import type { UserRole } from "./types";
 
 export type SessionUser = {
@@ -9,6 +17,7 @@ export type SessionUser = {
   email: string | null;
   image: string | null;
   role: UserRole;
+  devPersonaId?: DevPersonaId;
 };
 
 /**
@@ -27,6 +36,37 @@ export async function getDbUser(): Promise<SessionUser | null> {
     return null;
   }
 
+  let clerkUser: Awaited<ReturnType<typeof currentUser>> = null;
+
+  if (isDevPersonaModeAllowed()) {
+    clerkUser = await currentUser();
+    const email = clerkUser?.emailAddresses[0]?.emailAddress;
+
+    if (isDevPersonaEmail(email)) {
+      const cookieStore = await cookies();
+      const personaId = resolveDevPersonaId(
+        cookieStore.get(DEV_PERSONA_COOKIE)?.value,
+      );
+      const persona = await db.users.get({ where: { id: personaId } });
+
+      if (!persona) {
+        throw new Error(
+          `Development persona ${personaId} is missing. Run pnpm seed:dev.`,
+        );
+      }
+
+      return {
+        id: persona.id,
+        clerkId: persona.clerkId,
+        name: persona.name,
+        email: persona.email,
+        image: persona.image,
+        role: persona.role,
+        devPersonaId: personaId,
+      };
+    }
+  }
+
   // Try to find existing user by clerkId
   let user = await db.users.get({
     where: { clerkId: userId },
@@ -34,7 +74,7 @@ export async function getDbUser(): Promise<SessionUser | null> {
 
   // If user doesn't exist by clerkId, try to find by email and link
   if (!user) {
-    const clerkUser = await currentUser();
+    clerkUser ??= await currentUser();
     if (!clerkUser) {
       return null;
     }

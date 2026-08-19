@@ -1,7 +1,13 @@
 import { SignIn } from "@clerk/nextjs";
 import Image from "next/image";
+import {
+  DEV_PERSONA_EMAIL,
+  isDevPersonaModeAllowed,
+} from "@/lib/dev-persona";
 
 export default function LoginPage() {
+  const devPersonaMode = isDevPersonaModeAllowed();
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
       {/* Decorative background */}
@@ -22,6 +28,23 @@ export default function LoginPage() {
           />
           <p className="text-charcoal-light mt-4">Docházka</p>
         </div>
+
+        {devPersonaMode && (
+          <div className="mb-4 rounded-xl border-2 border-coral bg-[#fff8e8] p-3 shadow-[3px_3px_0_0_rgba(224,107,91,0.22)]">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-charcoal px-2 py-1 font-mono text-[10px] font-bold tracking-[0.16em] text-white">
+                DEV LOGIN
+              </span>
+              <p className="text-xs font-bold text-charcoal">
+                Přihlas se účtem {DEV_PERSONA_EMAIL}
+              </p>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-charcoal-light">
+              Po přihlášení můžeš v hlavičce okamžitě přepínat testovací
+              rodiče, učitele a ředitele.
+            </p>
+          </div>
+        )}
 
         {/* Clerk SignIn */}
         <div className="flex justify-center">

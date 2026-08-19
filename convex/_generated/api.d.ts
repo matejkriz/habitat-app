@@ -9,6 +9,8 @@
  */
 
 import type * as db from "../db.js";
+import type * as seed from "../seed.js";
+import type * as seedData from "../seedData.js";
 
 import type {
   ApiFromModules,
@@ -18,6 +20,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   db: typeof db;
+  seed: typeof seed;
+  seedData: typeof seedData;
 }>;
 
 /**

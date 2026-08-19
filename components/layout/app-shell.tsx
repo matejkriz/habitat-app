@@ -6,6 +6,8 @@ import { useClerk } from "@clerk/nextjs";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Avatar, Button } from "@/components/ui";
+import { DevPersonaSwitcher } from "./dev-persona-switcher";
+import type { DevPersonaId } from "@/lib/dev-persona";
 import type { UserRole } from "@/lib/types";
 
 interface AppShellProps {
@@ -15,6 +17,7 @@ interface AppShellProps {
     email?: string | null;
     image?: string | null;
     role: UserRole;
+    devPersonaId?: DevPersonaId;
   };
 }
 
@@ -276,6 +279,9 @@ export function AppShell({ children, user }: AppShellProps) {
 
             {/* User Menu */}
             <div className="flex items-center gap-3">
+              {user.devPersonaId && (
+                <DevPersonaSwitcher currentPersonaId={user.devPersonaId} />
+              )}
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-medium text-charcoal">
                   {user.name || user.email}

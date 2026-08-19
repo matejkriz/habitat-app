@@ -64,6 +64,34 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
 pnpm convex:dev
 ```
 
+### Reprodukovatelná testovací data
+
+Development Convex lze naplnit deterministickými testovacími uživateli, dětmi
+a vazbami rodič–dítě:
+
+```bash
+pnpm seed:dev
+```
+
+Seed používá stabilní aplikační ID a záznamy aktualizuje, takže jej lze spouštět
+opakovaně bez vytváření duplikátů. Pokud se testovací uživatel už přihlásil přes
+Clerk, jeho propojené Clerk ID zůstane zachované. Mutation je interní a běžný
+klient ji nemůže zavolat.
+
+Testovací účty používají Gmail aliasy `krizmate+<role>-<jmeno>@gmail.com`:
+
+- rodiče: Róza Rohlíková, Bedřich Bábovka, Věra Vrtulová
+- učitelé: Květa Křída, Hugo Hvízd
+- ředitel: Bohumil Boss
+
+Testovací děti jsou Žofie Žížalka, Oskar Okurka, Božena Bublina, Max Mlsoun a
+Tobiáš Tornádo.
+
+V lokálním developmentu a na Preview větve `develop` lze po přihlášení účtem
+`dev@habitatzbraslav.cz` přepínat tyto seed uživatele přímo v hlavičce. Funkce
+vyžaduje serverovou proměnnou `DEV_PERSONA_SWITCHER=true`, Clerk development
+klíče a je v kódu explicitně zakázaná pro Vercel Production.
+
 7. Spusťte vývojový server:
 
 ```bash

@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "convex:dev": "CONVEX_DISABLE_TELEMETRY=1 convex dev",
     "convex:deploy": "CONVEX_DISABLE_TELEMETRY=1 convex deploy",
-    "convex:codegen": "CONVEX_DISABLE_TELEMETRY=1 convex codegen --typecheck disable"
+    "convex:codegen": "CONVEX_DISABLE_TELEMETRY=1 convex codegen --typecheck disable",
+    "seed:dev": "CONVEX_DISABLE_TELEMETRY=1 convex run seed:development '{}' --push --typecheck disable"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.16.0",
