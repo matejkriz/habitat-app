@@ -154,6 +154,50 @@ async function StatsCard({ childId }: { childId: string }) {
   );
 }
 
+export function AttendanceHistoryRow({
+  record,
+}: {
+  record: AttendanceHistoryItem;
+}) {
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-lg bg-cream p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+          record.presence === "PRESENT" ? "bg-sage/20" : "bg-coral/20"
+        }`}
+      >
+        {record.presence === "PRESENT" ? (
+          <svg className="h-4 w-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="h-4 w-4 text-coral" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-charcoal">
+          {formatDateWithWeekday(record.date)}
+        </p>
+        {record.excuse?.reason && (
+          <p className="break-words text-xs text-charcoal-light">
+            {record.excuse.reason}
+          </p>
+        )}
+      </div>
+
+      <div className="col-span-2 flex flex-wrap items-center gap-2 pl-11 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:justify-end sm:pl-0">
+        <PresenceBadge present={record.presence === "PRESENT"} />
+        {record.excuseStatus !== "NONE" && (
+          <ExcuseStatusBadge status={record.excuseStatus} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 async function AttendanceHistory({ childId }: { childId: string }) {
   const history =
     (await getChildAttendanceHistory(childId)) as ReadonlyArray<AttendanceHistoryItem>;
@@ -186,43 +230,7 @@ async function AttendanceHistory({ childId }: { childId: string }) {
       <CardContent>
         <div className="space-y-2">
           {history.map((record) => (
-            <div
-              key={record.id}
-              className="flex items-center justify-between p-3 bg-cream rounded-lg"
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${record.presence === "PRESENT"
-                    ? "bg-sage/20"
-                    : "bg-coral/20"
-                  }`}>
-                  {record.presence === "PRESENT" ? (
-                    <svg className="w-4 h-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 text-coral" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-charcoal">
-                    {formatDateWithWeekday(record.date)}
-                  </p>
-                  {record.excuse?.reason && (
-                    <p className="text-xs text-charcoal-light">
-                      {record.excuse.reason}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <PresenceBadge present={record.presence === "PRESENT"} />
-                {record.excuseStatus !== "NONE" && (
-                  <ExcuseStatusBadge status={record.excuseStatus} />
-                )}
-              </div>
-            </div>
+            <AttendanceHistoryRow key={record.id} record={record} />
           ))}
         </div>
       </CardContent>
@@ -300,9 +308,12 @@ export default async function ParentDashboard({
               selectedId={selectedChildId}
             />
           )}
-          <Link href={`/rodic/omluvenka?child=${selectedChildId}`}>
-            <Button>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <Link
+            href={`/rodic/omluvenka?child=${selectedChildId}`}
+            className="inline-flex shrink-0"
+          >
+            <Button className="w-full">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Nová omluvenka
