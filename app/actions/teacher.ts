@@ -8,6 +8,7 @@ import {
   ExcuseStatus,
   type Child,
   type Attendance,
+  type Excuse,
 } from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
 import { recordBulkAttendance, canEnterAttendance } from "@/lib/attendance";
@@ -17,6 +18,17 @@ type AttendanceRecord = {
   readonly childId: string;
   readonly presence: Presence;
   readonly excuseStatus: ExcuseStatus;
+};
+
+type DailyExcuse = {
+  readonly childId: string;
+  readonly isOnTime: boolean;
+};
+
+type DailyAttendance = {
+  readonly isClosed: boolean;
+  readonly attendance: ReadonlyArray<AttendanceRecord>;
+  readonly excuses: ReadonlyArray<DailyExcuse>;
 };
 
 /**
@@ -41,7 +53,7 @@ export const getAllChildren = async (): Promise<ReadonlyArray<Child>> => {
  */
 export const getAttendanceForDate = async (
   dateStr: string,
-): Promise<{ readonly isClosed: boolean; readonly attendance: ReadonlyArray<AttendanceRecord> }> => {
+): Promise<DailyAttendance> => {
   const user = await getDbUser();
   if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
@@ -52,21 +64,36 @@ export const getAttendanceForDate = async (
 
   const closed = await isClosedDay(date);
   if (closed) {
-    return { isClosed: true, attendance: [] };
+    return { isClosed: true, attendance: [], excuses: [] };
   }
 
-  const attendance = (await db.attendance.list({
-    where: { date },
-    include: {
-      child: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
+  const [attendance, possibleExcuses] = await Promise.all([
+    db.attendance.list({
+      where: { date },
+      include: {
+        child: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
         },
       },
-    },
-  })) as ReadonlyArray<Attendance>;
+    }) as Promise<ReadonlyArray<Attendance>>,
+    db.excuses.list({
+      where: { fromDate: { lte: date } },
+      orderBy: { submittedAt: "desc" },
+    }) as Promise<ReadonlyArray<Excuse>>,
+  ]);
+
+  const excusesByChild = new Map<string, DailyExcuse>();
+  for (const excuse of possibleExcuses) {
+    if (excuse.toDate < date || excusesByChild.has(excuse.childId)) continue;
+    excusesByChild.set(excuse.childId, {
+      childId: excuse.childId,
+      isOnTime: excuse.autoApproved,
+    });
+  }
 
   return {
     isClosed: false,
@@ -75,6 +102,7 @@ export const getAttendanceForDate = async (
       presence: a.presence,
       excuseStatus: a.excuseStatus,
     })),
+    excuses: [...excusesByChild.values()],
   };
 };
 

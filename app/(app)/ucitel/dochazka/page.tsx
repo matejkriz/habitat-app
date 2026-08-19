@@ -11,6 +11,7 @@ import {
   Input,
   Toggle,
   Avatar,
+  Badge,
 } from "@/components/ui";
 import {
   getAllChildren,
@@ -30,12 +31,18 @@ interface AttendanceRecord {
   presence: "PRESENT" | "ABSENT";
 }
 
+interface DailyExcuse {
+  childId: string;
+  isOnTime: boolean;
+}
+
 export default function TeacherAttendancePage() {
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
+  const [excuses, setExcuses] = useState<Record<string, DailyExcuse>>({});
   const [isClosed, setIsClosed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,20 +60,33 @@ export default function TeacherAttendancePage() {
           getAttendanceForDate(selectedDate),
         ])) as [
           ReadonlyArray<Child>,
-          { readonly isClosed: boolean; readonly attendance: ReadonlyArray<AttendanceRecord> },
+          {
+            readonly isClosed: boolean;
+            readonly attendance: ReadonlyArray<AttendanceRecord>;
+            readonly excuses: ReadonlyArray<DailyExcuse>;
+          },
         ];
 
         setChildren([...childrenData]);
         setIsClosed(attendanceData.isClosed);
+        setExcuses(
+          Object.fromEntries(
+            attendanceData.excuses.map((excuse) => [excuse.childId, excuse]),
+          ),
+        );
 
         // Initialize attendance state
         const initialAttendance: Record<string, boolean> = {};
+        const excusedChildIds = new Set(
+          attendanceData.excuses.map((excuse) => excuse.childId),
+        );
         childrenData.forEach((child) => {
           const record = attendanceData.attendance.find(
             (a: AttendanceRecord) => a.childId === child.id
           );
-          // Default to present if no record exists
-          initialAttendance[child.id] = record ? record.presence === "PRESENT" : true;
+          initialAttendance[child.id] = record
+            ? record.presence === "PRESENT"
+            : !excusedChildIds.has(child.id);
         });
         setAttendance(initialAttendance);
       } catch {
@@ -240,14 +260,25 @@ export default function TeacherAttendancePage() {
                         : "bg-coral/5 border border-coral/20"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Avatar
                         name={`${child.firstName} ${child.lastName}`}
                         size="sm"
                       />
-                      <span className="font-medium text-charcoal">
-                        {child.firstName} {child.lastName}
-                      </span>
+                      <div className="flex min-w-0 flex-col items-start gap-1">
+                        <span className="font-medium text-charcoal">
+                          {child.firstName} {child.lastName}
+                        </span>
+                        {excuses[child.id] && (
+                          <Badge
+                            variant={excuses[child.id].isOnTime ? "excused" : "unexcused"}
+                          >
+                            {excuses[child.id].isOnTime
+                              ? "Omluveno včas"
+                              : "Omluveno pozdě"}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`text-sm font-medium ${
