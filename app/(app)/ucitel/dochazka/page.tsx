@@ -36,6 +36,12 @@ interface DailyExcuse {
   isOnTime: boolean;
 }
 
+function shiftCalendarDate(date: string, days: number) {
+  const shiftedDate = new Date(`${date}T00:00:00Z`);
+  shiftedDate.setUTCDate(shiftedDate.getUTCDate() + days);
+  return shiftedDate.toISOString().slice(0, 10);
+}
+
 export default function TeacherAttendancePage() {
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedDate, setSelectedDate] = useState(
@@ -115,6 +121,15 @@ export default function TeacherAttendancePage() {
     setSuccess("");
   };
 
+  const handleDateChange = (date: string) => {
+    setSelectedDate(date);
+    setSuccess("");
+  };
+
+  const handleDayChange = (days: number) => {
+    handleDateChange(shiftCalendarDate(selectedDate, days));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -155,16 +170,59 @@ export default function TeacherAttendancePage() {
               </svg>
               Docházka
             </CardTitle>
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
-                setSuccess("");
-              }}
-              max={today}
-              className="w-auto"
-            />
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="Předchozí den"
+                onClick={() => handleDayChange(-1)}
+                className="h-12 w-12 shrink-0 p-0"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+              </Button>
+              <Input
+                type="date"
+                aria-label="Datum docházky"
+                value={selectedDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="h-12 w-full sm:w-auto"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="Následující den"
+                onClick={() => handleDayChange(1)}
+                className="h-12 w-12 shrink-0 p-0"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </Button>
+            </div>
           </div>
           <p className="text-charcoal-light">
             {formatDateWithWeekday(new Date(selectedDate))}
@@ -193,25 +251,25 @@ export default function TeacherAttendancePage() {
               </div>
             </div>
           </CardContent>
-        ) : isInFuture ? (
-          <CardContent>
-            <div className="flex items-center gap-3 p-6 bg-gold/10 rounded-lg">
-              <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center">
-                <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-semibold text-charcoal">Budoucí datum</p>
-                <p className="text-sm text-charcoal-light">
-                  Docházku lze zaznamenat pouze pro dnešek nebo minulé dny.
-                </p>
-              </div>
-            </div>
-          </CardContent>
         ) : (
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {isInFuture && (
+                <div className="flex items-center gap-3 p-6 bg-gold/10 rounded-lg">
+                  <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-charcoal">Budoucí datum</p>
+                    <p className="text-sm text-charcoal-light">
+                      Docházku lze zaznamenat pouze pro dnešek nebo minulé dny.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm">
                   {error}
@@ -239,14 +297,16 @@ export default function TeacherAttendancePage() {
                     <p className="text-xs text-charcoal-light">Nepřítomno</p>
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSetAllPresent}
-                >
-                  Všichni přítomni
-                </Button>
+                {!isInFuture && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSetAllPresent}
+                  >
+                    Všichni přítomni
+                  </Button>
+                )}
               </div>
 
               {/* Children list */}
@@ -286,25 +346,29 @@ export default function TeacherAttendancePage() {
                       }`}>
                         {attendance[child.id] ? "Přítomen/a" : "Nepřítomen/a"}
                       </span>
-                      <Toggle
-                        checked={attendance[child.id] || false}
-                        onChange={() => handleToggle(child.id)}
-                      />
+                      {!isInFuture && (
+                        <Toggle
+                          checked={attendance[child.id] || false}
+                          onChange={() => handleToggle(child.id)}
+                        />
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </CardContent>
 
-            <CardFooter>
-              <Button
-                type="submit"
-                isLoading={isSaving}
-                className="w-full"
-              >
-                Uložit docházku
-              </Button>
-            </CardFooter>
+            {!isInFuture && (
+              <CardFooter>
+                <Button
+                  type="submit"
+                  isLoading={isSaving}
+                  className="w-full"
+                >
+                  Uložit docházku
+                </Button>
+              </CardFooter>
+            )}
           </form>
         )}
       </Card>
