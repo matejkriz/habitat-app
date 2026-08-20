@@ -15,8 +15,11 @@ Systém docházky a omluvenek pro Dětskou vzdělávací skupinu Habitat Zbrasla
 - **Auth**: Clerk (Google OAuth, Email OTP)
 - **Backend databáze**: Convex
 - **PWA**: Serwist
+- **Lokální vývoj**: Portless
 
 ## Instalace
+
+Pro lokální vývoj je potřeba Node.js 24 nebo novější.
 
 1. Naklonujte repozitář:
 
@@ -98,11 +101,14 @@ klíče a je v kódu explicitně zakázaná pro Vercel Production.
 pnpm dev
 ```
 
-Aplikace bude dostupná na [http://localhost:3000](http://localhost:3000).
+Aplikace bude dostupná na [https://habitat-app.localhost](https://habitat-app.localhost).
+Při prvním spuštění může Portless vyžádat oprávnění pro instalaci lokálního HTTPS certifikátu.
+V Git worktree s vlastní branchí přidá Portless název branche automaticky jako subdoménu,
+například `https://fix-ui.habitat-app.localhost`.
 
 ## Skripty
 
-- `pnpm dev` - Spustí vývojový server
+- `pnpm dev` - Spustí vývojový server přes Portless
 - `pnpm build` - Vytvoří produkční build
 - `pnpm start` - Spustí produkční server
 - `pnpm lint` - Spustí ESLint

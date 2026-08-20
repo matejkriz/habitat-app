@@ -4,7 +4,7 @@
   "packageManager": "pnpm@11.21.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "portless run next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -40,6 +40,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "happy-dom": "^20.1.0",
+    "portless": "^0.15.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.16"

@@ -2,7 +2,7 @@
  * Test endpoint for Slack webhook integration
  * DELETE THIS FILE AFTER TESTING
  *
- * Usage: curl http://localhost:3000/api/test-slack
+ * Usage: curl https://habitat-app.localhost/api/test-slack
  */
 
 import { sendExcuseNotification } from "@/lib/slack";
