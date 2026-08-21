@@ -2,11 +2,12 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getDbUser } from "@/lib/auth";
-import { UserRole } from "@/lib/types";
+import { UserRole, type ChildGender } from "@/lib/types";
 import {
   getParentChildren,
   getChildTodayStatus,
   getChildAttendanceHistory,
+  getChildCalendarMonth,
   getChildStats,
 } from "@/app/actions/parent";
 import {
@@ -19,7 +20,9 @@ import {
   ExcuseStatusBadge,
 } from "@/components/ui";
 import { formatDateWithWeekday } from "@/lib/utils";
+import { parseMonth } from "@/lib/parent-calendar";
 import { ChildSelector } from "./child-selector";
+import { AttendanceCalendar } from "./attendance-calendar";
 
 export const metadata = {
   title: "Přehled dítěte",
@@ -29,6 +32,7 @@ type ParentChildItem = {
   readonly id: string;
   readonly firstName: string;
   readonly lastName: string;
+  readonly gender: ChildGender | null;
 };
 
 type AttendanceHistoryItem = {
@@ -250,10 +254,34 @@ function LoadingCard() {
   );
 }
 
+async function CalendarCard({
+  childId,
+  childName,
+  childGender,
+  month,
+}: {
+  childId: string;
+  childName: string;
+  childGender: ChildGender | null;
+  month: string;
+}) {
+  const days = await getChildCalendarMonth(childId, month);
+
+  return (
+    <AttendanceCalendar
+      childId={childId}
+      childName={childName}
+      childGender={childGender}
+      month={month}
+      days={days}
+    />
+  );
+}
+
 export default async function ParentDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ child?: string }>;
+  searchParams: Promise<{ child?: string; month?: string }>;
 }) {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
@@ -286,6 +314,10 @@ export default async function ParentDashboard({
 
   const selectedChildId = params.child || children[0].id;
   const selectedChild = children.find((c) => c.id === selectedChildId) || children[0];
+  const selectedMonthDate = parseMonth(params.month);
+  const selectedMonth = `${selectedMonthDate.getFullYear()}-${String(
+    selectedMonthDate.getMonth() + 1,
+  ).padStart(2, "0")}`;
 
   return (
     <div className="space-y-6">
@@ -321,6 +353,15 @@ export default async function ParentDashboard({
           </Link>
         </div>
       </div>
+
+      <Suspense fallback={<LoadingCard />}>
+        <CalendarCard
+          childId={selectedChildId}
+          childName={selectedChild.firstName}
+          childGender={selectedChild.gender}
+          month={selectedMonth}
+        />
+      </Suspense>
 
       {/* Content Grid */}
       <div className="grid gap-6 md:grid-cols-2">

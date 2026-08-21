@@ -82,6 +82,7 @@ export const developmentSeed = {
       id: "seed-child-zofie",
       firstName: "Žofie",
       lastName: "Žížalka",
+      gender: "FEMALE",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -90,6 +91,7 @@ export const developmentSeed = {
       id: "seed-child-oskar",
       firstName: "Oskar",
       lastName: "Okurka",
+      gender: "MALE",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -98,6 +100,7 @@ export const developmentSeed = {
       id: "seed-child-bozena",
       firstName: "Božena",
       lastName: "Bublina",
+      gender: "FEMALE",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -106,6 +109,7 @@ export const developmentSeed = {
       id: "seed-child-max",
       firstName: "Max",
       lastName: "Mlsoun",
+      gender: "MALE",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -114,6 +118,7 @@ export const developmentSeed = {
       id: "seed-child-tobias",
       firstName: "Tobiáš",
       lastName: "Tornádo",
+      gender: "MALE",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -163,6 +168,7 @@ export const developmentSeed = {
     id: string;
     firstName: string;
     lastName: string;
+    gender: "MALE" | "FEMALE";
     active: boolean;
     createdAt: number;
     updatedAt: number;

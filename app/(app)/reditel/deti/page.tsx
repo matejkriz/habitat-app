@@ -21,6 +21,7 @@ import {
   Select,
   Badge,
 } from "@/components/ui";
+import type { ChildGender } from "@/lib/types";
 
 type Parent = {
   id: string;
@@ -36,6 +37,7 @@ export default function ChildrenManagementPage() {
   // New child form
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
+  const [newGender, setNewGender] = useState<ChildGender | "">("");
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -43,6 +45,7 @@ export default function ChildrenManagementPage() {
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
+  const [editGender, setEditGender] = useState<ChildGender | "">("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Assign parent modal
@@ -84,7 +87,10 @@ export default function ChildrenManagementPage() {
     setIsAddingChild(true);
 
     try {
-      const newChild = await createChild(newFirstName, newLastName);
+      if (!newGender) {
+        throw new Error("Vyberte pohlaví dítěte");
+      }
+      const newChild = await createChild(newFirstName, newLastName, newGender);
       setChildren((prev) => [
         ...prev,
         { ...newChild, parents: [] },
@@ -94,6 +100,7 @@ export default function ChildrenManagementPage() {
       }));
       setNewFirstName("");
       setNewLastName("");
+      setNewGender("");
     } catch (err) {
       setAddError(
         err instanceof Error ? err.message : "Nepodařilo se přidat dítě"
@@ -107,28 +114,31 @@ export default function ChildrenManagementPage() {
     setEditingChildId(child.id);
     setEditFirstName(child.firstName);
     setEditLastName(child.lastName);
+    setEditGender(child.gender ?? "");
   };
 
   const handleCancelEdit = () => {
     setEditingChildId(null);
     setEditFirstName("");
     setEditLastName("");
+    setEditGender("");
   };
 
   const handleSaveEdit = async () => {
-    if (!editingChildId) return;
+    if (!editingChildId || !editGender) return;
     setIsSavingEdit(true);
 
     try {
       await updateChild(editingChildId, {
         firstName: editFirstName,
         lastName: editLastName,
+        gender: editGender,
       });
       setChildren((prev) =>
         prev
           .map((c) =>
             c.id === editingChildId
-              ? { ...c, firstName: editFirstName, lastName: editLastName }
+              ? { ...c, firstName: editFirstName, lastName: editLastName, gender: editGender }
               : c
           )
           .sort((a, b) => {
@@ -268,7 +278,7 @@ export default function ChildrenManagementPage() {
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <Input
                 label="Jméno"
                 value={newFirstName}
@@ -281,6 +291,17 @@ export default function ChildrenManagementPage() {
                 value={newLastName}
                 onChange={(e) => setNewLastName(e.target.value)}
                 placeholder="Např. Nováková"
+                required
+              />
+              <Select
+                label="Pohlaví"
+                value={newGender}
+                onChange={(e) => setNewGender(e.target.value as ChildGender | "")}
+                options={[
+                  { value: "", label: "-- Vyberte --" },
+                  { value: "FEMALE", label: "Dívka" },
+                  { value: "MALE", label: "Chlapec" },
+                ]}
                 required
               />
             </div>
@@ -343,8 +364,10 @@ export default function ChildrenManagementPage() {
                   isEditing={editingChildId === child.id}
                   editFirstName={editFirstName}
                   editLastName={editLastName}
+                  editGender={editGender}
                   setEditFirstName={setEditFirstName}
                   setEditLastName={setEditLastName}
+                  setEditGender={setEditGender}
                   isSavingEdit={isSavingEdit}
                   togglingId={togglingId}
                   removingParent={removingParent}
@@ -378,8 +401,10 @@ export default function ChildrenManagementPage() {
                   isEditing={editingChildId === child.id}
                   editFirstName={editFirstName}
                   editLastName={editLastName}
+                  editGender={editGender}
                   setEditFirstName={setEditFirstName}
                   setEditLastName={setEditLastName}
+                  setEditGender={setEditGender}
                   isSavingEdit={isSavingEdit}
                   togglingId={togglingId}
                   removingParent={removingParent}
@@ -470,8 +495,10 @@ interface ChildRowProps {
   isEditing: boolean;
   editFirstName: string;
   editLastName: string;
+  editGender: ChildGender | "";
   setEditFirstName: (value: string) => void;
   setEditLastName: (value: string) => void;
+  setEditGender: (value: ChildGender | "") => void;
   isSavingEdit: boolean;
   togglingId: string | null;
   removingParent: { parentId: string; childId: string } | null;
@@ -489,8 +516,10 @@ function ChildRow({
   isEditing,
   editFirstName,
   editLastName,
+  editGender,
   setEditFirstName,
   setEditLastName,
+  setEditGender,
   isSavingEdit,
   togglingId,
   removingParent,
@@ -526,8 +555,20 @@ function ChildRow({
               className="sm:w-40"
               placeholder="Příjmení"
             />
+            <Select
+              value={editGender}
+              onChange={(e) => setEditGender(e.target.value as ChildGender | "")}
+              options={[
+                { value: "", label: "-- Pohlaví --" },
+                { value: "FEMALE", label: "Dívka" },
+                { value: "MALE", label: "Chlapec" },
+              ]}
+              className="sm:w-36"
+              aria-label="Pohlaví"
+              required
+            />
             <div className="flex gap-2">
-              <Button size="sm" onClick={onSaveEdit} isLoading={isSavingEdit}>
+              <Button size="sm" onClick={onSaveEdit} isLoading={isSavingEdit} disabled={!editGender}>
                 Uložit
               </Button>
               <Button
@@ -546,6 +587,11 @@ function ChildRow({
               <p className="font-medium text-charcoal">
                 {child.firstName} {child.lastName}
               </p>
+              {child.gender === null && (
+                <Badge variant="excused" className="text-xs">
+                  Doplňte pohlaví
+                </Badge>
+              )}
               {!child.active && (
                 <Badge variant="default" className="text-xs">
                   Neaktivní

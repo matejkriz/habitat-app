@@ -6,6 +6,7 @@ import type {
   Attendance,
   AuditLog,
   Child,
+  ChildGender,
   ClosedDay,
   Excuse,
   ParentChild,
@@ -39,6 +40,7 @@ type RawChild = {
   readonly id: string;
   readonly firstName: string;
   readonly lastName: string;
+  readonly gender?: ChildGender;
   readonly active: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -202,6 +204,7 @@ const fromRawChild = (raw: RawChild): Child => ({
   id: raw.id,
   firstName: raw.firstName,
   lastName: raw.lastName,
+  gender: raw.gender ?? null,
   active: raw.active,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
@@ -510,6 +513,7 @@ export const db: any = {
         id: createId(),
         firstName: String(args.data.firstName ?? ""),
         lastName: String(args.data.lastName ?? ""),
+        gender: args.data.gender as ChildGender,
         active: args.data.active === undefined ? true : Boolean(args.data.active),
         createdAt: now,
         updatedAt: now,

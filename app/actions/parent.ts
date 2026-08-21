@@ -8,10 +8,12 @@ import {
   ExcuseStatus,
   type Attendance,
   type Child,
+  type ClosedDay,
   type Excuse,
 } from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
 import { createExcuse, canSubmitExcuse } from "@/lib/excuse";
+import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
 
 type ParentChildWithChild = {
@@ -217,6 +219,55 @@ export const getChildExcuses = async (
     autoApproved: e.autoApproved,
     submittedAt: e.submittedAt,
   }));
+};
+
+/**
+ * Get one calendar month with attendance, excuse and closure states.
+ */
+export const getChildCalendarMonth = async (childId: string, month: string) => {
+  const user = await getDbUser();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  if (user.role === UserRole.PARENT) {
+    const hasAccess = await canSubmitExcuse(user.id, childId);
+    if (!hasAccess) {
+      throw new Error("Access denied");
+    }
+  }
+
+  const monthStart = parseMonth(month);
+  const monthEnd = new Date(
+    monthStart.getFullYear(),
+    monthStart.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999,
+  );
+
+  const [attendance, allExcuses, closedDays] = (await Promise.all([
+    db.attendance.list({
+      where: { childId, date: { gte: monthStart, lte: monthEnd } },
+    }),
+    db.excuses.list({ where: { childId } }),
+    db.closedDays.list({
+      where: { date: { gte: monthStart, lte: monthEnd } },
+    }),
+  ])) as [ReadonlyArray<Attendance>, ReadonlyArray<Excuse>, ReadonlyArray<ClosedDay>];
+
+  const overlappingExcuses = allExcuses.filter(
+    (excuse) => excuse.fromDate <= monthEnd && excuse.toDate >= monthStart,
+  );
+
+  return buildParentCalendarMonth({
+    month: monthStart,
+    attendance,
+    excuses: overlappingExcuses,
+    closedDays: closedDays.map((day) => day.date),
+  });
 };
 
 /**

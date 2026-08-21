@@ -22,6 +22,13 @@ export const ExcuseStatus = {
 export type ExcuseStatus =
   (typeof ExcuseStatus)[keyof typeof ExcuseStatus];
 
+export const ChildGender = {
+  MALE: "MALE",
+  FEMALE: "FEMALE",
+} as const;
+
+export type ChildGender = (typeof ChildGender)[keyof typeof ChildGender];
+
 export const AuditAction = {
   CREATE: "CREATE",
   UPDATE: "UPDATE",
@@ -45,6 +52,7 @@ export type Child = {
   id: string;
   firstName: string;
   lastName: string;
+  gender: ChildGender | null;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

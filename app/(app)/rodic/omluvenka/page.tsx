@@ -20,11 +20,12 @@ export default function NewExcusePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedChildId = searchParams.get("child");
+  const preselectedDate = searchParams.get("date") || "";
 
   const [children, setChildren] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const [selectedChildId, setSelectedChildId] = useState(preselectedChildId || "");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(preselectedDate);
+  const [toDate, setToDate] = useState(preselectedDate);
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -85,8 +86,6 @@ export default function NewExcusePage() {
       setIsSubmitting(false);
     }
   };
-
-  const today = new Date().toISOString().split("T")[0];
 
   return (
     <div className="max-w-lg mx-auto">
@@ -150,7 +149,6 @@ export default function NewExcusePage() {
                   setToDate(e.target.value);
                 }
               }}
-              min={today}
               required
             />
 
@@ -159,7 +157,7 @@ export default function NewExcusePage() {
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              min={fromDate || today}
+              min={fromDate}
               required
             />
 

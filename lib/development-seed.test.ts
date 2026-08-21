@@ -41,6 +41,8 @@ describe("development seed data", () => {
         ),
       ).toBe(true);
     }
+
+    expect(developmentSeed.children.every((child) => child.gender === "MALE" || child.gender === "FEMALE")).toBe(true);
   });
 
   it("preserves an existing Clerk identity when a user is reseeded", () => {

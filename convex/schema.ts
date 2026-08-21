@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 const role = v.union(v.literal("PARENT"), v.literal("TEACHER"), v.literal("DIRECTOR"));
 const presence = v.union(v.literal("PRESENT"), v.literal("ABSENT"));
+const childGender = v.union(v.literal("MALE"), v.literal("FEMALE"));
 const excuseStatus = v.union(
   v.literal("NONE"),
   v.literal("EXCUSED"),
@@ -30,6 +31,8 @@ export default defineSchema({
     id: v.string(),
     firstName: v.string(),
     lastName: v.string(),
+    // Optional during rollout so existing children can be completed in the director UI.
+    gender: v.optional(childGender),
     active: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),

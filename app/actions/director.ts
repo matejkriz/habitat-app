@@ -10,6 +10,7 @@ import {
   type Attendance,
   type AuditLog,
   type Child,
+  type ChildGender,
   type Excuse,
   type ParentChild,
   type User,
@@ -491,6 +492,7 @@ export type ChildWithParents = {
   id: string;
   firstName: string;
   lastName: string;
+  gender: ChildGender | null;
   active: boolean;
   createdAt: Date;
   parents: Array<{
@@ -527,6 +529,7 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
     id: child.id,
     firstName: child.firstName,
     lastName: child.lastName,
+    gender: child.gender,
     active: child.active,
     createdAt: child.createdAt,
     parents: child.parents.map((pc) => ({
@@ -559,17 +562,25 @@ export async function getAllParents() {
 /**
  * Create a new child
  */
-export async function createChild(firstName: string, lastName: string) {
+export async function createChild(
+  firstName: string,
+  lastName: string,
+  gender: ChildGender,
+) {
   const user = await requireDirector();
 
   if (!firstName.trim() || !lastName.trim()) {
     throw new Error("Jméno a příjmení jsou povinné");
+  }
+  if (gender !== "MALE" && gender !== "FEMALE") {
+    throw new Error("Pohlaví je povinné");
   }
 
   const child = await db.children.create({
     data: {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
+      gender,
       active: true,
     },
   });
@@ -581,7 +592,7 @@ export async function createChild(firstName: string, lastName: string) {
       action: AuditAction.CREATE,
       entityType: "Child",
       entityId: child.id,
-      newValue: { firstName: child.firstName, lastName: child.lastName },
+      newValue: { firstName: child.firstName, lastName: child.lastName, gender: child.gender },
     },
   });
 
@@ -596,7 +607,7 @@ export async function createChild(firstName: string, lastName: string) {
  */
 export async function updateChild(
   childId: string,
-  data: { firstName?: string; lastName?: string }
+  data: { firstName?: string; lastName?: string; gender?: ChildGender }
 ) {
   const user = await requireDirector();
 
@@ -608,7 +619,7 @@ export async function updateChild(
     throw new Error("Dítě nebylo nalezeno");
   }
 
-  const updateData: { firstName?: string; lastName?: string } = {};
+  const updateData: { firstName?: string; lastName?: string; gender?: ChildGender } = {};
   if (data.firstName !== undefined) {
     if (!data.firstName.trim()) {
       throw new Error("Jméno je povinné");
@@ -621,6 +632,12 @@ export async function updateChild(
     }
     updateData.lastName = data.lastName.trim();
   }
+  if (data.gender !== undefined) {
+    if (data.gender !== "MALE" && data.gender !== "FEMALE") {
+      throw new Error("Neplatné pohlaví");
+    }
+    updateData.gender = data.gender;
+  }
 
   // Create audit log
   await db.auditLogs.create({
@@ -629,7 +646,7 @@ export async function updateChild(
       action: AuditAction.UPDATE,
       entityType: "Child",
       entityId: childId,
-      previousValue: { firstName: child.firstName, lastName: child.lastName },
+      previousValue: { firstName: child.firstName, lastName: child.lastName, gender: child.gender },
       newValue: updateData,
     },
   });
