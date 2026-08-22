@@ -10,6 +10,7 @@ import {
   Badge,
 } from "@/components/ui";
 import { formatShortDate } from "@/lib/utils";
+import { AuditQuickAction } from "./audit-quick-action";
 
 export const metadata = {
   title: "Administrace",
@@ -182,7 +183,7 @@ async function DashboardContent() {
       </Card>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Link href="/ucitel/dochazka">
           <Card hover className="h-full">
             <CardContent className="pt-6 flex flex-col items-center text-center">
@@ -252,6 +253,8 @@ async function DashboardContent() {
             </CardContent>
           </Card>
         </Link>
+
+        <AuditQuickAction />
       </div>
     </div>
   );
