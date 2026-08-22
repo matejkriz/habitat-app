@@ -165,6 +165,34 @@ describe("TeacherAttendancePage", () => {
     expect(dateInput.value).toBe(shiftDate(initialDate, -1));
   });
 
+  it("lets the date input shrink between day controls on narrow screens", () => {
+    mocks.getAllChildren.mockImplementation(() => new Promise(() => {}));
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    const dateInput = screen.getByLabelText<HTMLInputElement>("Datum docházky");
+    const dateInputSlot = dateInput.parentElement?.parentElement;
+    const previousDayButton = screen.getByRole("button", {
+      name: "Předchozí den",
+    });
+    const nextDayButton = screen.getByRole("button", {
+      name: "Následující den",
+    });
+
+    expect(dateInputSlot?.className).toContain("min-w-0");
+    expect(dateInputSlot?.className).toContain("flex-1");
+    expect(dateInput.className).toContain("min-w-0");
+    expect(previousDayButton.className).toContain("h-11");
+    expect(previousDayButton.className).toContain("w-11");
+    expect(nextDayButton.className).toContain("h-11");
+    expect(nextDayButton.className).toContain("w-11");
+  });
+
   it("moves to future calendar days", () => {
     mocks.getAllChildren.mockImplementation(() => new Promise(() => {}));
     mocks.getAttendanceForDate.mockResolvedValue({

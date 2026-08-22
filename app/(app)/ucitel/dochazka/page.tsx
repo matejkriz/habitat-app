@@ -274,7 +274,7 @@ export default function TeacherAttendancePage() {
                 variant="outline"
                 aria-label="Předchozí den"
                 onClick={() => handleDayChange(-1)}
-                className="h-12 w-12 shrink-0 p-0"
+                className="h-11 w-11 shrink-0 p-0 sm:h-12 sm:w-12"
               >
                 <svg
                   aria-hidden="true"
@@ -291,19 +291,21 @@ export default function TeacherAttendancePage() {
                   />
                 </svg>
               </Button>
-              <Input
-                type="date"
-                aria-label="Datum docházky"
-                value={selectedDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="h-12 w-full sm:w-auto"
-              />
+              <div className="min-w-0 flex-1">
+                <Input
+                  type="date"
+                  aria-label="Datum docházky"
+                  value={selectedDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className="h-11 min-w-0 w-full px-2 sm:h-12 sm:w-auto sm:px-3"
+                />
+              </div>
               <Button
                 type="button"
                 variant="outline"
                 aria-label="Následující den"
                 onClick={() => handleDayChange(1)}
-                className="h-12 w-12 shrink-0 p-0"
+                className="h-11 w-11 shrink-0 p-0 sm:h-12 sm:w-12"
               >
                 <svg
                   aria-hidden="true"
