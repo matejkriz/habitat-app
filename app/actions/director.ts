@@ -2,6 +2,7 @@
 
 import { getDbUser, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getPresenceLabel } from "@/lib/presence-label";
 import {
   UserRole,
   Presence,
@@ -467,7 +468,7 @@ export async function exportAttendanceCSV(
     a.date.toLocaleDateString("cs-CZ"),
     a.child.firstName,
     a.child.lastName,
-    a.presence === Presence.PRESENT ? "Přítomen" : "Nepřítomen",
+    getPresenceLabel(a.presence === Presence.PRESENT),
     a.excuseStatus === ExcuseStatus.NONE
       ? ""
       : a.excuseStatus === ExcuseStatus.EXCUSED

@@ -1,5 +1,6 @@
 import { type HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
+import { getPresenceLabel } from "@/lib/presence-label";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: "present" | "absent" | "excused" | "unexcused" | "default" | "info";
@@ -37,7 +38,7 @@ export function Badge({
 export function PresenceBadge({ present }: { present: boolean }) {
   return (
     <Badge variant={present ? "present" : "absent"}>
-      {present ? "Přítomen/a" : "Nepřítomen/a"}
+      {getPresenceLabel(present)}
     </Badge>
   );
 }

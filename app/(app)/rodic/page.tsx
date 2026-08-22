@@ -21,6 +21,7 @@ import {
 } from "@/components/ui";
 import { formatDateWithWeekday } from "@/lib/utils";
 import { parseMonth } from "@/lib/parent-calendar";
+import { getPresenceLabel } from "@/lib/presence-label";
 import { ChildSelector } from "./child-selector";
 import { AttendanceCalendar } from "./attendance-calendar";
 
@@ -93,9 +94,7 @@ async function TodayCard({ childId }: { childId: string }) {
               </div>
               <div>
                 <p className="font-semibold text-charcoal">
-                  {status.attendance.presence === "PRESENT"
-                    ? "Přítomen/a"
-                    : "Nepřítomen/a"}
+                  {getPresenceLabel(status.attendance.presence === "PRESENT")}
                 </p>
                 {status.attendance.excuseStatus !== "NONE" && (
                   <ExcuseStatusBadge status={status.attendance.excuseStatus} />

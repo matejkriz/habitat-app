@@ -153,7 +153,9 @@ describe("TeacherAttendancePage", () => {
     expect(await screen.findByText("Budoucí datum")).toBeTruthy();
     expect(screen.getByText("Ada Lovelace")).toBeTruthy();
     expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Všichni přítomni" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Všechny děti přítomné" }),
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: "Uložit docházku" })).toBeNull();
   });
 
@@ -243,17 +245,21 @@ describe("TeacherAttendancePage", () => {
 
     render(<TeacherAttendancePage />);
 
-    expect(await screen.findByText("Přítomen/a")).toBeTruthy();
+    expect(
+      await screen.findByText("Přítomno", { selector: "span" }),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Následující den" }));
-    expect(await screen.findByText("Nepřítomen/a")).toBeTruthy();
+    expect(
+      await screen.findByText("Nepřítomno", { selector: "span" }),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Předchozí den" }));
 
     expect(
       screen.queryByRole("status", { name: "Načítání docházky" }),
     ).toBeNull();
-    expect(screen.getByText("Přítomen/a")).toBeTruthy();
+    expect(screen.getByText("Přítomno", { selector: "span" })).toBeTruthy();
     await waitFor(() => {
       expect(mocks.getAttendanceForDate).toHaveBeenCalledTimes(3);
     });
@@ -267,7 +273,9 @@ describe("TeacherAttendancePage", () => {
       await refreshedDate.promise;
     });
 
-    expect(await screen.findByText("Nepřítomen/a")).toBeTruthy();
+    expect(
+      await screen.findByText("Nepřítomno", { selector: "span" }),
+    ).toBeTruthy();
     expect(
       screen.queryByRole("status", { name: "Načítání docházky" }),
     ).toBeNull();
@@ -315,7 +323,7 @@ describe("TeacherAttendancePage", () => {
     expect(
       screen.queryByRole("status", { name: "Načítání docházky" }),
     ).toBeNull();
-    expect(screen.getByText("Nepřítomen/a")).toBeTruthy();
+    expect(screen.getByText("Nepřítomno", { selector: "span" })).toBeTruthy();
   });
 
   it("toggles a child's attendance and gives haptic feedback when the card is tapped", async () => {
@@ -336,12 +344,14 @@ describe("TeacherAttendancePage", () => {
     render(<TeacherAttendancePage />);
 
     const childName = await screen.findByText("Jana Nováková");
-    expect(screen.getByText("Přítomen/a")).toBeTruthy();
+    expect(screen.getByText("Přítomno", { selector: "span" })).toBeTruthy();
 
     fireEvent.click(childName);
 
     await waitFor(() => {
-      expect(screen.getByText("Nepřítomen/a")).toBeTruthy();
+      expect(
+        screen.getByText("Nepřítomno", { selector: "span" }),
+      ).toBeTruthy();
     });
     expect(vibrate).toHaveBeenCalledOnce();
     expect(vibrate).toHaveBeenCalledWith(10);

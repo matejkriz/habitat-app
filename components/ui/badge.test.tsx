@@ -7,7 +7,7 @@ describe("Badge", () => {
   it("keeps a status label on one line", () => {
     render(<PresenceBadge present={false} />);
 
-    expect(screen.getByText("Nepřítomen/a").className).toContain(
+    expect(screen.getByText("Nepřítomno").className).toContain(
       "whitespace-nowrap",
     );
   });

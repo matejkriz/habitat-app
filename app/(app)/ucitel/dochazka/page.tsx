@@ -19,6 +19,10 @@ import {
   saveAttendance,
 } from "@/app/actions/teacher";
 import { formatDateWithWeekday } from "@/lib/utils";
+import {
+  ALL_CHILDREN_PRESENT_LABEL,
+  getPresenceLabel,
+} from "@/lib/presence-label";
 
 interface Child {
   id: string;
@@ -388,7 +392,7 @@ export default function TeacherAttendancePage() {
                     size="sm"
                     onClick={handleSetAllPresent}
                   >
-                    Všichni přítomni
+                    {ALL_CHILDREN_PRESENT_LABEL}
                   </Button>
                 )}
               </div>
@@ -432,7 +436,7 @@ export default function TeacherAttendancePage() {
                       <span className={`text-sm font-medium ${
                         attendance[child.id] ? "text-sage" : "text-coral"
                       }`}>
-                        {attendance[child.id] ? "Přítomen/a" : "Nepřítomen/a"}
+                        {getPresenceLabel(attendance[child.id])}
                       </span>
                       {!isInFuture && (
                         <span className="relative shrink-0">
