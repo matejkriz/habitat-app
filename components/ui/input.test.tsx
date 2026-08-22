@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -12,5 +14,15 @@ describe("Input", () => {
     expect(input.parentElement?.className).toContain("min-w-0");
     expect(input.className).toContain("min-w-0");
     expect(input.className).toContain("max-w-full");
+    expect(input.className).toContain("native-date-input");
+
+    const globalStyles = readFileSync(
+      join(process.cwd(), "app/globals.css"),
+      "utf8",
+    );
+
+    expect(globalStyles).toMatch(
+      /\.native-date-input\s*\{[\s\S]*?width:\s*-webkit-fill-available;/,
+    );
   });
 });

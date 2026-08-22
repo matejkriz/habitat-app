@@ -34,6 +34,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             error
               ? "border-coral focus:border-coral"
               : "border-cream-dark hover:border-sage-light",
+            type === "date" && "native-date-input",
             className
           )}
           {...props}
