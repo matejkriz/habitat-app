@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -21,6 +22,15 @@ function shiftDate(date: string, days: number) {
   const shiftedDate = new Date(`${date}T00:00:00Z`);
   shiftedDate.setUTCDate(shiftedDate.getUTCDate() + days);
   return shiftedDate.toISOString().slice(0, 10);
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
 }
 
 describe("TeacherAttendancePage", () => {
@@ -145,5 +155,166 @@ describe("TeacherAttendancePage", () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("button", { name: "Všichni přítomni" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Uložit docházku" })).toBeNull();
+  });
+
+  it("keeps showing a skeleton when an older date finishes loading", async () => {
+    const olderDate = createDeferred<{
+      isClosed: boolean;
+      attendance: never[];
+      excuses: never[];
+    }>();
+    const selectedDate = createDeferred<{
+      isClosed: boolean;
+      attendance: never[];
+      excuses: never[];
+    }>();
+
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace" },
+    ]);
+    mocks.getAttendanceForDate
+      .mockResolvedValueOnce({
+        isClosed: false,
+        attendance: [],
+        excuses: [],
+      })
+      .mockReturnValueOnce(olderDate.promise)
+      .mockReturnValueOnce(selectedDate.promise);
+
+    render(<TeacherAttendancePage />);
+
+    expect(await screen.findByText("Ada Lovelace")).toBeTruthy();
+
+    const nextDayButton = screen.getByRole("button", {
+      name: "Následující den",
+    });
+    fireEvent.click(nextDayButton);
+    await waitFor(() => {
+      expect(mocks.getAttendanceForDate).toHaveBeenCalledTimes(2);
+    });
+    fireEvent.click(nextDayButton);
+    await waitFor(() => {
+      expect(mocks.getAttendanceForDate).toHaveBeenCalledTimes(3);
+    });
+
+    await act(async () => {
+      olderDate.resolve({ isClosed: true, attendance: [], excuses: [] });
+      await olderDate.promise;
+    });
+
+    expect(
+      screen.getByRole("status", { name: "Načítání docházky" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("Habitat má zavřeno")).toBeNull();
+
+    await act(async () => {
+      selectedDate.resolve({ isClosed: false, attendance: [], excuses: [] });
+      await selectedDate.promise;
+    });
+
+    expect(await screen.findByText("Ada Lovelace")).toBeTruthy();
+    expect(
+      screen.queryByRole("status", { name: "Načítání docházky" }),
+    ).toBeNull();
+  });
+
+  it("shows a previously loaded day immediately and refreshes it in the background", async () => {
+    const refreshedDate = createDeferred<{
+      isClosed: boolean;
+      attendance: Array<{ childId: string; presence: "ABSENT" }>;
+      excuses: never[];
+    }>();
+
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace" },
+    ]);
+    mocks.getAttendanceForDate
+      .mockResolvedValueOnce({
+        isClosed: false,
+        attendance: [],
+        excuses: [],
+      })
+      .mockResolvedValueOnce({
+        isClosed: false,
+        attendance: [{ childId: "child-1", presence: "ABSENT" }],
+        excuses: [],
+      })
+      .mockReturnValueOnce(refreshedDate.promise);
+
+    render(<TeacherAttendancePage />);
+
+    expect(await screen.findByText("Přítomen/a")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Následující den" }));
+    expect(await screen.findByText("Nepřítomen/a")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Předchozí den" }));
+
+    expect(
+      screen.queryByRole("status", { name: "Načítání docházky" }),
+    ).toBeNull();
+    expect(screen.getByText("Přítomen/a")).toBeTruthy();
+    await waitFor(() => {
+      expect(mocks.getAttendanceForDate).toHaveBeenCalledTimes(3);
+    });
+
+    await act(async () => {
+      refreshedDate.resolve({
+        isClosed: false,
+        attendance: [{ childId: "child-1", presence: "ABSENT" }],
+        excuses: [],
+      });
+      await refreshedDate.promise;
+    });
+
+    expect(await screen.findByText("Nepřítomen/a")).toBeTruthy();
+    expect(
+      screen.queryByRole("status", { name: "Načítání docházky" }),
+    ).toBeNull();
+  });
+
+  it("keeps the saved attendance in the cached day", async () => {
+    const backgroundRefresh = createDeferred<{
+      isClosed: boolean;
+      attendance: never[];
+      excuses: never[];
+    }>();
+
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace" },
+    ]);
+    mocks.getAttendanceForDate
+      .mockResolvedValueOnce({
+        isClosed: false,
+        attendance: [],
+        excuses: [],
+      })
+      .mockResolvedValueOnce({
+        isClosed: false,
+        attendance: [],
+        excuses: [],
+      })
+      .mockReturnValueOnce(backgroundRefresh.promise);
+    mocks.saveAttendance.mockResolvedValue({ success: true, recordCount: 1 });
+
+    render(<TeacherAttendancePage />);
+
+    const toggle = await screen.findByRole<HTMLInputElement>("checkbox");
+    fireEvent.click(toggle);
+    expect(toggle.checked).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Uložit docházku" }));
+    expect(await screen.findByText("Docházka uložena (1 záznamů)")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Následující den" }));
+    await waitFor(() => {
+      expect(mocks.getAttendanceForDate).toHaveBeenCalledTimes(2);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Předchozí den" }));
+
+    expect(
+      screen.queryByRole("status", { name: "Načítání docházky" }),
+    ).toBeNull();
+    expect(screen.getByText("Nepřítomen/a")).toBeTruthy();
   });
 });

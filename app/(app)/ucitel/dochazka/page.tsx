@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Card,
@@ -37,10 +37,53 @@ interface DailyExcuse {
   isOnTime: boolean;
 }
 
+interface CachedAttendanceDay {
+  readonly children: ReadonlyArray<Child>;
+  readonly attendance: Readonly<Record<string, boolean>>;
+  readonly excuses: Readonly<Record<string, DailyExcuse>>;
+  readonly isClosed: boolean;
+}
+
 function shiftCalendarDate(date: string, days: number) {
   const shiftedDate = new Date(`${date}T00:00:00Z`);
   shiftedDate.setUTCDate(shiftedDate.getUTCDate() + days);
   return shiftedDate.toISOString().slice(0, 10);
+}
+
+function AttendanceSkeleton() {
+  return (
+    <CardContent
+      role="status"
+      aria-label="Načítání docházky"
+      aria-busy="true"
+      className="space-y-4"
+    >
+      <div aria-hidden="true" className="animate-pulse space-y-4">
+        <div className="flex items-center justify-between rounded-lg bg-cream p-4">
+          <div className="flex gap-4">
+            <div className="h-12 w-14 rounded-md bg-cream-dark" />
+            <div className="h-12 w-16 rounded-md bg-cream-dark" />
+          </div>
+          <div className="h-9 w-32 rounded-lg bg-cream-dark" />
+        </div>
+
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((row) => (
+            <div
+              key={row}
+              className="flex items-center justify-between rounded-lg border border-cream-dark p-3"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-full bg-cream-dark" />
+                <div className="h-4 w-36 rounded bg-cream-dark" />
+              </div>
+              <div className="h-6 w-24 rounded-full bg-cream-dark" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </CardContent>
+  );
 }
 
 export default function TeacherAttendancePage() {
@@ -55,15 +98,17 @@ export default function TeacherAttendancePage() {
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [excuses, setExcuses] = useState<Record<string, DailyExcuse>>({});
   const [isClosed, setIsClosed] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadedDate, setLoadedDate] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const dayCache = useRef(new Map<string, CachedAttendanceDay>());
 
   // Load children and attendance data
   useEffect(() => {
+    let isCurrentDate = true;
+
     async function loadData() {
-      setIsLoading(true);
       setError("");
       try {
         const [childrenData, attendanceData] = (await Promise.all([
@@ -78,16 +123,15 @@ export default function TeacherAttendancePage() {
           },
         ];
 
-        setChildren([...childrenData]);
-        setIsClosed(attendanceData.isClosed);
-        setExcuses(
-          Object.fromEntries(
-            attendanceData.excuses.map((excuse) => [excuse.childId, excuse]),
-          ),
+        if (!isCurrentDate) return;
+
+        const nextChildren = [...childrenData];
+        const nextExcuses = Object.fromEntries(
+          attendanceData.excuses.map((excuse) => [excuse.childId, excuse]),
         );
 
         // Initialize attendance state
-        const initialAttendance: Record<string, boolean> = {};
+        const nextAttendance: Record<string, boolean> = {};
         const excusedChildIds = new Set(
           attendanceData.excuses.map((excuse) => excuse.childId),
         );
@@ -95,18 +139,34 @@ export default function TeacherAttendancePage() {
           const record = attendanceData.attendance.find(
             (a: AttendanceRecord) => a.childId === child.id
           );
-          initialAttendance[child.id] = record
+          nextAttendance[child.id] = record
             ? record.presence === "PRESENT"
             : !excusedChildIds.has(child.id);
         });
-        setAttendance(initialAttendance);
+
+        dayCache.current.set(selectedDate, {
+          children: nextChildren,
+          attendance: nextAttendance,
+          excuses: nextExcuses,
+          isClosed: attendanceData.isClosed,
+        });
+        setChildren(nextChildren);
+        setIsClosed(attendanceData.isClosed);
+        setExcuses(nextExcuses);
+        setAttendance(nextAttendance);
+        setLoadedDate(selectedDate);
       } catch {
+        if (!isCurrentDate) return;
+
         setError("Nepodařilo se načíst data.");
-      } finally {
-        setIsLoading(false);
+        setLoadedDate(selectedDate);
       }
     }
     loadData();
+
+    return () => {
+      isCurrentDate = false;
+    };
   }, [selectedDate]);
 
   const handleToggle = (childId: string) => {
@@ -127,6 +187,16 @@ export default function TeacherAttendancePage() {
   };
 
   const handleDateChange = (date: string) => {
+    const cachedDay = dayCache.current.get(date);
+    if (cachedDay) {
+      setChildren([...cachedDay.children]);
+      setAttendance({ ...cachedDay.attendance });
+      setExcuses({ ...cachedDay.excuses });
+      setIsClosed(cachedDay.isClosed);
+      setLoadedDate(date);
+      setError("");
+    }
+
     setSelectedDate(date);
     setSuccess("");
   };
@@ -150,6 +220,12 @@ export default function TeacherAttendancePage() {
       });
 
       const result = await saveAttendance(formData);
+      dayCache.current.set(selectedDate, {
+        children: [...children],
+        attendance: { ...attendance },
+        excuses: { ...excuses },
+        isClosed,
+      });
       setSuccess(`Docházka uložena (${result.recordCount} záznamů)`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nepodařilo se uložit docházku.");
@@ -163,6 +239,7 @@ export default function TeacherAttendancePage() {
 
   const today = new Date().toISOString().split("T")[0];
   const isInFuture = selectedDate > today;
+  const isLoading = loadedDate !== selectedDate;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -235,11 +312,7 @@ export default function TeacherAttendancePage() {
         </CardHeader>
 
         {isLoading ? (
-          <CardContent className="py-12">
-            <div className="flex items-center justify-center">
-              <div className="animate-spin h-8 w-8 border-4 border-gold border-t-transparent rounded-full" />
-            </div>
-          </CardContent>
+          <AttendanceSkeleton />
         ) : isClosed ? (
           <CardContent>
             <div className="flex items-center gap-3 p-6 bg-sage/10 rounded-lg">
