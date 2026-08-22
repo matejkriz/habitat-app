@@ -317,4 +317,33 @@ describe("TeacherAttendancePage", () => {
     ).toBeNull();
     expect(screen.getByText("Nepřítomen/a")).toBeTruthy();
   });
+
+  it("toggles a child's attendance and gives haptic feedback when the card is tapped", async () => {
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, "vibrate", {
+      configurable: true,
+      value: vibrate,
+    });
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Jana", lastName: "Nováková" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [{ childId: "child-1", presence: "PRESENT" }],
+      excuses: [],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    const childName = await screen.findByText("Jana Nováková");
+    expect(screen.getByText("Přítomen/a")).toBeTruthy();
+
+    fireEvent.click(childName);
+
+    await waitFor(() => {
+      expect(screen.getByText("Nepřítomen/a")).toBeTruthy();
+    });
+    expect(vibrate).toHaveBeenCalledOnce();
+    expect(vibrate).toHaveBeenCalledWith(10);
+  });
 });

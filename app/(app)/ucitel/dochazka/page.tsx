@@ -10,7 +10,6 @@ import {
   CardFooter,
   Button,
   Input,
-  Toggle,
   Avatar,
   Badge,
 } from "@/components/ui";
@@ -84,6 +83,12 @@ function AttendanceSkeleton() {
       </div>
     </CardContent>
   );
+}
+
+function triggerSelectionHaptic() {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    navigator.vibrate(10);
+  }
 }
 
 export default function TeacherAttendancePage() {
@@ -170,6 +175,7 @@ export default function TeacherAttendancePage() {
   }, [selectedDate]);
 
   const handleToggle = (childId: string) => {
+    triggerSelectionHaptic();
     setAttendance((prev) => ({
       ...prev,
       [childId]: !prev[childId],
@@ -390,12 +396,16 @@ export default function TeacherAttendancePage() {
               {/* Children list */}
               <div className="space-y-2">
                 {children.map((child) => (
-                  <div
+                  <label
                     key={child.id}
-                    className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                    className={`flex min-h-12 select-none items-center justify-between rounded-lg border p-3 transition-[background-color,border-color,transform] ${
+                      isInFuture
+                        ? "cursor-default"
+                        : "cursor-pointer active:scale-[0.99]"
+                    } ${
                       attendance[child.id]
-                        ? "bg-sage/5 border border-sage/20"
-                        : "bg-coral/5 border border-coral/20"
+                        ? "border-sage/20 bg-sage/5"
+                        : "border-coral/20 bg-coral/5"
                     }`}
                   >
                     <div className="flex min-w-0 items-center gap-3">
@@ -425,13 +435,26 @@ export default function TeacherAttendancePage() {
                         {attendance[child.id] ? "Přítomen/a" : "Nepřítomen/a"}
                       </span>
                       {!isInFuture && (
-                        <Toggle
-                          checked={attendance[child.id] || false}
-                          onChange={() => handleToggle(child.id)}
-                        />
+                        <span className="relative shrink-0">
+                          <input
+                            type="checkbox"
+                            className="peer sr-only"
+                            aria-label={`Docházka: ${child.firstName} ${child.lastName}`}
+                            checked={attendance[child.id] || false}
+                            onChange={() => handleToggle(child.id)}
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="block h-6 w-11 rounded-full bg-cream-dark transition-colors duration-200 peer-checked:bg-gold peer-focus-visible:ring-2 peer-focus-visible:ring-gold peer-focus-visible:ring-offset-2"
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 peer-checked:translate-x-5"
+                          />
+                        </span>
                       )}
                     </div>
-                  </div>
+                  </label>
                 ))}
               </div>
             </CardContent>
