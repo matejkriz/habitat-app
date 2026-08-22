@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -43,9 +44,13 @@ function shiftCalendarDate(date: string, days: number) {
 }
 
 export default function TeacherAttendancePage() {
+  const searchParams = useSearchParams();
+  const requestedDate = searchParams?.get("date");
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
+    requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
+      ? requestedDate
+      : new Date().toISOString().split("T")[0]
   );
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [excuses, setExcuses] = useState<Record<string, DailyExcuse>>({});

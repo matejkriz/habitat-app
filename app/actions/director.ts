@@ -287,6 +287,7 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
+  revalidatePath("/kalendar");
 
   return updated;
 }
@@ -342,6 +343,7 @@ export async function addClosedDay(dateStr: string, description?: string) {
   });
 
   revalidatePath("/reditel/volne-dny");
+  revalidatePath("/kalendar");
 
   return closedDay;
 }
@@ -379,6 +381,7 @@ export async function removeClosedDay(id: string) {
   });
 
   revalidatePath("/reditel/volne-dny");
+  revalidatePath("/kalendar");
 }
 
 /**
@@ -598,6 +601,7 @@ export async function createChild(
 
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
 
   return child;
 }
@@ -659,6 +663,7 @@ export async function updateChild(
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/rodic");
+  revalidatePath("/kalendar");
 
   return updated;
 }
@@ -696,6 +701,7 @@ export async function toggleChildActive(childId: string, active: boolean) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
 
   return updated;
 }
