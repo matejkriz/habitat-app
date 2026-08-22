@@ -28,6 +28,11 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
+interface NavigationState {
+  pathname: string;
+  pendingHref: string | null;
+}
+
 const roleNavItems: Record<UserRole, NavItem[]> = {
   PARENT: [
     {
@@ -179,8 +184,19 @@ export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const navItems = roleNavItems[user.role];
   const { signOut } = useClerk();
+  const [navigationState, setNavigationState] = useState<NavigationState>({
+    pathname,
+    pendingHref: null,
+  });
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const pendingHref =
+    navigationState.pathname === pathname ? navigationState.pendingHref : null;
+  const selectedHref = pendingHref ?? pathname;
+
+  if (navigationState.pathname !== pathname) {
+    setNavigationState({ pathname, pendingHref: null });
+  }
 
   useEffect(() => {
     if (!isUserMenuOpen) return;
@@ -208,6 +224,11 @@ export function AppShell({ children, user }: AppShellProps) {
     signOut({ redirectUrl: "/login" });
   };
 
+  const startNavigation = (href: string) => {
+    if (href === pathname) return;
+    setNavigationState({ pathname, pendingHref: href });
+  };
+
   return (
     <div className="min-h-screen bg-cream">
       {/* Header */}
@@ -231,9 +252,13 @@ export function AppShell({ children, user }: AppShellProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch
+                  aria-current={pathname === item.href ? "page" : undefined}
+                  aria-busy={pendingHref === item.href || undefined}
+                  onNavigate={() => startNavigation(item.href)}
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                    pathname === item.href
+                    selectedHref === item.href
                       ? "bg-gold/10 text-gold"
                       : "text-charcoal-light hover:text-charcoal hover:bg-cream"
                   )}
@@ -326,9 +351,15 @@ export function AppShell({ children, user }: AppShellProps) {
             <Link
               key={item.href}
               href={item.href}
+              prefetch
+              aria-current={pathname === item.href ? "page" : undefined}
+              aria-busy={pendingHref === item.href || undefined}
+              onNavigate={() => startNavigation(item.href)}
               className={cn(
                 "flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-                pathname === item.href ? "text-gold" : "text-charcoal-light"
+                selectedHref === item.href
+                  ? "bg-gold/10 text-gold"
+                  : "text-charcoal-light"
               )}
             >
               {item.icon}

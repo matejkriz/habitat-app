@@ -19,9 +19,23 @@ vi.mock("next/image", () => ({
   ),
 }));
 
+interface MockLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+  href: string;
+  onNavigate?: () => void;
+  prefetch?: boolean;
+}
+
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <a href={String(href)} {...props}>
+  default: ({ children, href, onClick, onNavigate, prefetch, ...props }: MockLinkProps) => (
+    <a
+      href={href}
+      data-prefetch={prefetch ? "true" : undefined}
+      onClick={(event) => {
+        onClick?.(event);
+        if (!event.defaultPrevented) onNavigate?.();
+      }}
+      {...props}
+    >
       {children}
     </a>
   ),
@@ -76,5 +90,40 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Odhlásit" }));
 
     expect(signOut).toHaveBeenCalledWith({ redirectUrl: "/login" });
+  });
+
+  it("highlights a mobile destination as soon as its navigation starts", () => {
+    render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    const getMobileLink = (name: string) =>
+      screen.getAllByRole("link", { name }).at(-1) as HTMLAnchorElement;
+
+    expect(getMobileLink("Přehled").className).toContain("text-gold");
+    expect(getMobileLink("Docházka").className).toContain("text-charcoal-light");
+
+    fireEvent.click(getMobileLink("Docházka"));
+
+    expect(getMobileLink("Přehled").className).toContain("text-charcoal-light");
+    expect(getMobileLink("Docházka").className).toContain("text-gold");
+    expect(getMobileLink("Docházka").getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("does not leave the current destination in a pending state", () => {
+    render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    const overviewLink = screen.getAllByRole("link", { name: "Přehled" }).at(-1);
+    if (!overviewLink) throw new Error("Chybí odkaz na přehled");
+
+    fireEvent.click(overviewLink);
+
+    expect(overviewLink.getAttribute("aria-busy")).toBeNull();
   });
 });
