@@ -12,7 +12,7 @@ Systém docházky a omluvenek pro Dětskou vzdělávací skupinu Habitat Zbrasla
 
 - **Framework**: Next.js 16 (App Router)
 - **UI**: React 19, Tailwind CSS v4
-- **Auth**: Clerk (Google OAuth, Email OTP)
+- **Auth**: WorkOS AuthKit (Google OAuth, Email OTP)
 - **Backend databáze**: Convex
 - **PWA**: Serwist
 - **Lokální vývoj**: Portless
@@ -46,25 +46,57 @@ cp .env.example .env.local
 # Convex
 CONVEX_URL="https://your-deployment.convex.cloud"
 
-# Clerk (https://dashboard.clerk.com)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
-CLERK_SECRET_KEY="sk_test_..."
-
-# Clerk URLs
-NEXT_PUBLIC_CLERK_SIGN_IN_URL="/login"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
+# WorkOS AuthKit (https://dashboard.workos.com)
+WORKOS_CLIENT_ID="client_..."
+WORKOS_API_KEY="sk_test_..."
+WORKOS_COOKIE_PASSWORD="replace-with-at-least-32-random-characters"
 ```
 
-5. Nastavení Clerk:
-   - Vytvořte aplikaci na [dashboard.clerk.com](https://dashboard.clerk.com)
-   - Povolte **Email** (s OTP) a **Google** jako metody přihlášení
-   - Zkopírujte API klíče do `.env.local`
+Lokální `NEXT_PUBLIC_WORKOS_REDIRECT_URI` se nenastavuje. Portless ji při
+každém spuštění odvodí z aktuální branche nebo worktree přes `PORTLESS_URL`.
+
+5. Nastavení WorkOS AuthKit:
+   - Vytvořte projekt na [dashboard.workos.com](https://dashboard.workos.com)
+   - Povolte **Magic Auth** (šestimístný e-mailový kód) a **Google OAuth**
+   - Přidejte default redirect URI `https://habitat-app.localhost/callback`
+   - Přidejte staging wildcard `https://*.habitat-app.localhost/callback`
+   - Pro sign-out URI použijte stejné apex a wildcard adresy s cestou `/login`
+   - Zkopírujte Client ID a staging API key do `.env.local`
+   - Cookie heslo vygenerujte například příkazem `openssl rand -base64 32`
 
 6. Připravte Convex deployment:
 
 ```bash
 pnpm convex:dev
+```
+
+### WorkOS prostředí a Vercel
+
+WorkOS odděluje `Staging` a `Production`. Pro lokální vývoj a Vercel Preview
+používejte staging Client ID a klíč `sk_test_...`. Pro Vercel Production
+použijte samostatný production Client ID, klíč `sk_live_...` a nové cookie
+heslo. Tajné hodnoty nikdy necommitujte do Git repozitáře; nastavte je přímo
+ve Vercel Environment Variables se správným rozsahem `Preview` nebo
+`Production`.
+
+Production prostředí ve WorkOS zapněte až ve chvíli, kdy znáte finální doménu.
+V production aplikaci potom samostatně nastavte Magic Auth, Google OAuth,
+délku session a následující adresy:
+
+```text
+App homepage:      https://<produkční-doména>
+Initiate login:    https://<produkční-doména>/login
+Redirect URI:      https://<produkční-doména>/callback
+Sign-out URI:      https://<produkční-doména>/login
+```
+
+Vercel Production vyžaduje tyto WorkOS proměnné:
+
+```env
+WORKOS_CLIENT_ID="client_..."
+WORKOS_API_KEY="sk_live_..."
+WORKOS_COOKIE_PASSWORD="samostatný-náhodný-řetězec-minimálně-32-znaků"
+NEXT_PUBLIC_WORKOS_REDIRECT_URI="https://<produkční-doména>/callback"
 ```
 
 ### Reprodukovatelná testovací data
@@ -78,7 +110,7 @@ pnpm seed:dev
 
 Seed používá stabilní aplikační ID a záznamy aktualizuje, takže jej lze spouštět
 opakovaně bez vytváření duplikátů. Pokud se testovací uživatel už přihlásil přes
-Clerk, jeho propojené Clerk ID zůstane zachované. Mutation je interní a běžný
+WorkOS, jeho propojené WorkOS ID zůstane zachované. Mutation je interní a běžný
 klient ji nemůže zavolat.
 
 Testovací účty používají Gmail aliasy `krizmate+<role>-<jmeno>@gmail.com`:
@@ -90,10 +122,10 @@ Testovací účty používají Gmail aliasy `krizmate+<role>-<jmeno>@gmail.com`:
 Testovací děti jsou Žofie Žížalka, Oskar Okurka, Božena Bublina, Max Mlsoun a
 Tobiáš Tornádo.
 
-V lokálním developmentu a na Preview větve `develop` lze po přihlášení účtem
+V lokálním developmentu a na Preview větví `develop` a `workos` lze po přihlášení účtem
 `dev@habitatzbraslav.cz` přepínat tyto seed uživatele přímo v hlavičce. Funkce
-vyžaduje serverovou proměnnou `DEV_PERSONA_SWITCHER=true`, Clerk development
-klíče a je v kódu explicitně zakázaná pro Vercel Production.
+vyžaduje serverovou proměnnou `DEV_PERSONA_SWITCHER=true`, WorkOS staging klíč
+a je v kódu explicitně zakázaná pro Vercel Production.
 
 7. Spusťte vývojový server:
 
@@ -122,8 +154,8 @@ například `https://fix-ui.habitat-app.localhost`.
 
 ```
 app/
-├── (auth)/
-│   └── login/          # Přihlašovací stránka (Clerk SignIn)
+├── login/              # Přesměrování do WorkOS AuthKit
+├── callback/           # WorkOS OAuth callback
 ├── (app)/
 │   ├── rodic/          # Rozhraní pro rodiče
 │   │   └── omluvenka/  # Formulář omluvenky
@@ -141,7 +173,7 @@ components/
 └── layout/             # Layout komponenty
 
 lib/
-├── auth.ts             # Clerk auth helpers + DB user sync
+├── auth.ts             # WorkOS auth helpers + DB user sync
 ├── auth-utils.ts       # Role-based auth utilities
 ├── db.ts               # Convex kompatibilní DB vrstva
 ├── attendance.ts       # Business logika docházky
@@ -156,7 +188,7 @@ convex/
 
 ## Autentizace
 
-Aplikace používá [Clerk](https://clerk.com) pro autentizaci:
+Aplikace používá [WorkOS AuthKit](https://workos.com/authkit) pro autentizaci:
 
 - **Email OTP**: Uživatel zadá email a obdrží jednorázový kód
 - **Google OAuth**: Přihlášení přes Google účet

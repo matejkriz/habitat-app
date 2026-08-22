@@ -45,7 +45,7 @@ describe("development seed data", () => {
     expect(developmentSeed.children.every((child) => child.gender === "MALE" || child.gender === "FEMALE")).toBe(true);
   });
 
-  it("preserves an existing Clerk identity when a user is reseeded", () => {
+  it("preserves an existing WorkOS identity when a user is reseeded", () => {
     const mergeSeedUser = (
       seedData as unknown as {
         mergeSeedUser?: (seed: SeedUser, existing?: SeedUser) => SeedUser;
@@ -54,14 +54,14 @@ describe("development seed data", () => {
     const seedUser = developmentSeed.users[0];
     const linkedUser = {
       ...seedUser,
-      clerkId: "user_linked_from_clerk",
+      workosId: "user_linked_from_workos",
       image: "https://example.test/avatar.png",
       name: "Dočasné jméno",
     } satisfies SeedUser;
 
     expect(mergeSeedUser).toBeTypeOf("function");
     expect(mergeSeedUser?.(seedUser, linkedUser)).toMatchObject({
-      clerkId: linkedUser.clerkId,
+      workosId: linkedUser.workosId,
       image: linkedUser.image,
       name: seedUser.name,
       email: seedUser.email,

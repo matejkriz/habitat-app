@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useClerk } from "@clerk/nextjs";
+import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Avatar, Button } from "@/components/ui";
@@ -235,10 +235,12 @@ const roleLabels: Record<UserRole, string> = {
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const navItems = roleNavItems[user.role];
-  const { signOut } = useClerk();
+  const { signOut } = useAuth();
 
   const handleSignOut = () => {
-    signOut({ redirectUrl: "/login" });
+    void signOut({
+      returnTo: new URL("/login", window.location.origin).toString(),
+    });
   };
 
   return (

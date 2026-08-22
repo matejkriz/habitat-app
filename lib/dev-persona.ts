@@ -56,7 +56,7 @@ export const DEFAULT_DEV_PERSONA_ID: DevPersonaId =
 
 export interface DevPersonaEnvironment {
   DEV_PERSONA_SWITCHER?: string;
-  CLERK_SECRET_KEY?: string;
+  WORKOS_API_KEY?: string;
   NODE_ENV?: string;
   VERCEL_TARGET_ENV?: string;
   VERCEL_GIT_COMMIT_REF?: string;
@@ -71,7 +71,7 @@ export function isDevPersonaModeAllowed(
 
   if (
     environment.DEV_PERSONA_SWITCHER !== "true" ||
-    !environment.CLERK_SECRET_KEY?.startsWith("sk_test_")
+    !environment.WORKOS_API_KEY?.startsWith("sk_test_")
   ) {
     return false;
   }
@@ -81,7 +81,7 @@ export function isDevPersonaModeAllowed(
     environment.VERCEL_TARGET_ENV === undefined;
   const isDevelopPreview =
     environment.VERCEL_TARGET_ENV === "preview" &&
-    environment.VERCEL_GIT_COMMIT_REF === "develop";
+    ["develop", "workos"].includes(environment.VERCEL_GIT_COMMIT_REF ?? "");
 
   return isLocalDevelopment || isDevelopPreview;
 }

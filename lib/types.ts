@@ -39,7 +39,7 @@ export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 
 export type User = {
   id: string;
-  clerkId: string;
+  workosId: string;
   name: string | null;
   email: string | null;
   image: string | null;

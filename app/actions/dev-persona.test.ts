@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const auth = vi.fn();
-const currentUser = vi.fn();
+const withAuth = vi.fn();
 const setCookie = vi.fn();
 const revalidatePath = vi.fn();
 
-vi.mock("@clerk/nextjs/server", () => ({ auth, currentUser }));
+vi.mock("@workos-inc/authkit-nextjs", () => ({ withAuth }));
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({ set: setCookie })),
 }));
@@ -23,13 +22,15 @@ async function loadAction(): Promise<SwitchDevPersona | undefined> {
 describe("switchDevPersona", () => {
   beforeEach(() => {
     vi.stubEnv("DEV_PERSONA_SWITCHER", "true");
-    vi.stubEnv("CLERK_SECRET_KEY", "sk_test_example");
+    vi.stubEnv("WORKOS_API_KEY", "sk_test_example");
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERCEL_TARGET_ENV", "preview");
     vi.stubEnv("VERCEL_GIT_COMMIT_REF", "develop");
-    auth.mockResolvedValue({ userId: "user_developer" });
-    currentUser.mockResolvedValue({
-      emailAddresses: [{ emailAddress: "dev@habitatzbraslav.cz" }],
+    withAuth.mockResolvedValue({
+      user: {
+        id: "user_developer",
+        email: "dev@habitatzbraslav.cz",
+      },
     });
   });
 
@@ -74,8 +75,11 @@ describe("switchDevPersona", () => {
     const switchDevPersona = await loadAction();
     expect(switchDevPersona).toBeTypeOf("function");
     if (!switchDevPersona) return;
-    currentUser.mockResolvedValueOnce({
-      emailAddresses: [{ emailAddress: "nekdo@habitatzbraslav.cz" }],
+    withAuth.mockResolvedValueOnce({
+      user: {
+        id: "user_other",
+        email: "nekdo@habitatzbraslav.cz",
+      },
     });
 
     await expect(

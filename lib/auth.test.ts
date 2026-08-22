@@ -1,17 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  auth: vi.fn(),
-  currentUser: vi.fn(),
+  withAuth: vi.fn(),
   cookies: vi.fn(),
   userGet: vi.fn(),
   userCreate: vi.fn(),
   userUpdate: vi.fn(),
 }));
 
-vi.mock("@clerk/nextjs/server", () => ({
-  auth: mocks.auth,
-  currentUser: mocks.currentUser,
+vi.mock("@workos-inc/authkit-nextjs", () => ({
+  withAuth: mocks.withAuth,
 }));
 vi.mock("next/headers", () => ({ cookies: mocks.cookies }));
 vi.mock("./db", () => ({
@@ -28,7 +26,7 @@ import { getDbUser } from "./auth";
 
 const personaUser = {
   id: "seed-user-teacher-kveta",
-  clerkId: "seed:teacher-kveta",
+  workosId: "seed:teacher-kveta",
   name: "Květa Křída",
   email: "krizmate+ucitel-kveta-krida@gmail.com",
   image: null,
@@ -38,13 +36,19 @@ const personaUser = {
 describe("getDbUser development personas", () => {
   beforeEach(() => {
     vi.stubEnv("DEV_PERSONA_SWITCHER", "true");
-    vi.stubEnv("CLERK_SECRET_KEY", "sk_test_example");
+    vi.stubEnv("WORKOS_API_KEY", "sk_test_example");
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERCEL_TARGET_ENV", "preview");
     vi.stubEnv("VERCEL_GIT_COMMIT_REF", "develop");
-    mocks.auth.mockResolvedValue({ userId: "user_developer" });
-    mocks.currentUser.mockResolvedValue({
-      emailAddresses: [{ emailAddress: "dev@habitatzbraslav.cz" }],
+    mocks.withAuth.mockResolvedValue({
+      user: {
+        id: "user_developer",
+        email: "dev@habitatzbraslav.cz",
+        name: "Developer",
+        firstName: "Dev",
+        lastName: "Eloper",
+        profilePictureUrl: null,
+      },
     });
     mocks.cookies.mockResolvedValue({
       get: vi.fn(() => ({ value: "seed-user-teacher-kveta" })),
@@ -55,7 +59,7 @@ describe("getDbUser development personas", () => {
     mocks.userCreate.mockResolvedValue({
       ...personaUser,
       id: "ordinary-user",
-      clerkId: "user_developer",
+      workosId: "user_developer",
       email: "dev@habitatzbraslav.cz",
       role: "PARENT",
     });
@@ -77,17 +81,17 @@ describe("getDbUser development personas", () => {
     });
   });
 
-  it("uses the ordinary Clerk identity in production", async () => {
+  it("uses the ordinary WorkOS identity in production", async () => {
     vi.stubEnv("VERCEL_TARGET_ENV", "production");
     vi.stubEnv("VERCEL_GIT_COMMIT_REF", "main");
     const productionUser = {
       ...personaUser,
       id: "production-user",
-      clerkId: "user_developer",
+      workosId: "user_developer",
       role: "DIRECTOR" as const,
     };
     mocks.userGet.mockImplementation(async ({ where }) =>
-      where.clerkId === "user_developer" ? productionUser : null,
+      where.workosId === "user_developer" ? productionUser : null,
     );
 
     await expect(getDbUser()).resolves.toMatchObject({
@@ -95,5 +99,54 @@ describe("getDbUser development personas", () => {
       role: "DIRECTOR",
     });
     expect(mocks.cookies).not.toHaveBeenCalled();
+  });
+
+  it("links a prefilled user by email on first WorkOS sign-in", async () => {
+    vi.stubEnv("VERCEL_TARGET_ENV", "production");
+    vi.stubEnv("VERCEL_GIT_COMMIT_REF", "main");
+    const prefilledUser = {
+      ...personaUser,
+      id: "prefilled-parent",
+      workosId: "seed:parent-roza",
+      email: "parent@example.test",
+      role: "PARENT" as const,
+    };
+    const linkedUser = {
+      ...prefilledUser,
+      workosId: "user_workos",
+      name: "Rodič Z WorkOS",
+      image: "https://images.example.test/avatar.png",
+    };
+    mocks.withAuth.mockResolvedValueOnce({
+      user: {
+        id: "user_workos",
+        email: "parent@example.test",
+        name: "Rodič Z WorkOS",
+        firstName: "Rodič",
+        lastName: "Z WorkOS",
+        profilePictureUrl: "https://images.example.test/avatar.png",
+      },
+    });
+    mocks.userGet.mockImplementation(async ({ where }) => {
+      if (where.workosId === "user_workos") return null;
+      if (where.email === "parent@example.test") return prefilledUser;
+      return null;
+    });
+    mocks.userUpdate.mockResolvedValue(linkedUser);
+
+    await expect(getDbUser()).resolves.toMatchObject({
+      id: "prefilled-parent",
+      workosId: "user_workos",
+      role: "PARENT",
+    });
+    expect(mocks.userUpdate).toHaveBeenCalledWith({
+      where: { id: "prefilled-parent" },
+      data: {
+        workosId: "user_workos",
+        name: "Rodič Z WorkOS",
+        image: "https://images.example.test/avatar.png",
+      },
+    });
+    expect(mocks.userCreate).not.toHaveBeenCalled();
   });
 });

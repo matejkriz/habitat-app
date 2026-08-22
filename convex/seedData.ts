@@ -2,7 +2,7 @@ const SEED_TIMESTAMP = Date.UTC(2026, 0, 1);
 
 export type SeedUser = {
   id: string;
-  clerkId: string;
+  workosId: string;
   name: string;
   email: string;
   image: string | null;
@@ -11,14 +11,15 @@ export type SeedUser = {
   updatedAt: number;
 };
 
-type ExistingSeedUser = Pick<SeedUser, "clerkId" | "createdAt"> &
+type ExistingSeedUser = Pick<SeedUser, "createdAt"> &
+  Partial<Pick<SeedUser, "workosId">> &
   Partial<Pick<SeedUser, "image">>;
 
 export const developmentSeed = {
   users: [
     {
       id: "seed-user-parent-roza",
-      clerkId: "seed:parent-roza",
+      workosId: "seed:parent-roza",
       name: "Róza Rohlíková",
       email: "krizmate+rodic-roza-rohlikova@gmail.com",
       image: null,
@@ -28,7 +29,7 @@ export const developmentSeed = {
     },
     {
       id: "seed-user-parent-bedrich",
-      clerkId: "seed:parent-bedrich",
+      workosId: "seed:parent-bedrich",
       name: "Bedřich Bábovka",
       email: "krizmate+rodic-bedrich-babovka@gmail.com",
       image: null,
@@ -38,7 +39,7 @@ export const developmentSeed = {
     },
     {
       id: "seed-user-parent-vera",
-      clerkId: "seed:parent-vera",
+      workosId: "seed:parent-vera",
       name: "Věra Vrtulová",
       email: "krizmate+rodic-vera-vrtulova@gmail.com",
       image: null,
@@ -48,7 +49,7 @@ export const developmentSeed = {
     },
     {
       id: "seed-user-teacher-kveta",
-      clerkId: "seed:teacher-kveta",
+      workosId: "seed:teacher-kveta",
       name: "Květa Křída",
       email: "krizmate+ucitel-kveta-krida@gmail.com",
       image: null,
@@ -58,7 +59,7 @@ export const developmentSeed = {
     },
     {
       id: "seed-user-teacher-hugo",
-      clerkId: "seed:teacher-hugo",
+      workosId: "seed:teacher-hugo",
       name: "Hugo Hvízd",
       email: "krizmate+ucitel-hugo-hvizd@gmail.com",
       image: null,
@@ -68,7 +69,7 @@ export const developmentSeed = {
     },
     {
       id: "seed-user-director-bohumil",
-      clerkId: "seed:director-bohumil",
+      workosId: "seed:director-bohumil",
       name: "Bohumil Boss",
       email: "krizmate+reditel-bohumil-boss@gmail.com",
       image: null,
@@ -191,7 +192,7 @@ export function mergeSeedUser(
 
   return {
     ...seed,
-    clerkId: existing.clerkId,
+    workosId: existing.workosId ?? seed.workosId,
     image: existing.image ?? seed.image,
     createdAt: existing.createdAt,
   };

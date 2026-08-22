@@ -3,7 +3,7 @@ import * as policy from "./dev-persona";
 
 type PersonaEnvironment = {
   DEV_PERSONA_SWITCHER?: string;
-  CLERK_SECRET_KEY?: string;
+  WORKOS_API_KEY?: string;
   NODE_ENV?: string;
   VERCEL_TARGET_ENV?: string;
   VERCEL_GIT_COMMIT_REF?: string;
@@ -14,10 +14,10 @@ const allow = policy.isDevPersonaModeAllowed as (
 ) => boolean;
 
 describe("development persona policy", () => {
-  it("allows local development and the develop preview with Clerk test keys", () => {
+  it("allows local development and selected previews with WorkOS staging keys", () => {
     const shared = {
       DEV_PERSONA_SWITCHER: "true",
-      CLERK_SECRET_KEY: "sk_test_example",
+      WORKOS_API_KEY: "sk_test_example",
     };
 
     expect(allow({ ...shared, NODE_ENV: "development" })).toBe(true);
@@ -29,12 +29,20 @@ describe("development persona policy", () => {
         VERCEL_GIT_COMMIT_REF: "develop",
       }),
     ).toBe(true);
+    expect(
+      allow({
+        ...shared,
+        NODE_ENV: "production",
+        VERCEL_TARGET_ENV: "preview",
+        VERCEL_GIT_COMMIT_REF: "workos",
+      }),
+    ).toBe(true);
   });
 
   it("fails closed outside the explicitly allowed development environments", () => {
     const shared = {
       DEV_PERSONA_SWITCHER: "true",
-      CLERK_SECRET_KEY: "sk_test_example",
+      WORKOS_API_KEY: "sk_test_example",
       NODE_ENV: "production",
     };
 
@@ -55,7 +63,7 @@ describe("development persona policy", () => {
     expect(
       allow({
         ...shared,
-        CLERK_SECRET_KEY: "sk_live_example",
+        WORKOS_API_KEY: "sk_live_example",
         VERCEL_TARGET_ENV: "preview",
         VERCEL_GIT_COMMIT_REF: "develop",
       }),

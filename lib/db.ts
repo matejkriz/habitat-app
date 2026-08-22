@@ -27,7 +27,8 @@ type TableName =
 
 type RawUser = {
   readonly id: string;
-  readonly clerkId: string;
+  readonly workosId?: string;
+  readonly clerkId?: string;
   readonly name?: string | null;
   readonly email?: string | null;
   readonly image?: string | null;
@@ -191,7 +192,7 @@ const normalizeDates = (value: unknown): unknown => {
 
 const fromRawUser = (raw: RawUser): User => ({
   id: raw.id,
-  clerkId: raw.clerkId,
+  workosId: raw.workosId ?? "",
   name: raw.name ?? null,
   email: raw.email ?? null,
   image: raw.image ?? null,
@@ -338,7 +339,9 @@ export const db: any = {
 
       const user =
         (where.id ? users.find((u) => u.id === where.id) : undefined) ??
-        (where.clerkId ? users.find((u) => u.clerkId === where.clerkId) : undefined) ??
+        (where.workosId
+          ? users.find((u) => u.workosId === where.workosId)
+          : undefined) ??
         (where.email ? users.find((u) => u.email === where.email) : undefined) ??
         null;
 
@@ -375,11 +378,14 @@ export const db: any = {
     create: async (args: CreateRecordArgs) => {
       const data = args.data;
       const users = (await listTable<RawUser>("users")).map(fromRawUser);
-      const clerkId = String(data.clerkId ?? "");
+      const workosId = String(data.workosId ?? "");
       const email = data.email == null ? null : String(data.email);
 
-      if (users.some((u) => u.clerkId === clerkId)) {
-        throw new Error("User with this clerkId already exists");
+      if (!workosId) {
+        throw new Error("WorkOS user ID is required");
+      }
+      if (users.some((u) => u.workosId === workosId)) {
+        throw new Error("User with this WorkOS ID already exists");
       }
       if (email && users.some((u) => u.email === email)) {
         throw new Error("User with this email already exists");
@@ -389,7 +395,7 @@ export const db: any = {
       const id = createId();
       const created: RawUser = {
         id,
-        clerkId,
+        workosId,
         email,
         image: data.image == null ? null : String(data.image),
         name: data.name == null ? null : String(data.name),
@@ -405,8 +411,8 @@ export const db: any = {
       const users = (await listTable<RawUser>("users")).map(fromRawUser);
       const current =
         (args.where.id ? users.find((u) => u.id === args.where.id) : undefined) ??
-        (args.where.clerkId
-          ? users.find((u) => u.clerkId === args.where.clerkId)
+        (args.where.workosId
+          ? users.find((u) => u.workosId === args.where.workosId)
           : undefined) ??
         null;
 
@@ -418,10 +424,12 @@ export const db: any = {
         const collision = users.find((u) => u.email === email && u.id !== existing.id);
         if (collision) throw new Error("User with this email already exists");
       }
-      if (patch.clerkId !== undefined) {
-        const clerkId = String(patch.clerkId);
-        const collision = users.find((u) => u.clerkId === clerkId && u.id !== existing.id);
-        if (collision) throw new Error("User with this clerkId already exists");
+      if (patch.workosId !== undefined) {
+        const workosId = String(patch.workosId);
+        const collision = users.find(
+          (u) => u.workosId === workosId && u.id !== existing.id,
+        );
+        if (collision) throw new Error("User with this WorkOS ID already exists");
       }
 
       await patchById("users", existing.id, { ...patch, updatedAt: Date.now() });

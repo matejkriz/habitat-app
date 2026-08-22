@@ -1,6 +1,6 @@
 "use server";
 
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { withAuth } from "@workos-inc/authkit-nextjs";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import {
@@ -15,11 +15,9 @@ export async function switchDevPersona(personaId: string): Promise<void> {
     throw new Error("Development persona switching is not available");
   }
 
-  const { userId } = await auth();
-  const clerkUser = userId ? await currentUser() : null;
-  const email = clerkUser?.emailAddresses[0]?.emailAddress;
+  const { user } = await withAuth();
 
-  if (!userId || !isDevPersonaEmail(email)) {
+  if (!user || !isDevPersonaEmail(user.email)) {
     throw new Error("Development persona switching is not available");
   }
 

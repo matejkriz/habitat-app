@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito, Geist_Mono } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
+import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -45,14 +45,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="cs">
-        <body
-          className={`${nunito.variable} ${geistMono.variable} antialiased min-h-screen bg-cream`}
-        >
+    <html lang="cs">
+      <body
+        className={`${nunito.variable} ${geistMono.variable} antialiased min-h-screen bg-cream`}
+      >
+        <AuthKitProvider>
           {children}
-        </body>
-      </html>
-    </ClerkProvider>
+        </AuthKitProvider>
+      </body>
+    </html>
   );
 }
