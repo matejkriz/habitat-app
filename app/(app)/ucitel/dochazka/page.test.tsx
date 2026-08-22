@@ -125,6 +125,29 @@ describe("TeacherAttendancePage", () => {
     expect(toggles[2].checked).toBe(true);
   });
 
+  it("stacks the all-present action below the totals on narrow screens", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    const allPresentButton = await screen.findByRole("button", {
+      name: "Všechny děti přítomné",
+    });
+    const summary = allPresentButton.parentElement;
+
+    expect(summary?.className).toContain("flex-col");
+    expect(summary?.className).toContain("sm:flex-row");
+    expect(allPresentButton.className).toContain("w-full");
+    expect(allPresentButton.className).toContain("sm:w-auto");
+  });
+
   it("moves to the previous calendar day", () => {
     mocks.getAllChildren.mockImplementation(() => new Promise(() => {}));
     mocks.getAttendanceForDate.mockResolvedValue({

@@ -380,7 +380,7 @@ export default function TeacherAttendancePage() {
               )}
 
               {/* Summary */}
-              <div className="flex items-center justify-between p-4 bg-cream rounded-lg">
+              <div className="flex flex-col items-stretch gap-4 rounded-lg bg-cream p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-sage">{presentCount}</p>
@@ -401,6 +401,7 @@ export default function TeacherAttendancePage() {
                     variant="outline"
                     size="sm"
                     onClick={handleSetAllPresent}
+                    className="w-full sm:w-auto"
                   >
                     {ALL_CHILDREN_PRESENT_LABEL}
                   </Button>
