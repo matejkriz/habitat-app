@@ -483,24 +483,15 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-charcoal sm:text-3xl">Kalendář docházky</h1>
-          <p className="mt-1 max-w-2xl text-sm text-charcoal-light sm:text-base">
-            Rychlý přehled očekávané účasti pro plánování programu a obědů.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-charcoal-light">
-          <span className="h-2.5 w-2.5 rounded-full bg-sage" /> očekáváme
-          <span className="ml-2 h-2.5 w-2.5 rounded-full bg-coral" /> chybí zápis
-        </div>
-      </div>
+      <header>
+        <h1 className="text-2xl font-extrabold text-charcoal sm:text-3xl">Kalendář docházky</h1>
+      </header>
 
       {today && (
         <button
           type="button"
           onClick={() => openDay(today)}
-          className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-gold/30 bg-gradient-to-r from-gold/10 via-white to-sage/10 p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[1.2fr_repeat(3,1fr)] sm:items-center sm:p-5"
+          className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[1.2fr_repeat(3,1fr)] sm:items-center sm:p-5"
         >
           <div className="col-span-3 mb-1 sm:col-span-1 sm:mb-0">
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-gold-dark">Dnes</p>
@@ -627,11 +618,6 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
           )}
         </div>
       </section>
-
-      <p className="text-center text-xs text-charcoal-light">
-        Na počítači přejeďte přes den pro rychlý náhled, kliknutím otevřete detail. Na telefonu
-        klepněte na den.
-      </p>
 
       {hoverPreview && (
         <DayHoverPreview

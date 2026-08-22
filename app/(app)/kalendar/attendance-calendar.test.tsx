@@ -96,3 +96,29 @@ describe("AttendanceCalendar day preview", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });
+
+describe("AttendanceCalendar supporting copy", () => {
+  it("keeps the calendar header free of explanatory copy and status legend", () => {
+    renderCalendar();
+
+    const title = screen.getByRole("heading", { name: "Kalendář docházky" });
+    const header = title.closest("header");
+
+    expect(header).not.toBeNull();
+    expect(header?.textContent).not.toContain(
+      "Rychlý přehled očekávané účasti pro plánování programu a obědů.",
+    );
+    expect(header?.textContent).not.toContain("chybí zápis");
+    expect(header?.textContent).not.toContain("očekáváme");
+    expect(header?.querySelector(".bg-sage")).toBeNull();
+    expect(header?.querySelector(".bg-coral")).toBeNull();
+  });
+
+  it("does not show interaction instructions below the calendar", () => {
+    renderCalendar();
+
+    expect(document.body.textContent).not.toContain(
+      "Na počítači přejeďte přes den pro rychlý náhled, kliknutím otevřete detail.",
+    );
+  });
+});
