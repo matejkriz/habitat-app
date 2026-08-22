@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   getAttendanceCalendarMonth,
@@ -71,11 +71,13 @@ function CalendarDayButton({
   day,
   onOpen,
   onHoverStart,
+  onHoverMove,
   onHoverEnd,
 }: {
   readonly day: AttendanceCalendarDay;
   readonly onOpen: () => void;
-  readonly onHoverStart: () => void;
+  readonly onHoverStart: (event: PointerEvent<HTMLButtonElement>) => void;
+  readonly onHoverMove: (event: PointerEvent<HTMLButtonElement>) => void;
   readonly onHoverEnd: () => void;
 }) {
   const statusLabel = day.isPast ? "přítomno" : "očekáváno";
@@ -88,8 +90,10 @@ function CalendarDayButton({
       type="button"
       aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}`}
       onClick={onOpen}
-      onPointerEnter={(event) => event.pointerType === "mouse" && onHoverStart()}
+      onPointerEnter={(event) => event.pointerType === "mouse" && onHoverStart(event)}
+      onPointerMove={(event) => event.pointerType === "mouse" && onHoverMove(event)}
       onPointerLeave={onHoverEnd}
+      onPointerCancel={onHoverEnd}
       className={cn(
         "group relative min-h-20 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-28 sm:p-2.5",
         "focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-gold",
@@ -145,6 +149,128 @@ function CalendarDayButton({
         </div>
       )}
     </button>
+  );
+}
+
+function PreviewChildList({
+  title,
+  items,
+  tone,
+}: {
+  readonly title: string;
+  readonly items: ReadonlyArray<CalendarChildDetail>;
+  readonly tone: "gold" | "coral" | "neutral";
+}) {
+  if (items.length === 0) return null;
+
+  const toneClasses = {
+    gold: "text-gold-dark",
+    coral: "text-coral-dark",
+    neutral: "text-charcoal-light",
+  };
+  const visibleItems = items.slice(0, 3);
+
+  return (
+    <div>
+      <p className={cn("text-[11px] font-extrabold uppercase tracking-wide", toneClasses[tone])}>
+        {title} · {items.length}
+      </p>
+      <div className="mt-1 space-y-1">
+        {visibleItems.map((child) => (
+          <div key={child.childId} className="text-xs leading-snug text-charcoal">
+            <span className="font-semibold">{child.name}</span>
+            {child.reason && <span className="text-charcoal-light"> · {child.reason}</span>}
+          </div>
+        ))}
+        {items.length > visibleItems.length && (
+          <p className="text-[11px] font-semibold text-charcoal-light">
+            + {items.length - visibleItems.length} další
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DayHoverPreview({
+  day,
+  left,
+  top,
+}: {
+  readonly day: AttendanceCalendarDay;
+  readonly left: number;
+  readonly top: number;
+}) {
+  const hasExceptions =
+    day.children.waiting.length > 0 ||
+    day.children.excused.length > 0 ||
+    day.children.unexcused.length > 0 ||
+    day.children.unknown.length > 0;
+
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none fixed z-40 w-72 overflow-hidden rounded-xl border border-sage/20 bg-white shadow-2xl"
+      style={{ left, top }}
+    >
+      <div className="border-b border-cream-dark bg-cream/60 px-4 py-3">
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-gold-dark">
+          Rychlý přehled
+        </p>
+        <p className="mt-0.5 text-sm font-extrabold capitalize text-charcoal">
+          {formatLongDate(day.dateKey)}
+        </p>
+      </div>
+
+      {day.isClosed ? (
+        <div className="px-4 py-4">
+          <p className="text-sm font-bold text-charcoal">Habitat má zavřeno</p>
+          <p className="mt-1 text-xs text-charcoal-light">
+            {day.closedReason || "V tento den neprobíhá výuka."}
+          </p>
+        </div>
+      ) : (
+        <div className="px-4 py-3.5">
+          <div className="grid grid-cols-4 gap-1.5 text-center">
+            <div className="rounded-lg bg-sage/10 px-1 py-2">
+              <p className="text-lg font-extrabold leading-none text-sage-dark">{day.counts.expected}</p>
+              <p className="mt-1 text-[9px] text-charcoal-light">očekáváme</p>
+            </div>
+            <div className="rounded-lg bg-sage/10 px-1 py-2">
+              <p className="text-lg font-extrabold leading-none text-sage-dark">{day.counts.present}</p>
+              <p className="mt-1 text-[9px] text-charcoal-light">dorazilo</p>
+            </div>
+            <div className="rounded-lg bg-gold/10 px-1 py-2">
+              <p className="text-lg font-extrabold leading-none text-gold-dark">{day.counts.waiting}</p>
+              <p className="mt-1 text-[9px] text-charcoal-light">čekáme</p>
+            </div>
+            <div className="rounded-lg bg-coral/10 px-1 py-2">
+              <p className="text-lg font-extrabold leading-none text-coral-dark">
+                {day.counts.excused + day.counts.unexcused}
+              </p>
+              <p className="mt-1 text-[9px] text-charcoal-light">nedorazí</p>
+            </div>
+          </div>
+
+          {hasExceptions ? (
+            <div className="mt-3 max-h-52 space-y-2.5 overflow-hidden border-t border-cream-dark pt-3">
+              <PreviewChildList title="Ještě čekáme" items={day.children.waiting} tone="gold" />
+              <PreviewChildList title="Omluvené" items={day.children.excused} tone="gold" />
+              <PreviewChildList title="Bez omluvenky" items={day.children.unexcused} tone="coral" />
+              <PreviewChildList title="Bez zápisu" items={day.children.unknown} tone="neutral" />
+            </div>
+          ) : (
+            <p className="mt-3 border-t border-cream-dark pt-3 text-xs text-charcoal-light">
+              {day.isFuture ? "Zatím bez omluvenek." : "Všechny záznamy jsou vyřešené."}
+            </p>
+          )}
+
+          <p className="mt-3 text-[10px] font-semibold text-charcoal-light">
+            Kliknutím otevřete celý detail dne
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -298,9 +424,13 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
 export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceCalendarMonth }) {
   const [calendar, setCalendar] = useState(initialMonth);
   const [selectedDay, setSelectedDay] = useState<AttendanceCalendarDay | null>(null);
+  const [hoverPreview, setHoverPreview] = useState<{
+    day: AttendanceCalendarDay;
+    left: number;
+    top: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gridOffset = useMemo(() => getGridOffset(calendar.monthKey), [calendar.monthKey]);
   const workweekDays = useMemo(
     () => calendar.days.filter((day) => {
@@ -312,11 +442,8 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
   const workweekGridOffset = useMemo(() => getWorkweekGridOffset(workweekDays), [workweekDays]);
   const today = calendar.days.find((day) => day.isToday);
 
-  useEffect(() => () => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-  }, []);
-
   async function loadMonth(monthKey: string) {
+    setHoverPreview(null);
     setIsLoading(true);
     setError("");
     try {
@@ -328,14 +455,27 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
     }
   }
 
-  function scheduleHover(day: AttendanceCalendarDay) {
-    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-    hoverTimer.current = setTimeout(() => setSelectedDay(day), 450);
+  function getPreviewPosition(event: PointerEvent<HTMLButtonElement>) {
+    const previewWidth = 288;
+    const previewHeight = 340;
+    const offset = 14;
+    const edge = 12;
+    const fitsRight = event.clientX + offset + previewWidth <= window.innerWidth - edge;
+    const fitsBelow = event.clientY + offset + previewHeight <= window.innerHeight - edge;
+
+    return {
+      left: Math.max(edge, fitsRight ? event.clientX + offset : event.clientX - previewWidth - offset),
+      top: Math.max(edge, fitsBelow ? event.clientY + offset : event.clientY - previewHeight - offset),
+    };
   }
 
-  function cancelHover() {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    hoverTimer.current = null;
+  function showHoverPreview(day: AttendanceCalendarDay, event: PointerEvent<HTMLButtonElement>) {
+    setHoverPreview({ day, ...getPreviewPosition(event) });
+  }
+
+  function openDay(day: AttendanceCalendarDay) {
+    setHoverPreview(null);
+    setSelectedDay(day);
   }
 
   return (
@@ -356,7 +496,7 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
       {today && (
         <button
           type="button"
-          onClick={() => setSelectedDay(today)}
+          onClick={() => openDay(today)}
           className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-gold/30 bg-gradient-to-r from-gold/10 via-white to-sage/10 p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[1.2fr_repeat(3,1fr)] sm:items-center sm:p-5"
         >
           <div className="col-span-3 mb-1 sm:col-span-1 sm:mb-0">
@@ -447,9 +587,10 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
               <CalendarDayButton
                 key={`mobile-${day.dateKey}`}
                 day={day}
-                onOpen={() => setSelectedDay(day)}
-                onHoverStart={() => scheduleHover(day)}
-                onHoverEnd={cancelHover}
+                onOpen={() => openDay(day)}
+                onHoverStart={(event) => showHoverPreview(day, event)}
+                onHoverMove={(event) => showHoverPreview(day, event)}
+                onHoverEnd={() => setHoverPreview(null)}
               />
             ))}
           </div>
@@ -468,9 +609,10 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
               <CalendarDayButton
                 key={day.dateKey}
                 day={day}
-                onOpen={() => setSelectedDay(day)}
-                onHoverStart={() => scheduleHover(day)}
-                onHoverEnd={cancelHover}
+                onOpen={() => openDay(day)}
+                onHoverStart={(event) => showHoverPreview(day, event)}
+                onHoverMove={(event) => showHoverPreview(day, event)}
+                onHoverEnd={() => setHoverPreview(null)}
               />
             ))}
           </div>
@@ -484,9 +626,17 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
       </section>
 
       <p className="text-center text-xs text-charcoal-light">
-        Na počítači podržte kurzor nad dnem, na telefonu na den klepněte.
+        Na počítači přejeďte přes den pro rychlý náhled, kliknutím otevřete detail. Na telefonu
+        klepněte na den.
       </p>
 
+      {hoverPreview && (
+        <DayHoverPreview
+          day={hoverPreview.day}
+          left={hoverPreview.left}
+          top={hoverPreview.top}
+        />
+      )}
       {selectedDay && <DayDetailModal day={selectedDay} onClose={() => setSelectedDay(null)} />}
     </div>
   );
