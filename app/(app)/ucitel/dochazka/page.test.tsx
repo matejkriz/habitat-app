@@ -378,7 +378,11 @@ describe("TeacherAttendancePage", () => {
     render(<TeacherAttendancePage />);
 
     const childName = await screen.findByText("Jana Nováková");
+    const toggle = screen.getByRole("checkbox", {
+      name: "Docházka: Jana Nováková",
+    });
     expect(screen.getByText("Přítomna", { selector: "span" })).toBeTruthy();
+    expect(toggle.hasAttribute("switch")).toBe(true);
 
     fireEvent.click(childName);
 

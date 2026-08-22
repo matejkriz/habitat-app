@@ -39,6 +39,8 @@ interface AttendanceRecord {
   presence: "PRESENT" | "ABSENT";
 }
 
+const nativeSwitchAttribute = { switch: "" } as const;
+
 interface DailyExcuse {
   childId: string;
   isOnTime: boolean;
@@ -449,6 +451,7 @@ export default function TeacherAttendancePage() {
                       {!isInFuture && (
                         <span className="relative shrink-0">
                           <input
+                            {...nativeSwitchAttribute}
                             type="checkbox"
                             className="peer sr-only"
                             aria-label={`Docházka: ${child.firstName} ${child.lastName}`}
