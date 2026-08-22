@@ -5,9 +5,9 @@ import { PresenceBadge } from "./badge";
 
 describe("Badge", () => {
   it("keeps a status label on one line", () => {
-    render(<PresenceBadge present={false} />);
+    render(<PresenceBadge present={false} gender="FEMALE" />);
 
-    expect(screen.getByText("Nepřítomno").className).toContain(
+    expect(screen.getByText("Nepřítomna").className).toContain(
       "whitespace-nowrap",
     );
   });

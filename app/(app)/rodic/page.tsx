@@ -46,7 +46,13 @@ type AttendanceHistoryItem = {
   } | null;
 };
 
-async function TodayCard({ childId }: { childId: string }) {
+async function TodayCard({
+  childId,
+  childGender,
+}: {
+  childId: string;
+  childGender: ChildGender | null;
+}) {
   const status = await getChildTodayStatus(childId);
 
   return (
@@ -94,7 +100,10 @@ async function TodayCard({ childId }: { childId: string }) {
               </div>
               <div>
                 <p className="font-semibold text-charcoal">
-                  {getPresenceLabel(status.attendance.presence === "PRESENT")}
+                  {getPresenceLabel(
+                    status.attendance.presence === "PRESENT",
+                    childGender,
+                  )}
                 </p>
                 {status.attendance.excuseStatus !== "NONE" && (
                   <ExcuseStatusBadge status={status.attendance.excuseStatus} />
@@ -159,8 +168,10 @@ async function StatsCard({ childId }: { childId: string }) {
 
 export function AttendanceHistoryRow({
   record,
+  childGender,
 }: {
   record: AttendanceHistoryItem;
+  childGender: ChildGender | null;
 }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-lg bg-cream p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
@@ -192,7 +203,10 @@ export function AttendanceHistoryRow({
       </div>
 
       <div className="col-span-2 flex flex-wrap items-center gap-2 pl-11 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:justify-end sm:pl-0">
-        <PresenceBadge present={record.presence === "PRESENT"} />
+        <PresenceBadge
+          present={record.presence === "PRESENT"}
+          gender={childGender}
+        />
         {record.excuseStatus !== "NONE" && (
           <ExcuseStatusBadge status={record.excuseStatus} />
         )}
@@ -201,7 +215,13 @@ export function AttendanceHistoryRow({
   );
 }
 
-async function AttendanceHistory({ childId }: { childId: string }) {
+async function AttendanceHistory({
+  childId,
+  childGender,
+}: {
+  childId: string;
+  childGender: ChildGender | null;
+}) {
   const history =
     (await getChildAttendanceHistory(childId)) as ReadonlyArray<AttendanceHistoryItem>;
 
@@ -233,7 +253,11 @@ async function AttendanceHistory({ childId }: { childId: string }) {
       <CardContent>
         <div className="space-y-2">
           {history.map((record) => (
-            <AttendanceHistoryRow key={record.id} record={record} />
+            <AttendanceHistoryRow
+              key={record.id}
+              record={record}
+              childGender={childGender}
+            />
           ))}
         </div>
       </CardContent>
@@ -365,7 +389,10 @@ export default async function ParentDashboard({
       {/* Content Grid */}
       <div className="grid gap-6 md:grid-cols-2">
         <Suspense fallback={<LoadingCard />}>
-          <TodayCard childId={selectedChildId} />
+          <TodayCard
+            childId={selectedChildId}
+            childGender={selectedChild.gender}
+          />
         </Suspense>
 
         <Suspense fallback={<LoadingCard />}>
@@ -374,7 +401,10 @@ export default async function ParentDashboard({
       </div>
 
       <Suspense fallback={<LoadingCard />}>
-        <AttendanceHistory childId={selectedChildId} />
+        <AttendanceHistory
+          childId={selectedChildId}
+          childGender={selectedChild.gender}
+        />
       </Suspense>
     </div>
   );

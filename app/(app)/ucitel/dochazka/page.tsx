@@ -20,14 +20,18 @@ import {
 } from "@/app/actions/teacher";
 import { formatDateWithWeekday } from "@/lib/utils";
 import {
+  ABSENT_CHILDREN_LABEL,
   ALL_CHILDREN_PRESENT_LABEL,
   getPresenceLabel,
+  PRESENT_CHILDREN_LABEL,
 } from "@/lib/presence-label";
+import type { ChildGender } from "@/lib/types";
 
 interface Child {
   id: string;
   firstName: string;
   lastName: string;
+  gender: ChildGender | null;
 }
 
 interface AttendanceRecord {
@@ -378,11 +382,15 @@ export default function TeacherAttendancePage() {
                 <div className="flex items-center gap-4">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-sage">{presentCount}</p>
-                    <p className="text-xs text-charcoal-light">Přítomno</p>
+                    <p className="text-xs text-charcoal-light">
+                      {PRESENT_CHILDREN_LABEL}
+                    </p>
                   </div>
                   <div className="text-center">
                     <p className="text-2xl font-bold text-coral">{absentCount}</p>
-                    <p className="text-xs text-charcoal-light">Nepřítomno</p>
+                    <p className="text-xs text-charcoal-light">
+                      {ABSENT_CHILDREN_LABEL}
+                    </p>
                   </div>
                 </div>
                 {!isInFuture && (
@@ -436,7 +444,7 @@ export default function TeacherAttendancePage() {
                       <span className={`text-sm font-medium ${
                         attendance[child.id] ? "text-sage" : "text-coral"
                       }`}>
-                        {getPresenceLabel(attendance[child.id])}
+                        {getPresenceLabel(attendance[child.id], child.gender)}
                       </span>
                       {!isInFuture && (
                         <span className="relative shrink-0">

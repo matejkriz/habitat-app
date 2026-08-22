@@ -7,6 +7,7 @@ describe("parent dashboard layout", () => {
   it("stacks attendance statuses below the date on narrow screens", () => {
     const AttendanceHistoryRow = (
       ParentPage as unknown as Record<string, React.ComponentType<{
+        childGender: "MALE" | "FEMALE" | null;
         record: {
           id: string;
           date: Date;
@@ -22,6 +23,7 @@ describe("parent dashboard layout", () => {
 
     const { container } = render(
       <AttendanceHistoryRow
+        childGender="FEMALE"
         record={{
           id: "attendance-1",
           date: new Date("2026-08-19T12:00:00.000Z"),
@@ -35,6 +37,7 @@ describe("parent dashboard layout", () => {
     expect(container.firstElementChild?.className).toContain(
       "grid-cols-[auto_minmax(0,1fr)]",
     );
+    expect(screen.getByText("Nepřítomna")).toBeTruthy();
     expect(screen.getByText("Neomluveno").parentElement?.className).toContain(
       "flex-wrap",
     );

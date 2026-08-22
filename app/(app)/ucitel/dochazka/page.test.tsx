@@ -42,10 +42,44 @@ describe("TeacherAttendancePage", () => {
     cleanup();
   });
 
+  it("uses each child's gender in attendance labels", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      {
+        id: "child-1",
+        firstName: "Jana",
+        lastName: "Nováková",
+        gender: "FEMALE",
+      },
+      {
+        id: "child-2",
+        firstName: "Jan",
+        lastName: "Novák",
+        gender: "MALE",
+      },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [
+        { childId: "child-1", presence: "PRESENT" },
+        { childId: "child-2", presence: "ABSENT" },
+      ],
+      excuses: [],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    expect(
+      await screen.findByText("Přítomna", { selector: "span" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Nepřítomen", { selector: "span" }),
+    ).toBeTruthy();
+  });
+
   it("shows whether each excused child was excused on time", async () => {
     mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Žofie", lastName: "Žížalka" },
-      { id: "child-2", firstName: "Oskar", lastName: "Okurka" },
+      { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
+      { id: "child-2", firstName: "Oskar", lastName: "Okurka", gender: "MALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
@@ -67,9 +101,9 @@ describe("TeacherAttendancePage", () => {
 
   it("prefills excused children as absent unless attendance was already saved", async () => {
     mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Žofie", lastName: "Žížalka" },
-      { id: "child-2", firstName: "Oskar", lastName: "Okurka" },
-      { id: "child-3", firstName: "Božena", lastName: "Bublina" },
+      { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
+      { id: "child-2", firstName: "Oskar", lastName: "Okurka", gender: "MALE" },
+      { id: "child-3", firstName: "Božena", lastName: "Bublina", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
@@ -135,7 +169,7 @@ describe("TeacherAttendancePage", () => {
 
   it("keeps future attendance read-only", async () => {
     mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Ada", lastName: "Lovelace" },
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
@@ -172,7 +206,7 @@ describe("TeacherAttendancePage", () => {
     }>();
 
     mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Ada", lastName: "Lovelace" },
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate
       .mockResolvedValueOnce({
@@ -228,7 +262,7 @@ describe("TeacherAttendancePage", () => {
     }>();
 
     mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Ada", lastName: "Lovelace" },
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate
       .mockResolvedValueOnce({
@@ -246,12 +280,12 @@ describe("TeacherAttendancePage", () => {
     render(<TeacherAttendancePage />);
 
     expect(
-      await screen.findByText("Přítomno", { selector: "span" }),
+      await screen.findByText("Přítomna", { selector: "span" }),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Následující den" }));
     expect(
-      await screen.findByText("Nepřítomno", { selector: "span" }),
+      await screen.findByText("Nepřítomna", { selector: "span" }),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Předchozí den" }));
@@ -259,7 +293,7 @@ describe("TeacherAttendancePage", () => {
     expect(
       screen.queryByRole("status", { name: "Načítání docházky" }),
     ).toBeNull();
-    expect(screen.getByText("Přítomno", { selector: "span" })).toBeTruthy();
+    expect(screen.getByText("Přítomna", { selector: "span" })).toBeTruthy();
     await waitFor(() => {
       expect(mocks.getAttendanceForDate).toHaveBeenCalledTimes(3);
     });
@@ -274,7 +308,7 @@ describe("TeacherAttendancePage", () => {
     });
 
     expect(
-      await screen.findByText("Nepřítomno", { selector: "span" }),
+      await screen.findByText("Nepřítomna", { selector: "span" }),
     ).toBeTruthy();
     expect(
       screen.queryByRole("status", { name: "Načítání docházky" }),
@@ -289,7 +323,7 @@ describe("TeacherAttendancePage", () => {
     }>();
 
     mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Ada", lastName: "Lovelace" },
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate
       .mockResolvedValueOnce({
@@ -323,7 +357,7 @@ describe("TeacherAttendancePage", () => {
     expect(
       screen.queryByRole("status", { name: "Načítání docházky" }),
     ).toBeNull();
-    expect(screen.getByText("Nepřítomno", { selector: "span" })).toBeTruthy();
+    expect(screen.getByText("Nepřítomna", { selector: "span" })).toBeTruthy();
   });
 
   it("toggles a child's attendance and gives haptic feedback when the card is tapped", async () => {
@@ -333,7 +367,7 @@ describe("TeacherAttendancePage", () => {
       value: vibrate,
     });
     mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Jana", lastName: "Nováková" },
+      { id: "child-1", firstName: "Jana", lastName: "Nováková", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
@@ -344,13 +378,13 @@ describe("TeacherAttendancePage", () => {
     render(<TeacherAttendancePage />);
 
     const childName = await screen.findByText("Jana Nováková");
-    expect(screen.getByText("Přítomno", { selector: "span" })).toBeTruthy();
+    expect(screen.getByText("Přítomna", { selector: "span" })).toBeTruthy();
 
     fireEvent.click(childName);
 
     await waitFor(() => {
       expect(
-        screen.getByText("Nepřítomno", { selector: "span" }),
+        screen.getByText("Nepřítomna", { selector: "span" }),
       ).toBeTruthy();
     });
     expect(vibrate).toHaveBeenCalledOnce();

@@ -10,6 +10,10 @@ import {
   Badge,
 } from "@/components/ui";
 import { formatShortDate } from "@/lib/utils";
+import {
+  ABSENT_CHILDREN_LABEL,
+  PRESENT_CHILDREN_LABEL,
+} from "@/lib/presence-label";
 import { AuditQuickAction } from "./audit-quick-action";
 
 export const metadata = {
@@ -44,11 +48,15 @@ async function DashboardContent() {
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center p-4 bg-sage/10 rounded-lg">
                 <p className="text-3xl font-bold text-sage">{stats.today.present}</p>
-                <p className="text-sm text-charcoal-light">Přítomno</p>
+                <p className="text-sm text-charcoal-light">
+                  {PRESENT_CHILDREN_LABEL}
+                </p>
               </div>
               <div className="text-center p-4 bg-coral/10 rounded-lg">
                 <p className="text-3xl font-bold text-coral">{stats.today.absent}</p>
-                <p className="text-sm text-charcoal-light">Nepřítomno</p>
+                <p className="text-sm text-charcoal-light">
+                  {ABSENT_CHILDREN_LABEL}
+                </p>
               </div>
               <div className="text-center p-4 bg-cream-dark rounded-lg">
                 <p className="text-3xl font-bold text-charcoal">{stats.today.total}</p>

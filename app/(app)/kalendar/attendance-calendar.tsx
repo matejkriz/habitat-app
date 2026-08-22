@@ -9,6 +9,7 @@ import {
 import type { AttendanceCalendarDay, CalendarChildDetail } from "@/lib/attendance-calendar";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui";
+import { PRESENT_CHILDREN_LABEL } from "@/lib/presence-label";
 
 const WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
 
@@ -375,7 +376,9 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="rounded-xl bg-sage/10 p-3 text-center">
                   <p className="text-2xl font-extrabold text-sage-dark">{day.counts.expected}</p>
-                  <p className="text-xs text-charcoal-light">{day.isPast ? "Přítomno" : "Očekáváno"}</p>
+                  <p className="text-xs text-charcoal-light">
+                    {day.isPast ? PRESENT_CHILDREN_LABEL : "Očekávané děti"}
+                  </p>
                 </div>
                 <div className="rounded-xl bg-sage/10 p-3 text-center">
                   <p className="text-2xl font-extrabold text-sage-dark">{day.counts.present}</p>

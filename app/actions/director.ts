@@ -32,6 +32,7 @@ type AttendanceWithChild = Attendance & {
     readonly id: string;
     readonly firstName: string;
     readonly lastName: string;
+    readonly gender: ChildGender | null;
   };
   readonly excuse?: {
     readonly reason?: string | null;
@@ -444,6 +445,7 @@ export async function exportAttendanceCSV(
         select: {
           firstName: true,
           lastName: true,
+          gender: true,
         },
       },
       excuse: {
@@ -468,7 +470,7 @@ export async function exportAttendanceCSV(
     a.date.toLocaleDateString("cs-CZ"),
     a.child.firstName,
     a.child.lastName,
-    getPresenceLabel(a.presence === Presence.PRESENT),
+    getPresenceLabel(a.presence === Presence.PRESENT, a.child.gender),
     a.excuseStatus === ExcuseStatus.NONE
       ? ""
       : a.excuseStatus === ExcuseStatus.EXCUSED
