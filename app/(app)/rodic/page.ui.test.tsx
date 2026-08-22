@@ -1,26 +1,19 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import * as ParentPage from "./page";
+import { AttendanceHistoryRow } from "./attendance-history-row";
+import { NewExcuseLink } from "./new-excuse-link";
 
 describe("parent dashboard layout", () => {
+  it("hides the new excuse shortcut on narrow screens", () => {
+    render(<NewExcuseLink childId="child-1" />);
+
+    const link = screen.getByRole("link", { name: "Nová omluvenka" });
+    expect(link.className).toContain("hidden");
+    expect(link.className).toContain("sm:inline-flex");
+  });
+
   it("stacks attendance statuses below the date on narrow screens", () => {
-    const AttendanceHistoryRow = (
-      ParentPage as unknown as Record<string, React.ComponentType<{
-        childGender: "MALE" | "FEMALE" | null;
-        record: {
-          id: string;
-          date: Date;
-          presence: "PRESENT" | "ABSENT";
-          excuseStatus: "NONE" | "EXCUSED" | "UNEXCUSED";
-          excuse: null;
-        };
-      }>>
-    ).AttendanceHistoryRow;
-
-    expect(AttendanceHistoryRow).toBeTypeOf("function");
-    if (!AttendanceHistoryRow) return;
-
     const { container } = render(
       <AttendanceHistoryRow
         childGender="FEMALE"
