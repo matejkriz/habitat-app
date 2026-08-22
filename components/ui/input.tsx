@@ -14,7 +14,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
 
     return (
-      <div className="w-full">
+      <div className="w-full min-w-0">
         {label && (
           <label
             htmlFor={inputId}
@@ -28,7 +28,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           type={type}
           className={cn(
-            "w-full h-10 px-3 rounded-lg border-2 bg-white text-charcoal placeholder:text-charcoal-light/50",
+            "w-full min-w-0 max-w-full h-10 px-3 rounded-lg border-2 bg-white text-charcoal placeholder:text-charcoal-light/50",
             "transition-colors duration-200",
             "focus:outline-none focus:border-gold focus:ring-0",
             error
