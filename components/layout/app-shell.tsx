@@ -356,14 +356,14 @@ export function AppShell({ children, user }: AppShellProps) {
               aria-busy={pendingHref === item.href || undefined}
               onNavigate={() => startNavigation(item.href)}
               className={cn(
-                "flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
+                "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-xs font-medium transition-colors",
                 selectedHref === item.href
                   ? "bg-gold/10 text-gold"
                   : "text-charcoal-light"
               )}
             >
               {item.icon}
-              <span className="truncate max-w-[60px]">{item.label}</span>
+              <span className="whitespace-nowrap">{item.label}</span>
             </Link>
           ))}
         </div>

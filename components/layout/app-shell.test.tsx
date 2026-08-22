@@ -75,6 +75,23 @@ describe("AppShell", () => {
     );
   });
 
+  it("shows the complete mobile navigation label for excuses", () => {
+    render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    const excusesLabel = screen.getByText("Omluvenky", { selector: "span" });
+    const excusesLink = excusesLabel.closest("a");
+
+    expect(excusesLabel.className).toContain("whitespace-nowrap");
+    expect(excusesLabel.className).not.toContain("truncate");
+    expect(excusesLabel.className).not.toContain("max-w-");
+    expect(excusesLink?.className).toContain("min-w-0");
+    expect(excusesLink?.className).toContain("flex-1");
+  });
+
   it("reveals sign out only after opening the user menu", () => {
     render(
       <AppShell user={director}>
