@@ -12,7 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Generated service worker
+    // Service worker uses the worker runtime rather than page globals.
     "public/sw.js",
     // Generated Convex files
     "convex/_generated/**",

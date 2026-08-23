@@ -32,9 +32,8 @@ pnpm exec convex env set VAPID_PRIVATE_KEY "vygenerovaný soukromý klíč"
 
 Po změně `NEXT_PUBLIC_VAPID_PUBLIC_KEY` je nutný nový produkční build. Web Push
 funguje pouze přes HTTPS; na iOS/iPadOS musí mít uživatel PWA přidanou na plochu.
-Lokální `pnpm dev` používá webpack a service worker zapne, pokud je development
-veřejný VAPID klíč nastavený; `localhost` je pro service worker považovaný za
-bezpečný kontext.
+Klient registruje statický service worker bez offline precache; `localhost` je
+pro service worker považovaný za bezpečný kontext.
 
 ## Spolehlivost
 

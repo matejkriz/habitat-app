@@ -35,7 +35,7 @@ async function getPushServiceWorkerRegistration(): Promise<ServiceWorkerRegistra
 
   const registered = await navigator.serviceWorker.register("/sw.js", {
     scope: "/",
-    type: "module",
+    updateViaCache: "none",
   });
   if (registered.active) return registered;
 

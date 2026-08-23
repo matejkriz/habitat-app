@@ -14,7 +14,7 @@ Systém docházky a omluvenek pro Dětskou vzdělávací skupinu Habitat Zbrasla
 - **UI**: React 19, Tailwind CSS v4
 - **Auth**: WorkOS AuthKit (Google OAuth, Email OTP)
 - **Backend databáze**: Convex
-- **PWA**: Serwist
+- **PWA**: Web App Manifest, Web Push
 - **Lokální vývoj**: Portless
 
 ## Instalace

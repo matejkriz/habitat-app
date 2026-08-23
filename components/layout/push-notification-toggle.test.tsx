@@ -57,7 +57,10 @@ describe("PushNotificationToggle", () => {
     render(<PushNotificationToggle />);
 
     expect(await screen.findByText("Vypnuto")).toBeTruthy();
-    expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/", type: "module" });
+    expect(register).toHaveBeenCalledWith("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
   });
 
   it("stops loading when the service worker cannot become active", async () => {
