@@ -11,18 +11,14 @@ import {
 
 describe("Excuse Rules", () => {
   describe("resolveExcuseChildIds", () => {
-    it("uses the preselected child when no checkbox is selected", () => {
-      expect(resolveExcuseChildIds([], "child-1")).toEqual(["child-1"]);
+    it("rejects an empty selection", () => {
+      expect(() => resolveExcuseChildIds([])).toThrow("Vyberte alespoň jedno dítě.");
     });
 
     it("uses only checked children and removes duplicates", () => {
       expect(
-        resolveExcuseChildIds(["child-2", "child-1", "child-2"], "child-1"),
+        resolveExcuseChildIds(["child-2", "child-1", "child-2"]),
       ).toEqual(["child-2", "child-1"]);
-    });
-
-    it("rejects a missing fallback child", () => {
-      expect(() => resolveExcuseChildIds([], "")).toThrow("Vyberte alespoň jedno dítě.");
     });
   });
 

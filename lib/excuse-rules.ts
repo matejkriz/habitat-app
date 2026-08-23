@@ -29,18 +29,13 @@ export function parseExcuseDate(value: string): Date {
 
 export function resolveExcuseChildIds(
   selectedChildIds: ReadonlyArray<string>,
-  fallbackChildId: string,
 ): string[] {
   const selected = [...new Set(selectedChildIds.filter(Boolean))];
-  if (selected.length > 0) {
-    return selected;
-  }
-
-  if (!fallbackChildId) {
+  if (selected.length === 0) {
     throw new Error("Vyberte alespoň jedno dítě.");
   }
 
-  return [fallbackChildId];
+  return selected;
 }
 
 /**

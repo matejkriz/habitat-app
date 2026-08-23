@@ -68,6 +68,12 @@ export default function NewExcusePage() {
     e.preventDefault();
     setError("");
     setSuccess(null);
+
+    if (selectedChildIds.length === 0) {
+      setError("Vyberte alespoň jedno dítě.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -110,7 +116,10 @@ export default function NewExcusePage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm">
+              <div
+                className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm"
+                role="alert"
+              >
                 {error}
               </div>
             )}

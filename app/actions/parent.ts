@@ -287,13 +287,11 @@ export const submitExcuse = async (formData: FormData) => {
     throw new Error("Unauthorized");
   }
 
-  const fallbackChildId = formData.get("childId");
   const fromDateStr = formData.get("fromDate");
   const toDateStr = formData.get("toDate");
   const reasonValue = formData.get("reason");
 
   if (
-    typeof fallbackChildId !== "string" ||
     typeof fromDateStr !== "string" ||
     typeof toDateStr !== "string"
   ) {
@@ -303,7 +301,7 @@ export const submitExcuse = async (formData: FormData) => {
   const requestedChildIds = formData
     .getAll("childIds")
     .filter((value): value is string => typeof value === "string");
-  const childIds = resolveExcuseChildIds(requestedChildIds, fallbackChildId);
+  const childIds = resolveExcuseChildIds(requestedChildIds);
 
   if (!(await canManageExcuses(user, childIds))) {
     throw new Error("Access denied");

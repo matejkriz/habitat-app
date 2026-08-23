@@ -71,7 +71,7 @@ describe("NewExcusePage", () => {
     expect((jan as HTMLInputElement).checked).toBe(true);
   });
 
-  it("submits no checkbox values when all are cleared so the server can use the fallback", async () => {
+  it("shows an error and does not submit when all children are cleared", async () => {
     render(<NewExcusePage />);
 
     const anna = await screen.findByRole("checkbox", { name: "Anna Nováková" });
@@ -80,10 +80,8 @@ describe("NewExcusePage", () => {
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-10" } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
 
-    await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalled());
-    const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
-    expect(formData.get("childId")).toBe("child-1");
-    expect(formData.getAll("childIds")).toEqual([]);
+    expect(await screen.findByText("Vyberte alespoň jedno dítě.")).toBeTruthy();
+    expect(mocks.submitExcuse).not.toHaveBeenCalled();
   });
 
   it("can submit the excuse only for the other child", async () => {

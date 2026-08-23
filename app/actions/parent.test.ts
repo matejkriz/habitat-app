@@ -92,4 +92,15 @@ describe("submitExcuse", () => {
     await expect(submitExcuse(makeFormData())).rejects.toThrow("Access denied");
     expect(mocks.createExcuse).not.toHaveBeenCalled();
   });
+
+  it("creates nothing when no child is selected", async () => {
+    const formData = makeFormData();
+    formData.delete("childIds");
+
+    await expect(submitExcuse(formData)).rejects.toThrow(
+      "Vyberte alespoň jedno dítě.",
+    );
+    expect(mocks.canManageExcuses).not.toHaveBeenCalled();
+    expect(mocks.createExcuse).not.toHaveBeenCalled();
+  });
 });
