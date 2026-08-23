@@ -10,6 +10,11 @@ import {
   Badge,
 } from "@/components/ui";
 import { formatShortDate } from "@/lib/utils";
+import {
+  ABSENT_CHILDREN_LABEL,
+  PRESENT_CHILDREN_LABEL,
+} from "@/lib/presence-label";
+import { AuditQuickAction } from "./audit-quick-action";
 
 export const metadata = {
   title: "Administrace",
@@ -29,7 +34,7 @@ async function DashboardContent() {
       </div>
 
       {/* Today's Summary */}
-      <Card className="bg-gradient-to-br from-gold/5 to-sage/5">
+      <Card className="bg-gold/5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -43,11 +48,15 @@ async function DashboardContent() {
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center p-4 bg-sage/10 rounded-lg">
                 <p className="text-3xl font-bold text-sage">{stats.today.present}</p>
-                <p className="text-sm text-charcoal-light">Přítomno</p>
+                <p className="text-sm text-charcoal-light">
+                  {PRESENT_CHILDREN_LABEL}
+                </p>
               </div>
               <div className="text-center p-4 bg-coral/10 rounded-lg">
                 <p className="text-3xl font-bold text-coral">{stats.today.absent}</p>
-                <p className="text-sm text-charcoal-light">Nepřítomno</p>
+                <p className="text-sm text-charcoal-light">
+                  {ABSENT_CHILDREN_LABEL}
+                </p>
               </div>
               <div className="text-center p-4 bg-cream-dark rounded-lg">
                 <p className="text-3xl font-bold text-charcoal">{stats.today.total}</p>
@@ -182,7 +191,7 @@ async function DashboardContent() {
       </Card>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Link href="/ucitel/dochazka">
           <Card hover className="h-full">
             <CardContent className="pt-6 flex flex-col items-center text-center">
@@ -252,6 +261,8 @@ async function DashboardContent() {
             </CardContent>
           </Card>
         </Link>
+
+        <AuditQuickAction />
       </div>
     </div>
   );

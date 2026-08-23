@@ -154,6 +154,14 @@ const getClient = (): ConvexHttpClient => {
   return client;
 };
 
+const getPushInternalSecret = (): string => {
+  const secret = process.env.PUSH_INTERNAL_SECRET;
+  if (!secret) {
+    throw new Error("PUSH_INTERNAL_SECRET is not configured");
+  }
+  return secret;
+};
+
 type ConvexQueryReference = FunctionReference<"query">;
 type ConvexMutationReference = FunctionReference<"mutation">;
 
@@ -1124,5 +1132,32 @@ export const db: any = {
 
       return applyTake(withInclude, args.take);
     },
+  },
+
+  pushSubscriptions: {
+    upsertDirector: async (args: {
+      userId: string;
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+    }) =>
+      await convexMutation(api.pushNotifications.upsertDirectorSubscription, {
+        secret: getPushInternalSecret(),
+        ...args,
+      }),
+
+    removeDirector: async (args: { userId: string; endpoint: string }) =>
+      await convexMutation(api.pushNotifications.removeDirectorSubscription, {
+        secret: getPushInternalSecret(),
+        ...args,
+      }),
+  },
+
+  notifications: {
+    enqueueExcuse: async (args: { excuseId: string }) =>
+      await convexMutation(api.pushNotifications.enqueueExcuse, {
+        secret: getPushInternalSecret(),
+        ...args,
+      }),
   },
 };

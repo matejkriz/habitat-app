@@ -109,4 +109,49 @@ export default defineSchema({
     .index("by_user_id", { fields: ["userId"] })
     .index("by_entity", { fields: ["entityType", "entityId"] })
     .index("by_created_at", { fields: ["createdAt"] }),
+
+  pushSubscriptions: defineTable({
+    userId: v.string(),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+    topics: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_id", { fields: ["userId"] })
+    .index("by_endpoint", { fields: ["endpoint"] }),
+
+  notificationEvents: defineTable({
+    dedupeKey: v.string(),
+    type: v.string(),
+    title: v.string(),
+    body: v.string(),
+    url: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_dedupe_key", { fields: ["dedupeKey"] })
+    .index("by_created_at", { fields: ["createdAt"] }),
+
+  notificationDeliveries: defineTable({
+    eventId: v.id("notificationEvents"),
+    subscriptionId: v.id("pushSubscriptions"),
+    status: v.string(),
+    attemptCount: v.number(),
+    nextAttemptAt: v.number(),
+    leaseUntil: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    sentAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_event_id", { fields: ["eventId"] })
+    .index("by_subscription_id", { fields: ["subscriptionId"] })
+    .index("by_status_next_attempt", { fields: ["status", "nextAttemptAt"] }),
+
+  notificationCursors: defineTable({
+    key: v.string(),
+    lastProcessedAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_key", { fields: ["key"] }),
 });

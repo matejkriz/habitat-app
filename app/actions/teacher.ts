@@ -167,6 +167,7 @@ export const saveAttendance = async (
   });
 
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
   revalidatePath("/rodic");
 
   return { success: true, recordCount: records.length };

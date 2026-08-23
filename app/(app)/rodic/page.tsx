@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getDbUser } from "@/lib/auth";
 import { UserRole, type ChildGender } from "@/lib/types";
 import {
@@ -15,14 +14,18 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
-  Button,
-  PresenceBadge,
   ExcuseStatusBadge,
 } from "@/components/ui";
 import { formatDateWithWeekday } from "@/lib/utils";
 import { parseMonth } from "@/lib/parent-calendar";
+import { getPresenceLabel } from "@/lib/presence-label";
 import { ChildSelector } from "./child-selector";
 import { AttendanceCalendar } from "./attendance-calendar";
+import {
+  AttendanceHistoryRow,
+  type AttendanceHistoryItem,
+} from "./attendance-history-row";
+import { NewExcuseLink } from "./new-excuse-link";
 
 export const metadata = {
   title: "Přehled dítěte",
@@ -35,21 +38,17 @@ type ParentChildItem = {
   readonly gender: ChildGender | null;
 };
 
-type AttendanceHistoryItem = {
-  readonly id: string;
-  readonly date: Date;
-  readonly presence: "PRESENT" | "ABSENT";
-  readonly excuseStatus: "NONE" | "EXCUSED" | "UNEXCUSED";
-  readonly excuse?: {
-    readonly reason?: string | null;
-  } | null;
-};
-
-async function TodayCard({ childId }: { childId: string }) {
+async function TodayCard({
+  childId,
+  childGender,
+}: {
+  childId: string;
+  childGender: ChildGender | null;
+}) {
   const status = await getChildTodayStatus(childId);
 
   return (
-    <Card className="bg-gradient-to-br from-gold/5 to-sage/5">
+    <Card className="bg-gold/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -93,9 +92,10 @@ async function TodayCard({ childId }: { childId: string }) {
               </div>
               <div>
                 <p className="font-semibold text-charcoal">
-                  {status.attendance.presence === "PRESENT"
-                    ? "Přítomen/a"
-                    : "Nepřítomen/a"}
+                  {getPresenceLabel(
+                    status.attendance.presence === "PRESENT",
+                    childGender,
+                  )}
                 </p>
                 {status.attendance.excuseStatus !== "NONE" && (
                   <ExcuseStatusBadge status={status.attendance.excuseStatus} />
@@ -158,51 +158,13 @@ async function StatsCard({ childId }: { childId: string }) {
   );
 }
 
-export function AttendanceHistoryRow({
-  record,
+async function AttendanceHistory({
+  childId,
+  childGender,
 }: {
-  record: AttendanceHistoryItem;
+  childId: string;
+  childGender: ChildGender | null;
 }) {
-  return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-lg bg-cream p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
-      <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-          record.presence === "PRESENT" ? "bg-sage/20" : "bg-coral/20"
-        }`}
-      >
-        {record.presence === "PRESENT" ? (
-          <svg className="h-4 w-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        ) : (
-          <svg className="h-4 w-4 text-coral" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        )}
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-charcoal">
-          {formatDateWithWeekday(record.date)}
-        </p>
-        {record.excuse?.reason && (
-          <p className="break-words text-xs text-charcoal-light">
-            {record.excuse.reason}
-          </p>
-        )}
-      </div>
-
-      <div className="col-span-2 flex flex-wrap items-center gap-2 pl-11 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:justify-end sm:pl-0">
-        <PresenceBadge present={record.presence === "PRESENT"} />
-        {record.excuseStatus !== "NONE" && (
-          <ExcuseStatusBadge status={record.excuseStatus} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-async function AttendanceHistory({ childId }: { childId: string }) {
   const history =
     (await getChildAttendanceHistory(childId)) as ReadonlyArray<AttendanceHistoryItem>;
 
@@ -234,7 +196,11 @@ async function AttendanceHistory({ childId }: { childId: string }) {
       <CardContent>
         <div className="space-y-2">
           {history.map((record) => (
-            <AttendanceHistoryRow key={record.id} record={record} />
+            <AttendanceHistoryRow
+              key={record.id}
+              record={record}
+              childGender={childGender}
+            />
           ))}
         </div>
       </CardContent>
@@ -340,17 +306,7 @@ export default async function ParentDashboard({
               selectedId={selectedChildId}
             />
           )}
-          <Link
-            href={`/rodic/omluvenka?child=${selectedChildId}`}
-            className="inline-flex shrink-0"
-          >
-            <Button className="w-full">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Nová omluvenka
-            </Button>
-          </Link>
+          <NewExcuseLink childId={selectedChildId} />
         </div>
       </div>
 
@@ -366,7 +322,10 @@ export default async function ParentDashboard({
       {/* Content Grid */}
       <div className="grid gap-6 md:grid-cols-2">
         <Suspense fallback={<LoadingCard />}>
-          <TodayCard childId={selectedChildId} />
+          <TodayCard
+            childId={selectedChildId}
+            childGender={selectedChild.gender}
+          />
         </Suspense>
 
         <Suspense fallback={<LoadingCard />}>
@@ -375,7 +334,10 @@ export default async function ParentDashboard({
       </div>
 
       <Suspense fallback={<LoadingCard />}>
-        <AttendanceHistory childId={selectedChildId} />
+        <AttendanceHistory
+          childId={selectedChildId}
+          childGender={selectedChild.gender}
+        />
       </Suspense>
     </div>
   );

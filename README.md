@@ -50,6 +50,10 @@ CONVEX_URL="https://your-deployment.convex.cloud"
 WORKOS_CLIENT_ID="client_..."
 WORKOS_API_KEY="sk_test_..."
 WORKOS_COOKIE_PASSWORD="replace-with-at-least-32-random-characters"
+
+# Push notifikace (veřejný VAPID klíč + sdílené serverové tajemství)
+NEXT_PUBLIC_VAPID_PUBLIC_KEY="..."
+PUSH_INTERNAL_SECRET="..."
 ```
 
 Lokální `NEXT_PUBLIC_WORKOS_REDIRECT_URI` se nenastavuje. Portless ji při
@@ -105,6 +109,10 @@ WORKOS_API_KEY="sk_live_..."
 WORKOS_COOKIE_PASSWORD="samostatný-náhodný-řetězec-minimálně-32-znaků"
 NEXT_PUBLIC_WORKOS_REDIRECT_URI="https://<produkční-doména>/callback"
 ```
+
+Pro push notifikace je navíc potřeba nastavit VAPID klíče a stejné
+`PUSH_INTERNAL_SECRET` v Next.js i Convexu. Přesný postup je v
+[`docs/push-notifications.md`](docs/push-notifications.md).
 
 ### Reprodukovatelná testovací data
 

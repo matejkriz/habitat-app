@@ -221,9 +221,6 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
             </span>
           ))}
         </div>
-        <p className="mt-3 text-xs text-charcoal-light">
-          Klepněte na den pro rychlou omluvenku. Na mobilu můžete den také podržet.
-        </p>
       </div>
     </Card>
   );

@@ -160,4 +160,20 @@ describe("AttendanceCalendar", () => {
     expect(closedDay.className).toContain("opacity-65");
     expect(missingDay.className).not.toContain("opacity-65");
   });
+
+  it("does not show interaction instructions below the calendar", () => {
+    render(
+      <AttendanceCalendar
+        childId="child-1"
+        childName="Žofie"
+        childGender="FEMALE"
+        month="2026-08"
+        days={days}
+      />,
+    );
+
+    expect(document.body.textContent).not.toContain(
+      "Klepněte na den pro rychlou omluvenku. Na mobilu můžete den také podržet.",
+    );
+  });
 });

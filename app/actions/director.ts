@@ -2,6 +2,7 @@
 
 import { getDbUser, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getPresenceLabel } from "@/lib/presence-label";
 import {
   UserRole,
   Presence,
@@ -31,6 +32,7 @@ type AttendanceWithChild = Attendance & {
     readonly id: string;
     readonly firstName: string;
     readonly lastName: string;
+    readonly gender: ChildGender | null;
   };
   readonly excuse?: {
     readonly reason?: string | null;
@@ -287,6 +289,7 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
+  revalidatePath("/kalendar");
 
   return updated;
 }
@@ -342,6 +345,7 @@ export async function addClosedDay(dateStr: string, description?: string) {
   });
 
   revalidatePath("/reditel/volne-dny");
+  revalidatePath("/kalendar");
 
   return closedDay;
 }
@@ -379,6 +383,7 @@ export async function removeClosedDay(id: string) {
   });
 
   revalidatePath("/reditel/volne-dny");
+  revalidatePath("/kalendar");
 }
 
 /**
@@ -440,6 +445,7 @@ export async function exportAttendanceCSV(
         select: {
           firstName: true,
           lastName: true,
+          gender: true,
         },
       },
       excuse: {
@@ -464,7 +470,7 @@ export async function exportAttendanceCSV(
     a.date.toLocaleDateString("cs-CZ"),
     a.child.firstName,
     a.child.lastName,
-    a.presence === Presence.PRESENT ? "Přítomen" : "Nepřítomen",
+    getPresenceLabel(a.presence === Presence.PRESENT, a.child.gender),
     a.excuseStatus === ExcuseStatus.NONE
       ? ""
       : a.excuseStatus === ExcuseStatus.EXCUSED
@@ -598,6 +604,7 @@ export async function createChild(
 
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
 
   return child;
 }
@@ -659,6 +666,7 @@ export async function updateChild(
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/rodic");
+  revalidatePath("/kalendar");
 
   return updated;
 }
@@ -696,6 +704,7 @@ export async function toggleChildActive(childId: string, active: boolean) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
 
   return updated;
 }

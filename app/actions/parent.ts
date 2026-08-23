@@ -307,6 +307,7 @@ export const submitExcuse = async (formData: FormData) => {
 
   revalidatePath("/rodic");
   revalidatePath("/rodic/omluvenka");
+  revalidatePath("/kalendar");
 
   return {
     success: true,
