@@ -1,27 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Excuse } from "@/lib/types";
+import { ChildGender, UserRole, type Excuse } from "@/lib/types";
 
 const mocks = vi.hoisted(() => ({
   getDbUser: vi.fn(),
+  listParentLinks: vi.fn(),
   canManageExcuses: vi.fn(),
   createExcuse: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
-vi.mock("@/lib/db", () => ({ db: {} }));
+vi.mock("@/lib/db", () => ({
+  db: {
+    parentLinks: { list: mocks.listParentLinks },
+  },
+}));
+vi.mock("@/lib/school-days", () => ({ isClosedDay: vi.fn() }));
 vi.mock("@/lib/excuse", () => ({
+  createExcuse: mocks.createExcuse,
   canManageExcuse: vi.fn(),
   canManageExcuses: mocks.canManageExcuses,
   canSubmitExcuse: vi.fn(),
-  createExcuse: mocks.createExcuse,
   deleteExcuse: vi.fn(),
   updateExcuse: vi.fn(),
 }));
-vi.mock("@/lib/school-days", () => ({ isClosedDay: vi.fn() }));
+vi.mock("@/lib/parent-calendar", () => ({
+  buildParentCalendarMonth: vi.fn(),
+  parseMonth: vi.fn(),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 
-import { submitExcuse } from "./parent";
+import { getParentChildren, submitExcuse } from "./parent";
 
 const makeExcuse = (childId: string): Excuse => ({
   id: `excuse-${childId}`,
@@ -102,5 +111,39 @@ describe("submitExcuse", () => {
     );
     expect(mocks.canManageExcuses).not.toHaveBeenCalled();
     expect(mocks.createExcuse).not.toHaveBeenCalled();
+  });
+});
+
+describe("getParentChildren", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDbUser.mockResolvedValue({
+      id: "parent-1",
+      role: UserRole.PARENT,
+    });
+  });
+
+  it("returns only child data visible to parents", async () => {
+    mocks.listParentLinks.mockResolvedValue([
+      {
+        child: {
+          id: "child-1",
+          firstName: "Anna",
+          lastName: "Novakova",
+          gender: ChildGender.FEMALE,
+          active: true,
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-02"),
+        },
+      },
+    ]);
+
+    await expect(getParentChildren()).resolves.toEqual([
+      {
+        id: "child-1",
+        firstName: "Anna",
+        gender: ChildGender.FEMALE,
+      },
+    ]);
   });
 });

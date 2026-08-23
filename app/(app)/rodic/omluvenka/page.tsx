@@ -12,7 +12,11 @@ import {
   Input,
   Textarea,
 } from "@/components/ui";
-import { getParentChildren, submitExcuse } from "@/app/actions/parent";
+import {
+  getParentChildren,
+  submitExcuse,
+  type ParentVisibleChild,
+} from "@/app/actions/parent";
 import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
 
 export default function NewExcusePage() {
@@ -21,7 +25,7 @@ export default function NewExcusePage() {
   const preselectedChildId = searchParams.get("child");
   const preselectedDate = searchParams.get("date") || "";
 
-  const [children, setChildren] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
+  const [children, setChildren] = useState<ParentVisibleChild[]>([]);
   const [selectedChildId, setSelectedChildId] = useState(preselectedChildId || "");
   const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
   const [fromDate, setFromDate] = useState(preselectedDate);
@@ -161,7 +165,6 @@ export default function NewExcusePage() {
                 </legend>
                 <div className="space-y-2 rounded-lg border-2 border-cream-dark bg-white p-3">
                   {children.map((child) => {
-                    const name = `${child.firstName} ${child.lastName}`;
                     return (
                       <label
                         key={child.id}
@@ -181,7 +184,9 @@ export default function NewExcusePage() {
                           }}
                           className="h-5 w-5 rounded border-cream-dark accent-gold"
                         />
-                        <span className="font-medium text-charcoal">{name}</span>
+                        <span className="font-medium text-charcoal">
+                          {child.firstName}
+                        </span>
                       </label>
                     );
                   })}

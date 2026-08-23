@@ -8,6 +8,7 @@ import {
   ExcuseStatus,
   type Attendance,
   type Child,
+  type ChildGender,
   type ClosedDay,
   type Excuse,
 } from "@/lib/types";
@@ -26,6 +27,12 @@ import { revalidatePath } from "next/cache";
 
 type ParentChildWithChild = {
   readonly child: Child;
+};
+
+export type ParentVisibleChild = {
+  readonly id: string;
+  readonly firstName: string;
+  readonly gender: ChildGender | null;
 };
 
 type ChildTodayStatus = {
@@ -66,7 +73,9 @@ type ChildExcuseItem = {
 /**
  * Get children for the current parent
  */
-export const getParentChildren = async (): Promise<ReadonlyArray<Child>> => {
+export const getParentChildren = async (): Promise<
+  ReadonlyArray<ParentVisibleChild>
+> => {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
@@ -79,7 +88,11 @@ export const getParentChildren = async (): Promise<ReadonlyArray<Child>> => {
     },
   })) as ReadonlyArray<ParentChildWithChild>;
 
-  return parentChildren.map((pc) => pc.child);
+  return parentChildren.map(({ child }) => ({
+    id: child.id,
+    firstName: child.firstName,
+    gender: child.gender,
+  }));
 };
 
 /**

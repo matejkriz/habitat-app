@@ -36,7 +36,6 @@ export const metadata = {
 type ParentChildItem = {
   readonly id: string;
   readonly firstName: string;
-  readonly lastName: string;
   readonly gender: ChildGender | null;
 };
 
@@ -313,7 +312,7 @@ export default async function ParentDashboard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">
-            {selectedChild.firstName} {selectedChild.lastName}
+            {selectedChild.firstName}
           </h1>
           <p className="text-charcoal-light">Přehled docházky</p>
         </div>
@@ -323,7 +322,7 @@ export default async function ParentDashboard({
             <ChildSelector
               items={children.map((c) => ({
                 id: c.id,
-                name: `${c.firstName} ${c.lastName}`,
+                name: c.firstName,
               }))}
               selectedId={selectedChildId}
             />

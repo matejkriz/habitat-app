@@ -23,18 +23,12 @@ const children = [
   {
     id: "child-1",
     firstName: "Anna",
-    lastName: "Nováková",
-    active: true,
-    createdAt: new Date(2024, 0, 1),
-    updatedAt: new Date(2024, 0, 1),
+    gender: "FEMALE",
   },
   {
     id: "child-2",
     firstName: "Jan",
-    lastName: "Novák",
-    active: true,
-    createdAt: new Date(2024, 0, 1),
-    updatedAt: new Date(2024, 0, 1),
+    gender: "MALE",
   },
 ];
 
@@ -59,11 +53,12 @@ describe("NewExcusePage", () => {
   it("preselects the current child and lets the parent select both children", async () => {
     render(<NewExcusePage />);
 
-    const anna = await screen.findByRole("checkbox", { name: "Anna Nováková" });
-    const jan = screen.getByRole("checkbox", { name: "Jan Novák" });
+    const anna = await screen.findByRole("checkbox", { name: "Anna" });
+    const jan = screen.getByRole("checkbox", { name: "Jan" });
 
     expect((anna as HTMLInputElement).checked).toBe(true);
     expect((jan as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByText(/Novák/)).toBeNull();
 
     fireEvent.click(jan);
 
@@ -74,7 +69,7 @@ describe("NewExcusePage", () => {
   it("shows an error and does not submit when all children are cleared", async () => {
     render(<NewExcusePage />);
 
-    const anna = await screen.findByRole("checkbox", { name: "Anna Nováková" });
+    const anna = await screen.findByRole("checkbox", { name: "Anna" });
     fireEvent.click(anna);
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-09-10" } });
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-10" } });
@@ -87,8 +82,8 @@ describe("NewExcusePage", () => {
   it("can submit the excuse only for the other child", async () => {
     render(<NewExcusePage />);
 
-    const anna = await screen.findByRole("checkbox", { name: "Anna Nováková" });
-    const jan = screen.getByRole("checkbox", { name: "Jan Novák" });
+    const anna = await screen.findByRole("checkbox", { name: "Anna" });
+    const jan = screen.getByRole("checkbox", { name: "Jan" });
     fireEvent.click(anna);
     fireEvent.click(jan);
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-09-10" } });
@@ -103,8 +98,8 @@ describe("NewExcusePage", () => {
   it("can submit the excuse for both children", async () => {
     render(<NewExcusePage />);
 
-    await screen.findByRole("checkbox", { name: "Anna Nováková" });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Jan Novák" }));
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Jan" }));
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-09-10" } });
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-10" } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
