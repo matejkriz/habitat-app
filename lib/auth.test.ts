@@ -149,4 +149,48 @@ describe("getDbUser development personas", () => {
     });
     expect(mocks.userCreate).not.toHaveBeenCalled();
   });
+
+  it("does not preserve a profile image from a retired identity provider", async () => {
+    vi.stubEnv("VERCEL_TARGET_ENV", "production");
+    vi.stubEnv("VERCEL_GIT_COMMIT_REF", "main");
+    const prefilledUser = {
+      ...personaUser,
+      id: "prefilled-parent",
+      workosId: "seed:parent-roza",
+      email: "parent@example.test",
+      image: "https://legacy-idp.example.test/avatar.png",
+      role: "PARENT" as const,
+    };
+    mocks.withAuth.mockResolvedValueOnce({
+      user: {
+        id: "user_workos",
+        email: "parent@example.test",
+        name: "Rodič Z WorkOS",
+        firstName: "Rodič",
+        lastName: "Z WorkOS",
+        profilePictureUrl: null,
+      },
+    });
+    mocks.userGet.mockImplementation(async ({ where }) => {
+      if (where.workosId === "user_workos") return null;
+      if (where.email === "parent@example.test") return prefilledUser;
+      return null;
+    });
+    mocks.userUpdate.mockResolvedValue({
+      ...prefilledUser,
+      workosId: "user_workos",
+      image: null,
+    });
+
+    await getDbUser();
+
+    expect(mocks.userUpdate).toHaveBeenCalledWith({
+      where: { id: "prefilled-parent" },
+      data: {
+        workosId: "user_workos",
+        name: "Rodič Z WorkOS",
+        image: null,
+      },
+    });
+  });
 });

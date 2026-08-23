@@ -28,7 +28,6 @@ type TableName =
 type RawUser = {
   readonly id: string;
   readonly workosId?: string;
-  readonly clerkId?: string;
   readonly name?: string | null;
   readonly email?: string | null;
   readonly image?: string | null;

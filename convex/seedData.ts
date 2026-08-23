@@ -12,8 +12,7 @@ export type SeedUser = {
 };
 
 type ExistingSeedUser = Pick<SeedUser, "createdAt"> &
-  Partial<Pick<SeedUser, "workosId">> &
-  Partial<Pick<SeedUser, "image">>;
+  Partial<Pick<SeedUser, "workosId">>;
 
 export const developmentSeed = {
   users: [
@@ -193,7 +192,6 @@ export function mergeSeedUser(
   return {
     ...seed,
     workosId: existing.workosId ?? seed.workosId,
-    image: existing.image ?? seed.image,
     createdAt: existing.createdAt,
   };
 }

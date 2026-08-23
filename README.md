@@ -54,6 +54,9 @@ WORKOS_COOKIE_PASSWORD="replace-with-at-least-32-random-characters"
 
 Lokální `NEXT_PUBLIC_WORKOS_REDIRECT_URI` se nenastavuje. Portless ji při
 každém spuštění odvodí z aktuální branche nebo worktree přes `PORTLESS_URL`.
+Na Vercelu aplikace bez explicitní hodnoty použije stabilní
+`VERCEL_BRANCH_URL`, případně jedinečnou `VERCEL_URL`. Pro vlastní Preview
+doménu nastavte branch-specific `NEXT_PUBLIC_WORKOS_REDIRECT_URI`.
 
 5. Nastavení WorkOS AuthKit:
    - Vytvořte projekt na [dashboard.workos.com](https://dashboard.workos.com)
@@ -78,6 +81,10 @@ použijte samostatný production Client ID, klíč `sk_live_...` a nové cookie
 heslo. Tajné hodnoty nikdy necommitujte do Git repozitáře; nastavte je přímo
 ve Vercel Environment Variables se správným rozsahem `Preview` nebo
 `Production`.
+
+Staging WorkOS aplikace musí povolit callback a sign-out wildcardy odpovídající
+Vercel branch a deployment URL. Stabilní vlastní alias Preview branche může
+místo toho použít branch-specific `NEXT_PUBLIC_WORKOS_REDIRECT_URI`.
 
 Production prostředí ve WorkOS zapněte až ve chvíli, kdy znáte finální doménu.
 V production aplikaci potom samostatně nastavte Magic Auth, Google OAuth,

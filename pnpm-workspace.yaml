@@ -1,9 +1,5 @@
 allowBuilds:
-  '@clerk/shared': true
   bufferutil: true
   esbuild: true
   sharp: true
   unrs-resolver: true
-overrides:
-  '@clerk/clerk-react': 5.61.6
-  '@clerk/shared': 3.47.8

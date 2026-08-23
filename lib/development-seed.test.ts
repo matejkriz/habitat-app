@@ -45,7 +45,7 @@ describe("development seed data", () => {
     expect(developmentSeed.children.every((child) => child.gender === "MALE" || child.gender === "FEMALE")).toBe(true);
   });
 
-  it("preserves an existing WorkOS identity when a user is reseeded", () => {
+  it("preserves an existing WorkOS identity but resets the seeded profile image", () => {
     const mergeSeedUser = (
       seedData as unknown as {
         mergeSeedUser?: (seed: SeedUser, existing?: SeedUser) => SeedUser;
@@ -62,7 +62,7 @@ describe("development seed data", () => {
     expect(mergeSeedUser).toBeTypeOf("function");
     expect(mergeSeedUser?.(seedUser, linkedUser)).toMatchObject({
       workosId: linkedUser.workosId,
-      image: linkedUser.image,
+      image: seedUser.image,
       name: seedUser.name,
       email: seedUser.email,
       role: seedUser.role,

@@ -1,11 +1,17 @@
 export function getWorkOSBaseUrl(
   redirectUri = process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
   portlessUrl = process.env.PORTLESS_URL,
+  vercelBranchUrl = process.env.VERCEL_BRANCH_URL,
+  vercelUrl = process.env.VERCEL_URL,
 ): string {
-  const publicUrl = portlessUrl || redirectUri;
+  const vercelHostname = vercelBranchUrl || vercelUrl;
+  const publicUrl =
+    portlessUrl ||
+    redirectUri ||
+    (vercelHostname ? `https://${vercelHostname}` : undefined);
   if (!publicUrl) {
     throw new Error(
-      "PORTLESS_URL or NEXT_PUBLIC_WORKOS_REDIRECT_URI must be configured.",
+      "PORTLESS_URL, NEXT_PUBLIC_WORKOS_REDIRECT_URI, VERCEL_BRANCH_URL, or VERCEL_URL must be configured.",
     );
   }
 

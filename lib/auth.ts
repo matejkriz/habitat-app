@@ -88,7 +88,7 @@ export async function getDbUser(): Promise<SessionUser | null> {
         data: {
           workosId: workosUser.id,
           name: name ?? existingUserByEmail.name,
-          image: workosUser.profilePictureUrl ?? existingUserByEmail.image,
+          image: workosUser.profilePictureUrl,
         },
       });
     } else {

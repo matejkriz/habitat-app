@@ -14,9 +14,7 @@ const auditAction = v.union(v.literal("CREATE"), v.literal("UPDATE"), v.literal(
 export default defineSchema({
   users: defineTable({
     id: v.string(),
-    // Optional so existing Clerk-linked rows can be relinked by email on first WorkOS sign-in.
     workosId: v.optional(v.string()),
-    clerkId: v.optional(v.string()),
     name: v.optional(v.union(v.string(), v.null())),
     email: v.optional(v.union(v.string(), v.null())),
     image: v.optional(v.union(v.string(), v.null())),
@@ -26,7 +24,6 @@ export default defineSchema({
   })
     .index("by_app_id", { fields: ["id"] })
     .index("by_workos_id", { fields: ["workosId"] })
-    .index("by_clerk_id", { fields: ["clerkId"] })
     .index("by_email", { fields: ["email"] })
     .index("by_role", { fields: ["role"] }),
 

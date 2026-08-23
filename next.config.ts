@@ -25,10 +25,6 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "workoscdn.com",
       },
-      {
-        protocol: "https",
-        hostname: "img.clerk.com",
-      },
     ],
   },
 };
