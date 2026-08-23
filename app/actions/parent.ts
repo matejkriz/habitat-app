@@ -15,11 +15,12 @@ import { isClosedDay } from "@/lib/school-days";
 import {
   createExcuse,
   canManageExcuse,
+  canManageExcuses,
   canSubmitExcuse,
   deleteExcuse as deleteExcuseRecord,
   updateExcuse as updateExcuseRecord,
 } from "@/lib/excuse";
-import { parseExcuseDate } from "@/lib/excuse-rules";
+import { parseExcuseDate, resolveExcuseChildIds } from "@/lib/excuse-rules";
 import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
 
@@ -286,30 +287,36 @@ export const submitExcuse = async (formData: FormData) => {
     throw new Error("Unauthorized");
   }
 
-  const childId = formData.get("childId") as string;
-  const fromDateStr = formData.get("fromDate") as string;
-  const toDateStr = formData.get("toDate") as string;
-  const reason = formData.get("reason") as string | null;
+  const fallbackChildId = formData.get("childId");
+  const fromDateStr = formData.get("fromDate");
+  const toDateStr = formData.get("toDate");
+  const reasonValue = formData.get("reason");
 
-  if (!childId || !fromDateStr || !toDateStr) {
+  if (
+    typeof fallbackChildId !== "string" ||
+    typeof fromDateStr !== "string" ||
+    typeof toDateStr !== "string"
+  ) {
     throw new Error("Missing required fields");
   }
 
-  // Verify parent has access to this child
-  const hasAccess = await canSubmitExcuse(user.id, childId);
-  if (!hasAccess) {
+  const requestedChildIds = formData
+    .getAll("childIds")
+    .filter((value): value is string => typeof value === "string");
+  const childIds = resolveExcuseChildIds(requestedChildIds, fallbackChildId);
+
+  if (!(await canManageExcuses(user, childIds))) {
     throw new Error("Access denied");
   }
 
-  const fromDate = new Date(fromDateStr);
-  const toDate = new Date(toDateStr);
+  const fromDate = parseExcuseDate(fromDateStr);
+  const toDate = parseExcuseDate(toDateStr);
+  const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
 
-  const excuse = await createExcuse(
-    childId,
-    fromDate,
-    toDate,
-    reason || null,
-    user.id
+  const excuses = await Promise.all(
+    childIds.map((childId) =>
+      createExcuse(childId, fromDate, toDate, reason, user.id),
+    ),
   );
 
   revalidatePath("/rodic");
@@ -318,12 +325,13 @@ export const submitExcuse = async (formData: FormData) => {
 
   return {
     success: true,
-    excuse: {
+    excuses: excuses.map((excuse) => ({
       id: excuse.id,
+      childId: excuse.childId,
       fromDate: excuse.fromDate,
       toDate: excuse.toDate,
       autoApproved: excuse.autoApproved,
-    },
+    })),
   };
 };
 

@@ -377,3 +377,13 @@ export async function canManageExcuse(
 
   return canSubmitExcuse(user.id, childId);
 }
+
+export async function canManageExcuses(
+  user: { readonly id: string; readonly role: UserRoleType },
+  childIds: ReadonlyArray<string>,
+): Promise<boolean> {
+  const access = await Promise.all(
+    childIds.map((childId) => canManageExcuse(user, childId)),
+  );
+  return access.every(Boolean);
+}

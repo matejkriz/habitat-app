@@ -36,7 +36,7 @@ vi.mock("./slack", () => ({
   sendExcuseNotification: vi.fn(),
 }));
 
-import { canManageExcuse, updateExcuse } from "./excuse";
+import { canManageExcuse, canManageExcuses, updateExcuse } from "./excuse";
 
 const currentExcuse: Excuse = {
   id: "excuse-1",
@@ -128,6 +128,21 @@ describe("canManageExcuse", () => {
   it("does not allow teachers to manage excuses", async () => {
     await expect(
       canManageExcuse({ id: "teacher-1", role: "TEACHER" }, "child-1"),
+    ).resolves.toBe(false);
+  });
+});
+
+describe("canManageExcuses", () => {
+  it("requires access to every selected child", async () => {
+    mocks.getParentLink
+      .mockResolvedValueOnce({ id: "link-1" })
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      canManageExcuses(
+        { id: "parent-1", role: "PARENT" },
+        ["child-1", "child-2"],
+      ),
     ).resolves.toBe(false);
   });
 });

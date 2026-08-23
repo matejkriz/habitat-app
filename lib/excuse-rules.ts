@@ -27,6 +27,22 @@ export function parseExcuseDate(value: string): Date {
   return date;
 }
 
+export function resolveExcuseChildIds(
+  selectedChildIds: ReadonlyArray<string>,
+  fallbackChildId: string,
+): string[] {
+  const selected = [...new Set(selectedChildIds.filter(Boolean))];
+  if (selected.length > 0) {
+    return selected;
+  }
+
+  if (!fallbackChildId) {
+    throw new Error("Vyberte alespoň jedno dítě.");
+  }
+
+  return [fallbackChildId];
+}
+
 /**
  * Check if an excuse qualifies for auto-approval
  *

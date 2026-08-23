@@ -11,7 +11,6 @@ import {
   Button,
   Input,
   Textarea,
-  Select,
 } from "@/components/ui";
 import { getParentChildren, submitExcuse } from "@/app/actions/parent";
 import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
@@ -24,12 +23,13 @@ export default function NewExcusePage() {
 
   const [children, setChildren] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const [selectedChildId, setSelectedChildId] = useState(preselectedChildId || "");
+  const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
   const [fromDate, setFromDate] = useState(preselectedDate);
   const [toDate, setToDate] = useState(preselectedDate);
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ autoApproved: boolean } | null>(null);
+  const [success, setSuccess] = useState<{ autoApproved: boolean; count: number } | null>(null);
   const [willAutoApprove, setWillAutoApprove] = useState<boolean | null>(null);
   const [deadline, setDeadline] = useState("");
 
@@ -38,15 +38,19 @@ export default function NewExcusePage() {
       try {
         const loadedChildren = await getParentChildren();
         setChildren([...loadedChildren]);
-        if (!selectedChildId && loadedChildren.length > 0) {
-          setSelectedChildId(loadedChildren[0].id);
+        if (loadedChildren.length > 0) {
+          const fallbackChild =
+            loadedChildren.find((child) => child.id === preselectedChildId) ??
+            loadedChildren[0];
+          setSelectedChildId(fallbackChild.id);
+          setSelectedChildIds([fallbackChild.id]);
         }
       } catch {
         setError("Nepodařilo se načíst seznam dětí.");
       }
     }
     loadChildren();
-  }, [selectedChildId]);
+  }, [preselectedChildId]);
 
   useEffect(() => {
     if (fromDate) {
@@ -69,16 +73,20 @@ export default function NewExcusePage() {
     try {
       const formData = new FormData();
       formData.set("childId", selectedChildId);
+      selectedChildIds.forEach((childId) => formData.append("childIds", childId));
       formData.set("fromDate", fromDate);
       formData.set("toDate", toDate || fromDate);
       if (reason) formData.set("reason", reason);
 
       const result = await submitExcuse(formData);
-      setSuccess({ autoApproved: result.excuse.autoApproved });
+      setSuccess({
+        autoApproved: result.excuses.every((excuse) => excuse.autoApproved),
+        count: result.excuses.length,
+      });
 
       // Redirect after short delay
       setTimeout(() => {
-        router.push(`/rodic?child=${selectedChildId}`);
+        router.push(`/rodic?child=${selectedChildIds[0] ?? selectedChildId}`);
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nepodařilo se odeslat omluvenku.");
@@ -117,26 +125,62 @@ export default function NewExcusePage() {
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span className="font-semibold">Omluvenka odeslána</span>
+                  <span className="font-semibold">
+                    {success.count > 1 ? "Omluvenky odeslány" : "Omluvenka odeslána"}
+                  </span>
                 </div>
                 {success.autoApproved ? (
-                  <p>Omluvenka byla odeslána včas – oběd bude odhlášen.</p>
+                  <p>
+                    {success.count > 1
+                      ? `Omluvenky pro ${success.count} děti byly odeslány včas – obědy budou odhlášeny.`
+                      : "Omluvenka byla odeslána včas – oběd bude odhlášen."}
+                  </p>
                 ) : (
-                  <p>Omluvenka byla odeslána pozdě – oběd nebude automaticky odhlášen.</p>
+                  <p>
+                    {success.count > 1
+                      ? `Omluvenky pro ${success.count} děti byly odeslány pozdě – obědy nebudou automaticky odhlášeny.`
+                      : "Omluvenka byla odeslána pozdě – oběd nebude automaticky odhlášen."}
+                  </p>
                 )}
               </div>
             )}
 
             {children.length > 1 && (
-              <Select
-                label="Dítě"
-                value={selectedChildId}
-                onChange={(e) => setSelectedChildId(e.target.value)}
-                options={children.map((child) => ({
-                  value: child.id,
-                  label: `${child.firstName} ${child.lastName}`,
-                }))}
-              />
+              <fieldset>
+                <legend className="mb-2 block text-sm font-medium text-charcoal">
+                  Děti
+                </legend>
+                <div className="space-y-2 rounded-lg border-2 border-cream-dark bg-white p-3">
+                  {children.map((child) => {
+                    const name = `${child.firstName} ${child.lastName}`;
+                    return (
+                      <label
+                        key={child.id}
+                        className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-cream"
+                      >
+                        <input
+                          type="checkbox"
+                          name="childIds"
+                          value={child.id}
+                          checked={selectedChildIds.includes(child.id)}
+                          onChange={(event) => {
+                            setSelectedChildIds((current) =>
+                              event.target.checked
+                                ? [...current, child.id]
+                                : current.filter((id) => id !== child.id),
+                            );
+                          }}
+                          className="h-5 w-5 rounded border-cream-dark accent-gold"
+                        />
+                        <span className="font-medium text-charcoal">{name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-sm text-charcoal-light">
+                  Můžete zapsat stejné období jednomu nebo více dětem.
+                </p>
+              </fieldset>
             )}
 
             <Input

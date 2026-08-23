@@ -6,9 +6,26 @@ import {
   validateExcuseDates,
   getTimeUntilDeadline,
   parseExcuseDate,
+  resolveExcuseChildIds,
 } from "./excuse-rules";
 
 describe("Excuse Rules", () => {
+  describe("resolveExcuseChildIds", () => {
+    it("uses the preselected child when no checkbox is selected", () => {
+      expect(resolveExcuseChildIds([], "child-1")).toEqual(["child-1"]);
+    });
+
+    it("uses only checked children and removes duplicates", () => {
+      expect(
+        resolveExcuseChildIds(["child-2", "child-1", "child-2"], "child-1"),
+      ).toEqual(["child-2", "child-1"]);
+    });
+
+    it("rejects a missing fallback child", () => {
+      expect(() => resolveExcuseChildIds([], "")).toThrow("Vyberte alespoň jedno dítě.");
+    });
+  });
+
   describe("parseExcuseDate", () => {
     it("parses a date input as a local calendar date", () => {
       expect(parseExcuseDate("2024-02-29")).toEqual(new Date(2024, 1, 29));
