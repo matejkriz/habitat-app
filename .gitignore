@@ -38,6 +38,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local auth tooling
+.clerk/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
