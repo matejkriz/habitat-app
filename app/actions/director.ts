@@ -17,6 +17,11 @@ import {
   type User,
 } from "@/lib/types";
 import { revalidatePath } from "next/cache";
+import {
+  deleteExcuse as deleteExcuseRecord,
+  updateExcuse as updateExcuseRecord,
+} from "@/lib/excuse";
+import { parseExcuseDate } from "@/lib/excuse-rules";
 
 // Type for audit log with included user relation
 export type AuditLogWithUser = AuditLog & {
@@ -292,6 +297,37 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
   revalidatePath("/kalendar");
 
   return updated;
+}
+
+type ExcuseEditInput = {
+  readonly fromDate: string;
+  readonly toDate: string;
+  readonly reason: string;
+};
+
+export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
+  const user = await requireDirector();
+
+  const updated = await updateExcuseRecord(
+    excuseId,
+    {
+      fromDate: parseExcuseDate(input.fromDate),
+      toDate: parseExcuseDate(input.toDate),
+      reason: input.reason.trim() || null,
+    },
+    user.id,
+  );
+
+  revalidatePath("/reditel/omluvenky");
+  revalidatePath("/rodic");
+  return updated;
+}
+
+export async function deleteExcuse(excuseId: string): Promise<void> {
+  const user = await requireDirector();
+  await deleteExcuseRecord(excuseId, user.id);
+  revalidatePath("/reditel/omluvenky");
+  revalidatePath("/rodic");
 }
 
 /**

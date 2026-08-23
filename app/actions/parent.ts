@@ -12,7 +12,14 @@ import {
   type Excuse,
 } from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
-import { createExcuse, canSubmitExcuse } from "@/lib/excuse";
+import {
+  createExcuse,
+  canManageExcuse,
+  canSubmitExcuse,
+  deleteExcuse as deleteExcuseRecord,
+  updateExcuse as updateExcuseRecord,
+} from "@/lib/excuse";
+import { parseExcuseDate } from "@/lib/excuse-rules";
 import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
 
@@ -318,6 +325,63 @@ export const submitExcuse = async (formData: FormData) => {
       autoApproved: excuse.autoApproved,
     },
   };
+};
+
+type ExcuseEditInput = {
+  readonly fromDate: string;
+  readonly toDate: string;
+  readonly reason: string;
+};
+
+export const editParentExcuse = async (
+  excuseId: string,
+  input: ExcuseEditInput,
+) => {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.PARENT) {
+    throw new Error("Unauthorized");
+  }
+
+  const excuse = await db.excuses.get({ where: { id: excuseId } });
+  if (!excuse) {
+    throw new Error("Omluvenka nebyla nalezena.");
+  }
+
+  if (!(await canManageExcuse(user, excuse.childId))) {
+    throw new Error("Access denied");
+  }
+
+  const updated = await updateExcuseRecord(
+    excuseId,
+    {
+      fromDate: parseExcuseDate(input.fromDate),
+      toDate: parseExcuseDate(input.toDate),
+      reason: input.reason.trim() || null,
+    },
+    user.id,
+  );
+
+  revalidatePath("/rodic");
+  return updated;
+};
+
+export const deleteParentExcuse = async (excuseId: string): Promise<void> => {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.PARENT) {
+    throw new Error("Unauthorized");
+  }
+
+  const excuse = await db.excuses.get({ where: { id: excuseId } });
+  if (!excuse) {
+    throw new Error("Omluvenka nebyla nalezena.");
+  }
+
+  if (!(await canManageExcuse(user, excuse.childId))) {
+    throw new Error("Access denied");
+  }
+
+  await deleteExcuseRecord(excuseId, user.id);
+  revalidatePath("/rodic");
 };
 
 /**

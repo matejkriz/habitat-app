@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getExcuses, updateExcuse } from "@/app/actions/director";
+import {
+  deleteExcuse,
+  editExcuse,
+  getExcuses,
+  updateExcuse,
+} from "@/app/actions/director";
+import {
+  ExcuseEditor,
+  type ExcuseEditValues,
+} from "@/components/excuses/excuse-editor";
 import {
   Card,
   CardContent,
@@ -74,6 +83,27 @@ export default function ExcuseManagementPage() {
     }
   };
 
+  const handleEdit = async (excuseId: string, values: ExcuseEditValues) => {
+    const updated = await editExcuse(excuseId, values);
+    setExcuses((current) =>
+      current.map((excuse) =>
+        excuse.id === excuseId
+          ? {
+              ...excuse,
+              fromDate: updated.fromDate,
+              toDate: updated.toDate,
+              reason: updated.reason,
+            }
+          : excuse,
+      ),
+    );
+  };
+
+  const handleDelete = async (excuseId: string) => {
+    await deleteExcuse(excuseId);
+    setExcuses((current) => current.filter((excuse) => excuse.id !== excuseId));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -144,27 +174,34 @@ export default function ExcuseManagementPage() {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {!excuse.autoApproved && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleApprove(excuse.id, true)}
-                          isLoading={updatingId === excuse.id}
-                        >
-                          Schválit
-                        </Button>
-                      )}
-                      {excuse.autoApproved && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleApprove(excuse.id, false)}
-                          isLoading={updatingId === excuse.id}
-                        >
-                          Zrušit schválení
-                        </Button>
-                      )}
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <div className="flex items-center gap-2">
+                        {!excuse.autoApproved && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleApprove(excuse.id, true)}
+                            isLoading={updatingId === excuse.id}
+                          >
+                            Schválit
+                          </Button>
+                        )}
+                        {excuse.autoApproved && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleApprove(excuse.id, false)}
+                            isLoading={updatingId === excuse.id}
+                          >
+                            Zrušit schválení
+                          </Button>
+                        )}
+                      </div>
+                      <ExcuseEditor
+                        excuse={excuse}
+                        onSave={handleEdit}
+                        onDelete={handleDelete}
+                      />
                     </div>
                   </div>
                 </div>

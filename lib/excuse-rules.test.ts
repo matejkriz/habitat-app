@@ -5,9 +5,21 @@ import {
   canStillAutoApprove,
   validateExcuseDates,
   getTimeUntilDeadline,
+  parseExcuseDate,
 } from "./excuse-rules";
 
 describe("Excuse Rules", () => {
+  describe("parseExcuseDate", () => {
+    it("parses a date input as a local calendar date", () => {
+      expect(parseExcuseDate("2024-02-29")).toEqual(new Date(2024, 1, 29));
+    });
+
+    it("rejects impossible and malformed dates", () => {
+      expect(() => parseExcuseDate("2024-02-31")).toThrow("Zadejte platné datum.");
+      expect(() => parseExcuseDate("31. 2. 2024")).toThrow("Zadejte platné datum.");
+    });
+  });
+
   describe("isAutoApproved", () => {
     it("should auto-approve when submitted more than 1 day before fromDate", () => {
       const fromDate = new Date("2024-01-15");
@@ -92,6 +104,13 @@ describe("Excuse Rules", () => {
   });
 
   describe("validateExcuseDates", () => {
+    it("should reject invalid dates", () => {
+      const result = validateExcuseDates(new Date("invalid"), new Date("2024-01-15"));
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe("Zadejte platné datum začátku a konce.");
+    });
+
     it("should return valid for correct date range", () => {
       const fromDate = new Date("2024-01-15");
       const toDate = new Date("2024-01-17");

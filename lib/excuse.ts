@@ -3,7 +3,7 @@
  */
 
 import { db } from "./db";
-import { ExcuseStatus, type Excuse } from "./types";
+import { ExcuseStatus, UserRole, type Excuse, type UserRole as UserRoleType } from "./types";
 import { isAutoApproved, validateExcuseDates } from "./excuse-rules";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
@@ -195,7 +195,7 @@ export async function getAllExcuses(options?: {
 }
 
 /**
- * Update an excuse (Director only)
+ * Update an excuse after authorization has been checked by the caller.
  */
 export async function updateExcuse(
   excuseId: string,
@@ -272,6 +272,14 @@ export async function updateExcuse(
   const newAutoApproved =
     updates.autoApproved !== undefined ? updates.autoApproved : current.autoApproved;
 
+  await db.attendance.bulkUpdate({
+    where: { excuseId },
+    data: {
+      excuseId: null,
+      excuseStatus: ExcuseStatus.UNEXCUSED,
+    },
+  });
+
   const schoolDays = await getSchoolDaysInRange(normalizedFrom, normalizedTo);
 
   for (const day of schoolDays) {
@@ -280,9 +288,10 @@ export async function updateExcuse(
         childId: current.childId,
         date: day,
         presence: "ABSENT",
-        excuseId: excuseId,
+        excuseId: null,
       },
       data: {
+        excuseId,
         excuseStatus: newAutoApproved ? ExcuseStatus.EXCUSED : ExcuseStatus.UNEXCUSED,
       },
     });
@@ -292,7 +301,7 @@ export async function updateExcuse(
 }
 
 /**
- * Delete an excuse (Director only)
+ * Delete an excuse after authorization has been checked by the caller.
  */
 export async function deleteExcuse(excuseId: string, userId: string): Promise<void> {
   const excuse = await db.excuses.get({
@@ -352,4 +361,19 @@ export async function canSubmitExcuse(
   });
 
   return !!parentChild;
+}
+
+export async function canManageExcuse(
+  user: { readonly id: string; readonly role: UserRoleType },
+  childId: string,
+): Promise<boolean> {
+  if (user.role === UserRole.DIRECTOR) {
+    return true;
+  }
+
+  if (user.role !== UserRole.PARENT) {
+    return false;
+  }
+
+  return canSubmitExcuse(user.id, childId);
 }

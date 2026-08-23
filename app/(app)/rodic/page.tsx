@@ -7,6 +7,7 @@ import {
   getChildTodayStatus,
   getChildAttendanceHistory,
   getChildCalendarMonth,
+  getChildExcuses,
   getChildStats,
 } from "@/app/actions/parent";
 import {
@@ -26,6 +27,7 @@ import {
   type AttendanceHistoryItem,
 } from "./attendance-history-row";
 import { NewExcuseLink } from "./new-excuse-link";
+import { ParentExcuses } from "./parent-excuses";
 
 export const metadata = {
   title: "Přehled dítěte",
@@ -208,6 +210,26 @@ async function AttendanceHistory({
   );
 }
 
+async function ExcusesCard({ childId }: { childId: string }) {
+  const excuses = await getChildExcuses(childId);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="h-5 w-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Omluvenky
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ParentExcuses excuses={[...excuses]} />
+      </CardContent>
+    </Card>
+  );
+}
+
 function LoadingCard() {
   return (
     <Card>
@@ -338,6 +360,10 @@ export default async function ParentDashboard({
           childId={selectedChildId}
           childGender={selectedChild.gender}
         />
+      </Suspense>
+
+      <Suspense fallback={<LoadingCard />}>
+        <ExcusesCard childId={selectedChildId} />
       </Suspense>
     </div>
   );
