@@ -167,9 +167,9 @@ export function PushNotificationToggle() {
       <Toggle
         id="director-excuse-push"
         role="menuitemcheckbox"
-        aria-label="Nové omluvenky"
+        aria-label="Notifikace"
         aria-checked={isEnabled}
-        label="Nové omluvenky"
+        label="Notifikace"
         description={message}
         checked={isEnabled}
         disabled={!isSupported || isBusy}

@@ -120,7 +120,7 @@ describe("AppShell", () => {
     });
   });
 
-  it("offers new excuse push notifications only to directors", () => {
+  it("offers notification settings only to directors", () => {
     const { rerender } = render(
       <AppShell user={director}>
         <div>Obsah</div>
@@ -132,7 +132,7 @@ describe("AppShell", () => {
     );
 
     expect(
-      screen.getByRole("menuitemcheckbox", { name: "Nové omluvenky" })
+      screen.getByRole("menuitemcheckbox", { name: "Notifikace" })
     ).toBeTruthy();
 
     rerender(
@@ -142,7 +142,7 @@ describe("AppShell", () => {
     );
 
     expect(
-      screen.queryByRole("menuitemcheckbox", { name: "Nové omluvenky" })
+      screen.queryByRole("menuitemcheckbox", { name: "Notifikace" })
     ).toBeNull();
   });
 
