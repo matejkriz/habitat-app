@@ -92,6 +92,14 @@ export async function createExcuse(
     },
   });
 
+  // Await the durable outbox write. Convex also reconciles recent excuses so a
+  // temporary failure between these writes is repaired automatically.
+  try {
+    await db.notifications.enqueueExcuse({ excuseId: excuse.id });
+  } catch (error) {
+    console.error("Failed to enqueue push notification; reconciliation will retry:", error);
+  }
+
   // Send Slack notification (non-blocking)
   // Fetch child and parent details for the notification
   const [child, parent] = await Promise.all([

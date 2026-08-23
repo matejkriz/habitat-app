@@ -8,6 +8,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Avatar, Button } from "@/components/ui";
 import { DevPersonaSwitcher } from "./dev-persona-switcher";
+import { PushNotificationToggle } from "./push-notification-toggle";
 import type { DevPersonaId } from "@/lib/dev-persona";
 import type { UserRole } from "@/lib/types";
 
@@ -313,6 +314,7 @@ export function AppShell({ children, user }: AppShellProps) {
                         {roleLabels[user.role]}
                       </p>
                     </div>
+                    {user.role === "DIRECTOR" && <PushNotificationToggle />}
                     <Button
                       role="menuitem"
                       variant="ghost"

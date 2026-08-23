@@ -54,6 +54,10 @@ CLERK_SECRET_KEY="sk_test_..."
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/login"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
+
+# Push notifikace (veřejný VAPID klíč + sdílené serverové tajemství)
+NEXT_PUBLIC_VAPID_PUBLIC_KEY="..."
+PUSH_INTERNAL_SECRET="..."
 ```
 
 5. Nastavení Clerk:
@@ -66,6 +70,10 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
 ```bash
 pnpm convex:dev
 ```
+
+Pro push notifikace je navíc potřeba nastavit VAPID klíče a stejné
+`PUSH_INTERNAL_SECRET` v Next.js i Convexu. Přesný postup je v
+[`docs/push-notifications.md`](docs/push-notifications.md).
 
 ### Reprodukovatelná testovací data
 

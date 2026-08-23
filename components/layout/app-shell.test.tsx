@@ -109,6 +109,32 @@ describe("AppShell", () => {
     expect(signOut).toHaveBeenCalledWith({ redirectUrl: "/login" });
   });
 
+  it("offers new excuse push notifications only to directors", () => {
+    const { rerender } = render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Otevřít uživatelské menu" })
+    );
+
+    expect(
+      screen.getByRole("menuitemcheckbox", { name: "Nové omluvenky" })
+    ).toBeTruthy();
+
+    rerender(
+      <AppShell user={{ ...director, role: "PARENT" }}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    expect(
+      screen.queryByRole("menuitemcheckbox", { name: "Nové omluvenky" })
+    ).toBeNull();
+  });
+
   it("highlights a mobile destination as soon as its navigation starts", () => {
     render(
       <AppShell user={director}>
