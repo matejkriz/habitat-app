@@ -149,7 +149,26 @@ const roleNavItems: Record<UserRole, NavItem[]> = {
       label: "Kalendář",
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+    {
+      href: "/reditel/obedy",
+      label: "Obědy",
+      icon: (
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 3v7a2 2 0 002 2h1m0-9v18m9-18v18m0-18c2.21 0 4 2.239 4 5s-1.79 5-4 5"
+          />
         </svg>
       ),
     },

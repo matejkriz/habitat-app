@@ -79,6 +79,7 @@ describe("AppShell", () => {
         "/reditel",
         "/ucitel/dochazka",
         "/kalendar",
+        "/reditel/obedy",
         "/reditel/omluvenky",
       ])
     );

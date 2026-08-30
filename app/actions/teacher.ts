@@ -168,6 +168,7 @@ export const saveAttendance = async (
 
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
   revalidatePath("/rodic");
 
   return { success: true, recordCount: records.length };
