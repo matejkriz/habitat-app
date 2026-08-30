@@ -19,6 +19,31 @@ export const list = query({
   handler: async ({ db }, args) => await db.query(args.table).collect(),
 });
 
+export const listExcusesOverlapping = query({
+  args: {
+    childId: v.optional(v.string()),
+    from: v.number(),
+    to: v.number(),
+  },
+  returns: v.array(v.any()),
+  handler: async ({ db }, args) => {
+    const childId = args.childId;
+    const candidates = childId
+      ? await db
+          .query("excuses")
+          .withIndex("by_child_from_date", (query) =>
+            query.eq("childId", childId).lte("fromDate", args.to),
+          )
+          .collect()
+      : await db
+          .query("excuses")
+          .withIndex("by_from_date", (query) => query.lte("fromDate", args.to))
+          .collect();
+
+    return candidates.filter((excuse) => excuse.toDate >= args.from);
+  },
+});
+
 export const getById = query({
   args: { table: tableName, id: v.string() },
   returns: v.union(v.null(), v.any()),

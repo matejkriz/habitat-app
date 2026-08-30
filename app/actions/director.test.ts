@@ -18,6 +18,7 @@ vi.mock("@/lib/db", () => ({
     attendance: { list: mocks.attendanceList },
     excuses: {
       list: mocks.excusesList,
+      listOverlapping: mocks.excusesList,
       get: mocks.excusesGet,
       update: mocks.excusesUpdate,
     },
@@ -29,7 +30,7 @@ vi.mock("@/lib/school-days", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { getLunchOverview, updateExcuse } from "./director";
+import { getExcuses, getLunchOverview, updateExcuse } from "./director";
 
 // 19. 8. 2026 is a Wednesday and 20. 8. a Thursday.
 const AUG = (day: number, hour = 0, minute = 0) => new Date(2026, 7, day, hour, minute);
@@ -132,5 +133,30 @@ describe("updateExcuse", () => {
       where: { id: "excuse-old" },
       data: { lateApprovedAt: null, lateApprovedById: null },
     });
+  });
+});
+
+describe("getExcuses", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
+  });
+
+  it("does not put an excuse for a configured closure into the pending queue", async () => {
+    mocks.excusesList.mockResolvedValue([
+      {
+        ...spanningLate,
+        fromDate: AUG(20),
+        toDate: AUG(20),
+        child: tobias,
+        submittedBy: { id: "parent-1", name: "Rodič", email: null },
+      },
+    ]);
+    mocks.getSchoolDaysInRange.mockResolvedValue([]);
+
+    await expect(getExcuses({ pendingOnly: true })).resolves.toEqual([]);
+    await expect(getExcuses({ settledOnly: true })).resolves.toEqual([
+      expect.objectContaining({ rangeState: "ON_TIME" }),
+    ]);
   });
 });

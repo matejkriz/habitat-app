@@ -58,6 +58,8 @@ type RawAttendance = {
   readonly childId: string;
   readonly date: number;
   readonly presence: Presence;
+  readonly excuseStatus?: string;
+  readonly excuseId?: string | null;
   readonly recordedById?: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -71,6 +73,7 @@ type RawExcuse = {
   readonly reason?: string | null;
   readonly submittedById: string;
   readonly submittedAt: number;
+  readonly autoApproved?: boolean;
   readonly lateApprovedAt?: number | null;
   readonly lateApprovedById?: string | null;
   readonly createdAt: number;
@@ -229,19 +232,33 @@ const fromRawAttendance = (raw: RawAttendance): Attendance => ({
   updatedAt: new Date(raw.updatedAt),
 });
 
-const fromRawExcuse = (raw: RawExcuse): Excuse => ({
-  id: raw.id,
-  childId: raw.childId,
-  fromDate: new Date(raw.fromDate),
-  toDate: new Date(raw.toDate),
-  reason: raw.reason ?? null,
-  submittedById: raw.submittedById,
-  submittedAt: new Date(raw.submittedAt),
-  lateApprovedAt: raw.lateApprovedAt == null ? null : new Date(raw.lateApprovedAt),
-  lateApprovedById: raw.lateApprovedById ?? null,
-  createdAt: new Date(raw.createdAt),
-  updatedAt: new Date(raw.updatedAt),
-});
+const fromRawExcuse = (raw: RawExcuse): Excuse => {
+  const hasLateApproval = Object.prototype.hasOwnProperty.call(
+    raw,
+    "lateApprovedAt",
+  );
+  const lateApprovedAt = hasLateApproval
+    ? raw.lateApprovedAt == null
+      ? null
+      : new Date(raw.lateApprovedAt)
+    : raw.autoApproved
+      ? new Date(raw.updatedAt)
+      : null;
+
+  return {
+    id: raw.id,
+    childId: raw.childId,
+    fromDate: new Date(raw.fromDate),
+    toDate: new Date(raw.toDate),
+    reason: raw.reason ?? null,
+    submittedById: raw.submittedById,
+    submittedAt: new Date(raw.submittedAt),
+    lateApprovedAt,
+    lateApprovedById: raw.lateApprovedById ?? null,
+    createdAt: new Date(raw.createdAt),
+    updatedAt: new Date(raw.updatedAt),
+  };
+};
 
 const fromRawClosedDay = (raw: RawClosedDay): ClosedDay => ({
   id: raw.id,
@@ -896,6 +913,19 @@ export const db: any = {
       });
 
       return applyTake(withInclude, args.take);
+    },
+
+    listOverlapping: async (args: {
+      childId?: string;
+      from: Date;
+      to: Date;
+    }) => {
+      const rows = await convexQuery(api.db.listExcusesOverlapping, {
+        childId: args.childId,
+        from: toTimestamp(args.from),
+        to: toTimestamp(args.to),
+      });
+      return (rows as unknown as ReadonlyArray<RawExcuse>).map(fromRawExcuse);
     },
 
     create: async (args: CreateRecordArgs) => {

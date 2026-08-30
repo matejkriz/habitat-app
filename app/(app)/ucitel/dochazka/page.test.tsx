@@ -85,8 +85,8 @@ describe("TeacherAttendancePage", () => {
       isClosed: false,
       attendance: [],
       excuses: [
-        { childId: "child-1", isOnTime: true },
-        { childId: "child-2", isOnTime: false },
+        { childId: "child-1", state: "ON_TIME" },
+        { childId: "child-2", state: "LATE" },
       ],
     });
 
@@ -99,6 +99,22 @@ describe("TeacherAttendancePage", () => {
     expect(screen.getByText("Omluveno pozdě")).toBeTruthy();
   });
 
+  it("shows director-approved late excuses without calling them on time", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [{ childId: "child-1", state: "LATE_APPROVED" }],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    expect(await screen.findByText("Pozdě – schváleno")).toBeTruthy();
+    expect(screen.queryByText("Omluveno včas")).toBeNull();
+  });
+
   it("prefills excused children as absent unless attendance was already saved", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
@@ -109,8 +125,8 @@ describe("TeacherAttendancePage", () => {
       isClosed: false,
       attendance: [{ childId: "child-2", presence: "PRESENT" }],
       excuses: [
-        { childId: "child-1", isOnTime: true },
-        { childId: "child-2", isOnTime: false },
+        { childId: "child-1", state: "ON_TIME" },
+        { childId: "child-2", state: "LATE" },
       ],
     });
 

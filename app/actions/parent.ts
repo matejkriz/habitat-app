@@ -12,7 +12,7 @@ import {
   type ClosedDay,
   type Excuse,
 } from "@/lib/types";
-import { isClosedDay } from "@/lib/school-days";
+import { getSchoolDaysInRange, isClosedDay } from "@/lib/school-days";
 import {
   createExcuse,
   canManageExcuse,
@@ -321,12 +321,18 @@ export const submitExcuse = async (formData: FormData) => {
   const fromDate = parseExcuseDate(fromDateStr);
   const toDate = parseExcuseDate(toDateStr);
   const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
+  const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
 
   const excuses = await Promise.all(
     childIds.map((childId) =>
-      createExcuse(childId, fromDate, toDate, reason, user.id),
+      createExcuse(childId, fromDate, toDate, reason, user.id, schoolDays),
     ),
   );
+  const lateDayCount = excuses.reduce(
+    (count, excuse) => count + getLateDays(excuse, schoolDays).length,
+    0,
+  );
+  const schoolDayCount = schoolDays.length * excuses.length;
 
   revalidatePath("/rodic");
   revalidatePath("/rodic/omluvenka");
@@ -339,8 +345,12 @@ export const submitExcuse = async (formData: FormData) => {
       childId: excuse.childId,
       fromDate: excuse.fromDate,
       toDate: excuse.toDate,
-      isOnTime: getLateDays(excuse).length === 0,
     })),
+    summary: {
+      schoolDayCount,
+      lateDayCount,
+      onTimeDayCount: schoolDayCount - lateDayCount,
+    },
   };
 };
 

@@ -3,6 +3,7 @@ import type { Excuse } from "./types";
 
 const mocks = vi.hoisted(() => ({
   getExcuse: vi.fn(),
+  listOverlappingExcuses: vi.fn(),
   updateExcuse: vi.fn(),
   createAuditLog: vi.fn(),
   getParentLink: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock("./db", () => ({
   db: {
     excuses: {
       get: mocks.getExcuse,
+      listOverlapping: mocks.listOverlappingExcuses,
       update: mocks.updateExcuse,
     },
     auditLogs: {
@@ -27,7 +29,12 @@ vi.mock("./slack", () => ({
   sendExcuseNotification: vi.fn(),
 }));
 
-import { canManageExcuse, canManageExcuses, updateExcuse } from "./excuse";
+import {
+  canManageExcuse,
+  canManageExcuses,
+  getExcusesOverlapping,
+  updateExcuse,
+} from "./excuse";
 
 const currentExcuse: Excuse = {
   id: "excuse-1",
@@ -42,6 +49,23 @@ const currentExcuse: Excuse = {
   createdAt: new Date("2023-12-30T08:00:00"),
   updatedAt: new Date("2023-12-30T08:00:00"),
 };
+
+describe("getExcusesOverlapping", () => {
+  it("uses the indexed overlap read instead of listing the whole table", async () => {
+    mocks.listOverlappingExcuses.mockResolvedValue([currentExcuse]);
+    const from = new Date(2024, 0, 2);
+    const to = new Date(2024, 0, 3);
+
+    await expect(
+      getExcusesOverlapping({ childId: "child-1", from, to }),
+    ).resolves.toEqual([currentExcuse]);
+    expect(mocks.listOverlappingExcuses).toHaveBeenCalledWith({
+      childId: "child-1",
+      from,
+      to,
+    });
+  });
+});
 
 describe("updateExcuse", () => {
   beforeEach(() => {

@@ -19,6 +19,31 @@ import {
 } from "@/app/actions/parent";
 import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
 
+type SubmissionSummary = {
+  readonly count: number;
+  readonly schoolDayCount: number;
+  readonly lateDayCount: number;
+  readonly onTimeDayCount: number;
+};
+
+function mixedLunchMessage(summary: SubmissionSummary): string {
+  const canceled =
+    summary.onTimeDayCount === 1
+      ? "1 oběd bude odhlášen"
+      : `${summary.onTimeDayCount} obědy budou odhlášeny`;
+  const lateDays =
+    summary.lateDayCount === 1
+      ? "1 pozdně omluvený den"
+      : summary.lateDayCount < 5
+        ? `${summary.lateDayCount} pozdně omluvené dny`
+        : `${summary.lateDayCount} pozdně omluvených dnů`;
+  const charged =
+    summary.lateDayCount === 1
+      ? "zůstane oběd započítaný"
+      : "zůstanou obědy započítané";
+  return `${canceled}; za ${lateDays} ${charged} do schválení ředitelkou.`;
+}
+
 export default function NewExcusePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,7 +58,7 @@ export default function NewExcusePage() {
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ isOnTime: boolean; count: number } | null>(null);
+  const [success, setSuccess] = useState<SubmissionSummary | null>(null);
   const [willAutoApprove, setWillAutoApprove] = useState<boolean | null>(null);
   const [deadline, setDeadline] = useState("");
 
@@ -90,8 +115,8 @@ export default function NewExcusePage() {
 
       const result = await submitExcuse(formData);
       setSuccess({
-        isOnTime: result.excuses.every((excuse) => excuse.isOnTime),
         count: result.excuses.length,
+        ...result.summary,
       });
 
       // Redirect after short delay
@@ -130,7 +155,7 @@ export default function NewExcusePage() {
 
             {success && (
               <div className={`p-4 rounded-lg text-sm ${
-                success.isOnTime
+                success.lateDayCount === 0
                   ? "bg-sage/10 border border-sage/20 text-sage-dark"
                   : "bg-gold/10 border border-gold/20 text-gold-dark"
               }`}>
@@ -142,18 +167,22 @@ export default function NewExcusePage() {
                     {success.count > 1 ? "Omluvenky odeslány" : "Omluvenka odeslána"}
                   </span>
                 </div>
-                {success.isOnTime ? (
+                {success.schoolDayCount === 0 ? (
+                  <p>V zadaném období nejsou žádné školní dny.</p>
+                ) : success.lateDayCount === 0 ? (
                   <p>
                     {success.count > 1
                       ? `Omluvenky pro ${success.count} děti byly odeslány včas – obědy budou odhlášeny.`
                       : "Omluvenka byla odeslána včas – oběd bude odhlášen."}
                   </p>
-                ) : (
+                ) : success.onTimeDayCount === 0 ? (
                   <p>
                     {success.count > 1
                       ? `Omluvenky pro ${success.count} děti byly odeslány pozdě – obědy nebudou automaticky odhlášeny.`
                       : "Omluvenka byla odeslána pozdě – oběd nebude automaticky odhlášen."}
                   </p>
+                ) : (
+                  <p>{mixedLunchMessage(success)}</p>
                 )}
               </div>
             )}

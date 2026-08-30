@@ -152,6 +152,20 @@ async function requireDirector(): Promise<SessionUser> {
   return user;
 }
 
+async function getSchoolDaysCoveringExcuses(
+  excuses: ReadonlyArray<Excuse>,
+): Promise<ReadonlyArray<Date>> {
+  if (excuses.length === 0) return [];
+  const { from, to } = excuses.reduce(
+    (range, excuse) => ({
+      from: Math.min(range.from, excuse.fromDate.getTime()),
+      to: Math.max(range.to, excuse.toDate.getTime()),
+    }),
+    { from: Number.POSITIVE_INFINITY, to: Number.NEGATIVE_INFINITY },
+  );
+  return getSchoolDaysInRange(new Date(from), new Date(to));
+}
+
 /**
  * Get the monthly lunch billing overview for all active children.
  */
@@ -287,7 +301,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const unexcusedCount = monthAbsences.length - excusedCount;
 
   // Recent excuses still waiting for the director to forgive a late submission
-  const recentExcuses = ((await db.excuses.list({
+  const recentExcuseCandidates = (await db.excuses.list({
     where: {
       submittedAt: {
         gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
@@ -302,8 +316,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       },
     },
     orderBy: { submittedAt: "desc" },
-  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string } }>)
-    .filter((excuse) => !isExcuseSettled(excuse))
+  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string } }>;
+  const recentSchoolDays = await getSchoolDaysCoveringExcuses(
+    recentExcuseCandidates,
+  );
+  const recentExcuses = recentExcuseCandidates
+    .filter((excuse) => !isExcuseSettled(excuse, recentSchoolDays))
     .slice(0, 5);
 
   // Get children count
@@ -367,18 +385,19 @@ export async function getExcuses(options?: {
     },
     orderBy: { submittedAt: "desc" },
   })) as ReadonlyArray<ExcuseWithChildAndSubmitter>;
+  const schoolDays = await getSchoolDaysCoveringExcuses(excuses);
 
   // Whether an excuse still needs a decision is derived, so it cannot be
   // pushed down into the query.
   const filtered = excuses.filter((excuse) => {
-    if (options?.settledOnly) return isExcuseSettled(excuse);
-    if (options?.pendingOnly) return !isExcuseSettled(excuse);
+    if (options?.settledOnly) return isExcuseSettled(excuse, schoolDays);
+    if (options?.pendingOnly) return !isExcuseSettled(excuse, schoolDays);
     return true;
   });
 
   return filtered.slice(0, 100).map((excuse) => ({
     ...excuse,
-    rangeState: getExcuseRangeState(excuse) satisfies ExcuseRangeState,
+    rangeState: getExcuseRangeState(excuse, schoolDays) satisfies ExcuseRangeState,
   }));
 }
 

@@ -6,6 +6,7 @@ import { db } from "./db";
 import { UserRole, type Excuse, type UserRole as UserRoleType } from "./types";
 import { validateExcuseDates } from "./excuse-rules";
 import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
+import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
 
 export type ExcuseWithChild = Excuse & {
@@ -28,20 +29,17 @@ const startOfDay = (date: Date): number => {
 
 /**
  * Every excuse that spans any part of the range, for deriving per-day state.
- * Overlap cannot be expressed as a stored filter, so it is applied here.
+ * The Convex adapter bounds candidates by indexed start date and then applies
+ * the remaining end-date condition server-side.
  */
 export async function getExcusesOverlapping(range: {
   readonly childId?: string;
   readonly from: Date;
   readonly to: Date;
 }): Promise<CoveringExcuse[]> {
-  const excuses = (await db.excuses.list({
-    where: range.childId ? { childId: range.childId } : {},
-  })) as ReadonlyArray<Excuse>;
-
+  const excuses = (await db.excuses.listOverlapping(range)) as ReadonlyArray<Excuse>;
   const from = startOfDay(range.from);
   const to = startOfDay(range.to);
-
   return excuses.filter(
     (excuse) =>
       startOfDay(excuse.fromDate) <= to && startOfDay(excuse.toDate) >= from,
@@ -56,7 +54,8 @@ export async function createExcuse(
   fromDate: Date,
   toDate: Date,
   reason: string | null,
-  submittedById: string
+  submittedById: string,
+  schoolDays?: ReadonlyArray<Date>,
 ): Promise<Excuse> {
   // Validate dates
   const validation = validateExcuseDates(fromDate, toDate);
@@ -86,7 +85,9 @@ export async function createExcuse(
 
   // Attendance is untouched: whether these days count as excused is derived
   // from this record whenever it is read.
-  const isOnTime = getLateDays(excuse).length === 0;
+  const openSchoolDays =
+    schoolDays ?? (await getSchoolDaysInRange(normalizedFrom, normalizedTo));
+  const isOnTime = getLateDays(excuse, openSchoolDays).length === 0;
 
   // Create audit log
   await db.auditLogs.create({

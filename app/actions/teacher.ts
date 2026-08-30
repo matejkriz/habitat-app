@@ -14,8 +14,10 @@ import { recordBulkAttendance, canEnterAttendance } from "@/lib/attendance";
 import { getExcusesOverlapping } from "@/lib/excuse";
 import {
   getDayCoverage,
+  getExcuseDayState,
   getExcuseStatusForDay,
   groupExcusesByChild,
+  type ExcuseDayState,
 } from "@/lib/excuse-coverage";
 import { revalidatePath } from "next/cache";
 
@@ -27,7 +29,7 @@ type AttendanceRecord = {
 
 type DailyExcuse = {
   readonly childId: string;
-  readonly isOnTime: boolean;
+  readonly state: ExcuseDayState;
 };
 
 type DailyAttendance = {
@@ -101,7 +103,7 @@ export const getAttendanceForDate = async (
     })),
     excuses: [...excusesByChild.keys()].map((childId) => ({
       childId,
-      isOnTime: coverageFor(childId).excused,
+      state: getExcuseDayState(excusesByChild.get(childId) ?? [], date)!,
     })),
   };
 };
