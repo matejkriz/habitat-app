@@ -3,8 +3,10 @@
  */
 
 import { db } from "./db";
-import { Presence, ExcuseStatus, type Attendance } from "./types";
+import { Presence, type Attendance } from "./types";
 import { isClosedDay, getSchoolDaysInRange } from "./school-days";
+import { getDayCoverage, toDayKey } from "./excuse-coverage";
+import { getExcusesOverlapping } from "./excuse";
 
 export type AttendanceWithChild = Attendance & {
   child: {
@@ -74,27 +76,7 @@ export async function recordAttendance(
   const normalizedDate = new Date(date);
   normalizedDate.setHours(0, 0, 0, 0);
 
-  // Check if there's an existing excuse covering this date
-  const excuse = await db.excuses.first({
-    where: {
-      childId,
-      fromDate: { lte: normalizedDate },
-      toDate: { gte: normalizedDate },
-    },
-  });
-
-  // Determine excuse status
-  let excuseStatus: ExcuseStatus = ExcuseStatus.NONE;
-  if (presence === Presence.ABSENT) {
-    if (excuse) {
-      excuseStatus = excuse.autoApproved
-        ? ExcuseStatus.EXCUSED
-        : ExcuseStatus.UNEXCUSED;
-    } else {
-      excuseStatus = ExcuseStatus.UNEXCUSED;
-    }
-  }
-
+  // Excuse state is derived from the excuses themselves, never stored here.
   return db.attendance.save({
     where: {
       childId_date: {
@@ -104,16 +86,12 @@ export async function recordAttendance(
     },
     update: {
       presence,
-      excuseStatus,
-      excuseId: excuse?.id || null,
       recordedById,
     },
     create: {
       childId,
       date: normalizedDate,
       presence,
-      excuseStatus,
-      excuseId: excuse?.id || null,
       recordedById,
     },
   });
@@ -179,12 +157,13 @@ export async function getChildAttendanceStats(
   unexcusedDays: number;
   attendanceRate: number;
 }> {
-  const schoolDays = await getSchoolDaysInRange(startDate, endDate);
-  const attendance = await getChildAttendance(childId, startDate, endDate);
+  const [schoolDays, attendance, excuses] = await Promise.all([
+    getSchoolDaysInRange(startDate, endDate),
+    getChildAttendance(childId, startDate, endDate),
+    getExcusesOverlapping({ childId, from: startDate, to: endDate }),
+  ]);
 
-  const attendanceMap = new Map(
-    attendance.map((a) => [a.date.toISOString().split("T")[0], a])
-  );
+  const attendanceMap = new Map(attendance.map((a) => [toDayKey(a.date), a]));
 
   let presentDays = 0;
   let absentDays = 0;
@@ -192,19 +171,17 @@ export async function getChildAttendanceStats(
   let unexcusedDays = 0;
 
   for (const day of schoolDays) {
-    const dateStr = day.toISOString().split("T")[0];
-    const record = attendanceMap.get(dateStr);
+    const record = attendanceMap.get(toDayKey(day));
+    if (!record) continue;
 
-    if (record) {
-      if (record.presence === Presence.PRESENT) {
-        presentDays++;
+    if (record.presence === Presence.PRESENT) {
+      presentDays++;
+    } else {
+      absentDays++;
+      if (getDayCoverage(excuses, day).excused) {
+        excusedDays++;
       } else {
-        absentDays++;
-        if (record.excuseStatus === ExcuseStatus.EXCUSED) {
-          excusedDays++;
-        } else {
-          unexcusedDays++;
-        }
+        unexcusedDays++;
       }
     }
   }
@@ -257,38 +234,4 @@ export async function getTodayStatus(childId: string): Promise<{
     isClosed: false,
     attendance,
   };
-}
-
-/**
- * Override excuse status (Director only)
- */
-export async function overrideExcuseStatus(
-  attendanceId: string,
-  newStatus: ExcuseStatus,
-  userId: string
-): Promise<Attendance> {
-  const current = await db.attendance.get({
-    where: { id: attendanceId },
-  });
-
-  if (!current) {
-    throw new Error("Attendance record not found");
-  }
-
-  // Create audit log
-  await db.auditLogs.create({
-    data: {
-      userId,
-      action: "UPDATE",
-      entityType: "Attendance",
-      entityId: attendanceId,
-      previousValue: { excuseStatus: current.excuseStatus },
-      newValue: { excuseStatus: newStatus },
-    },
-  });
-
-  return db.attendance.update({
-    where: { id: attendanceId },
-    data: { excuseStatus: newStatus },
-  });
 }

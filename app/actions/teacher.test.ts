@@ -36,16 +36,18 @@ describe("getAttendanceForDate", () => {
       {
         id: "excuse-current",
         childId: "child-1",
-        fromDate: new Date("2026-08-18"),
-        toDate: new Date("2026-08-20"),
-        autoApproved: true,
+        fromDate: new Date(2026, 7, 18),
+        toDate: new Date(2026, 7, 20),
+        submittedAt: new Date(2026, 7, 10, 8),
+        lateApprovedAt: null,
       },
       {
         id: "excuse-ended",
         childId: "child-2",
-        fromDate: new Date("2026-08-01"),
-        toDate: new Date("2026-08-10"),
-        autoApproved: false,
+        fromDate: new Date(2026, 7, 1),
+        toDate: new Date(2026, 7, 10),
+        submittedAt: new Date(2026, 7, 5, 10),
+        lateApprovedAt: null,
       },
     ]);
 
@@ -58,9 +60,26 @@ describe("getAttendanceForDate", () => {
         },
       ],
     });
-    expect(mocks.excusesList).toHaveBeenCalledWith({
-      where: { fromDate: { lte: new Date("2026-08-19T00:00:00") } },
-      orderBy: { submittedAt: "desc" },
+  });
+
+  it("treats a day as late only when its own deadline had passed", async () => {
+    // Submitted after 9:00 the day before 19. 8., but days in advance for the rest.
+    mocks.excusesList.mockResolvedValue([
+      {
+        id: "excuse-late-start",
+        childId: "child-1",
+        fromDate: new Date(2026, 7, 19),
+        toDate: new Date(2026, 7, 26),
+        submittedAt: new Date(2026, 7, 18, 10),
+        lateApprovedAt: null,
+      },
+    ]);
+
+    await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({
+      excuses: [{ childId: "child-1", isOnTime: false }],
+    });
+    await expect(getAttendanceForDate("2026-08-20")).resolves.toMatchObject({
+      excuses: [{ childId: "child-1", isOnTime: true }],
     });
   });
 });

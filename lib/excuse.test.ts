@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ExcuseStatus, type Excuse } from "./types";
+import type { Excuse } from "./types";
 
 const mocks = vi.hoisted(() => ({
   getExcuse: vi.fn(),
   updateExcuse: vi.fn(),
-  bulkUpdateAttendance: vi.fn(),
   createAuditLog: vi.fn(),
-  getSchoolDaysInRange: vi.fn(),
   getParentLink: vi.fn(),
 }));
 
@@ -16,9 +14,6 @@ vi.mock("./db", () => ({
       get: mocks.getExcuse,
       update: mocks.updateExcuse,
     },
-    attendance: {
-      bulkUpdate: mocks.bulkUpdateAttendance,
-    },
     auditLogs: {
       create: mocks.createAuditLog,
     },
@@ -26,10 +21,6 @@ vi.mock("./db", () => ({
       get: mocks.getParentLink,
     },
   },
-}));
-
-vi.mock("./school-days", () => ({
-  getSchoolDaysInRange: mocks.getSchoolDaysInRange,
 }));
 
 vi.mock("./slack", () => ({
@@ -46,7 +37,8 @@ const currentExcuse: Excuse = {
   reason: "Nemoc",
   submittedById: "parent-1",
   submittedAt: new Date("2023-12-30T08:00:00"),
-  autoApproved: true,
+  lateApprovedAt: null,
+  lateApprovedById: null,
   createdAt: new Date("2023-12-30T08:00:00"),
   updatedAt: new Date("2023-12-30T08:00:00"),
 };
@@ -55,49 +47,44 @@ describe("updateExcuse", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getExcuse.mockResolvedValue(currentExcuse);
-    mocks.updateExcuse.mockResolvedValue({
-      ...currentExcuse,
-      fromDate: new Date("2024-01-02T00:00:00"),
-      toDate: new Date("2024-01-04T00:00:00"),
-    });
-    mocks.getSchoolDaysInRange.mockResolvedValue([
-      new Date("2024-01-02T00:00:00"),
-      new Date("2024-01-03T00:00:00"),
-      new Date("2024-01-04T00:00:00"),
-    ]);
+    mocks.updateExcuse.mockImplementation((args: { data: unknown }) =>
+      Promise.resolve({ ...currentExcuse, ...(args.data as object) }),
+    );
   });
 
-  it("detaches attendance from the old range before attaching the new range", async () => {
+  it("narrows the range without touching attendance", async () => {
     await updateExcuse(
       currentExcuse.id,
       {
-        fromDate: new Date("2024-01-02"),
-        toDate: new Date("2024-01-04"),
+        fromDate: new Date(2024, 0, 2),
+        toDate: new Date(2024, 0, 3),
       },
       "director-1",
     );
 
-    expect(mocks.bulkUpdateAttendance).toHaveBeenNthCalledWith(1, {
-      where: { excuseId: currentExcuse.id },
+    expect(mocks.updateExcuse).toHaveBeenCalledWith({
+      where: { id: currentExcuse.id },
       data: {
-        excuseId: null,
-        excuseStatus: ExcuseStatus.UNEXCUSED,
-      },
-    });
-
-    expect(mocks.bulkUpdateAttendance).toHaveBeenNthCalledWith(2, {
-      where: {
-        childId: currentExcuse.childId,
-        date: new Date(2024, 0, 2),
-        presence: "ABSENT",
-        excuseId: null,
-      },
-      data: {
-        excuseId: currentExcuse.id,
-        excuseStatus: ExcuseStatus.EXCUSED,
+        fromDate: new Date(2024, 0, 2),
+        toDate: new Date(2024, 0, 3),
+        reason: currentExcuse.reason,
       },
     });
   });
+
+  it.each([
+    ["an earlier start", new Date(2023, 11, 31), new Date(2024, 0, 3)],
+    ["a later end", new Date(2024, 0, 1), new Date(2024, 0, 4)],
+  ])(
+    "refuses to grow the range by %s, which would launder the submission time",
+    async (_label, fromDate, toDate) => {
+      await expect(
+        updateExcuse(currentExcuse.id, { fromDate, toDate }, "parent-1"),
+      ).rejects.toThrow("Rozsah omluvenky nelze rozšířit");
+
+      expect(mocks.updateExcuse).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("canManageExcuse", () => {

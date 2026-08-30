@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createExcuseRecord: vi.fn(),
-  bulkUpdateAttendance: vi.fn(),
   createAuditLog: vi.fn(),
   getChild: vi.fn(),
   getUser: vi.fn(),
@@ -13,7 +12,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./db", () => ({
   db: {
     excuses: { create: mocks.createExcuseRecord },
-    attendance: { bulkUpdate: mocks.bulkUpdateAttendance },
     auditLogs: { create: mocks.createAuditLog },
     children: { get: mocks.getChild },
     users: { get: mocks.getUser },
@@ -42,7 +40,8 @@ describe("createExcuse push notification", () => {
       reason: "Nemoc",
       submittedById: "parent-1",
       submittedAt: new Date(),
-      autoApproved: true,
+      lateApprovedAt: null,
+      lateApprovedById: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

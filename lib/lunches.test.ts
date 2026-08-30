@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ExcuseStatus, Presence } from "./types";
+import { Presence } from "./types";
+import { NO_COVERAGE, type DayCoverage } from "./excuse-coverage";
 import {
   getLocalDateKey,
   getLunchStatus,
@@ -8,16 +9,22 @@ import {
   sortChildrenWithSiblings,
 } from "./lunches";
 
+const coverage = (excused: boolean): DayCoverage => ({
+  covered: true,
+  excused,
+  excuse: null,
+});
+
 describe("lunch overview", () => {
   it.each([
-    [Presence.PRESENT, ExcuseStatus.NONE, null, LunchStatus.PRESENT, true],
-    [Presence.ABSENT, ExcuseStatus.EXCUSED, "excuse-1", LunchStatus.EXCUSED, false],
-    [Presence.ABSENT, ExcuseStatus.UNEXCUSED, "excuse-2", LunchStatus.LATE, true],
-    [Presence.ABSENT, ExcuseStatus.UNEXCUSED, null, LunchStatus.UNEXCUSED, true],
+    [Presence.PRESENT, NO_COVERAGE, LunchStatus.PRESENT, true],
+    [Presence.ABSENT, coverage(true), LunchStatus.EXCUSED, false],
+    [Presence.ABSENT, coverage(false), LunchStatus.LATE, true],
+    [Presence.ABSENT, NO_COVERAGE, LunchStatus.UNEXCUSED, true],
   ])(
     "classifies attendance and payment",
-    (presence, excuseStatus, excuseId, expectedStatus, expectedPayable) => {
-      const status = getLunchStatus({ presence, excuseStatus, excuseId });
+    (presence, dayCoverage, expectedStatus, expectedPayable) => {
+      const status = getLunchStatus({ presence }, dayCoverage);
 
       expect(status).toBe(expectedStatus);
       expect(isPayableLunch(status)).toBe(expectedPayable);
@@ -25,7 +32,7 @@ describe("lunch overview", () => {
   );
 
   it("leaves a day without attendance unmarked and unpaid", () => {
-    expect(getLunchStatus(undefined)).toBeNull();
+    expect(getLunchStatus(undefined, NO_COVERAGE)).toBeNull();
     expect(isPayableLunch(null)).toBe(false);
   });
 

@@ -1,4 +1,12 @@
-import type { ExcuseStatus, Presence } from "./types";
+import {
+  getDayCoverage,
+  groupExcusesByChild,
+  type CoveringExcuse,
+} from "./excuse-coverage";
+import { isDefaultClosedDay, toLocalDateKey } from "./school-calendar";
+import type { Presence } from "./types";
+
+export { toLocalDateKey };
 
 export type CalendarChild = {
   readonly id: string;
@@ -10,15 +18,9 @@ export type CalendarAttendance = {
   readonly childId: string;
   readonly date: Date;
   readonly presence: Presence;
-  readonly excuseStatus: ExcuseStatus;
 };
 
-export type CalendarExcuse = {
-  readonly childId: string;
-  readonly fromDate: Date;
-  readonly toDate: Date;
-  readonly reason: string | null;
-};
+export type CalendarExcuse = CoveringExcuse;
 
 export type CalendarClosedDay = {
   readonly date: Date;
@@ -89,17 +91,6 @@ type BuildAttendanceCalendarInput = {
   readonly closedDays: ReadonlyArray<CalendarClosedDay>;
 };
 
-export function toLocalDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isDefaultClosedDay(date: Date): boolean {
-  return date.getDay() === 0 || date.getDay() >= 5;
-}
-
 function getChildDetail(child: CalendarChild, reason?: string | null): CalendarChildDetail {
   return {
     childId: child.id,
@@ -108,17 +99,12 @@ function getChildDetail(child: CalendarChild, reason?: string | null): CalendarC
   };
 }
 
-function isDateInExcuse(date: Date, excuse: CalendarExcuse): boolean {
-  const dateKey = toLocalDateKey(date);
-  return dateKey >= toLocalDateKey(excuse.fromDate) && dateKey <= toLocalDateKey(excuse.toDate);
-}
-
 function buildOpenDay(
   date: Date,
   todayKey: string,
   children: ReadonlyArray<CalendarChild>,
   attendance: ReadonlyArray<CalendarAttendance>,
-  excuses: ReadonlyArray<CalendarExcuse>,
+  excusesByChild: ReadonlyMap<string, CalendarExcuse[]>,
 ): AttendanceCalendarDay {
   const dateKey = toLocalDateKey(date);
   const isPast = dateKey < todayKey;
@@ -134,14 +120,12 @@ function buildOpenDay(
     const record = attendance.find(
       (item) => item.childId === child.id && toLocalDateKey(item.date) === dateKey,
     );
-    const excuse = excuses.find(
-      (item) => item.childId === child.id && isDateInExcuse(date, item),
-    );
+    const coverage = getDayCoverage(excusesByChild.get(child.id) ?? [], date);
 
     if (record?.presence === "PRESENT") {
       present.push(getChildDetail(child));
-    } else if (record?.excuseStatus === "EXCUSED" || (!record && excuse)) {
-      excused.push(getChildDetail(child, excuse?.reason));
+    } else if (coverage.excused) {
+      excused.push(getChildDetail(child, coverage.excuse?.reason));
     } else if (record?.presence === "ABSENT") {
       unexcused.push(getChildDetail(child));
     } else if (isPast) {
@@ -207,6 +191,7 @@ export function buildAttendanceCalendar({
   closedDays,
 }: BuildAttendanceCalendarInput): ReadonlyArray<AttendanceCalendarDay> {
   const todayKey = toLocalDateKey(today);
+  const excusesByChild = groupExcusesByChild(excuses);
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
   const dayCount = new Date(year, monthIndex + 1, 0).getDate();
@@ -221,6 +206,6 @@ export function buildAttendanceCalendar({
       return buildClosedDay(date, todayKey, customClosedDay?.description ?? null);
     }
 
-    return buildOpenDay(date, todayKey, children, attendance, excuses);
+    return buildOpenDay(date, todayKey, children, attendance, excusesByChild);
   });
 }

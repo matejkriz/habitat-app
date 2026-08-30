@@ -3,7 +3,8 @@
 import { buildAttendanceCalendar, type AttendanceCalendarDay } from "@/lib/attendance-calendar";
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { UserRole, type Attendance, type Child, type ClosedDay, type Excuse } from "@/lib/types";
+import { getExcusesOverlapping } from "@/lib/excuse";
+import { UserRole, type Attendance, type Child, type ClosedDay } from "@/lib/types";
 
 export type AttendanceCalendarMonth = {
   readonly monthKey: string;
@@ -35,24 +36,20 @@ export async function getAttendanceCalendarMonth(
   const startDate = new Date(year, monthIndex, 1);
   const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [children, attendance, allExcuses, closedDays] = (await Promise.all([
+  const [children, attendance, excuses, closedDays] = await Promise.all([
     db.children.list({
       where: { active: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    }),
-    db.attendance.list({ where: { date: { gte: startDate, lte: endDate } } }),
-    db.excuses.list({ where: { fromDate: { lte: endDate } } }),
-    db.closedDays.list({ where: { date: { gte: startDate, lte: endDate } } }),
-  ])) as [
-    ReadonlyArray<Child>,
-    ReadonlyArray<Attendance>,
-    ReadonlyArray<Excuse>,
-    ReadonlyArray<ClosedDay>,
-  ];
+    }) as Promise<ReadonlyArray<Child>>,
+    db.attendance.list({
+      where: { date: { gte: startDate, lte: endDate } },
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ from: startDate, to: endDate }),
+    db.closedDays.list({
+      where: { date: { gte: startDate, lte: endDate } },
+    }) as Promise<ReadonlyArray<ClosedDay>>,
+  ]);
 
-  const excuses = allExcuses.filter(
-    (excuse) => excuse.fromDate <= endDate && excuse.toDate >= startDate,
-  );
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

@@ -19,8 +19,14 @@ import {
   canManageExcuses,
   canSubmitExcuse,
   deleteExcuse as deleteExcuseRecord,
+  getExcusesOverlapping,
   updateExcuse as updateExcuseRecord,
 } from "@/lib/excuse";
+import {
+  getDayCoverage,
+  getExcuseStatusForDay,
+  getLateDays,
+} from "@/lib/excuse-coverage";
 import { parseExcuseDate, resolveExcuseChildIds } from "@/lib/excuse-rules";
 import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
@@ -45,20 +51,12 @@ type ChildTodayStatus = {
   } | null;
 };
 
-type AttendanceWithOptionalExcuse = Attendance & {
-  readonly excuse?: {
-    readonly id: string;
-    readonly reason: string | null;
-    readonly autoApproved: boolean;
-  } | null;
-};
-
 type AttendanceHistoryItem = {
   readonly id: string;
   readonly date: Date;
   readonly presence: Presence;
   readonly excuseStatus: ExcuseStatus;
-  readonly excuse: AttendanceWithOptionalExcuse["excuse"];
+  readonly excuse: { readonly id: string; readonly reason: string | null } | null;
 };
 
 type ChildExcuseItem = {
@@ -66,7 +64,6 @@ type ChildExcuseItem = {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason: string | null;
-  readonly autoApproved: boolean;
   readonly submittedAt: Date;
 };
 
@@ -128,14 +125,17 @@ export const getChildTodayStatus = async (
     };
   }
 
-  const attendance = (await db.attendance.get({
-    where: {
-      childId_date: {
-        childId,
-        date: today,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.get({
+      where: {
+        childId_date: {
+          childId,
+          date: today,
+        },
       },
-    },
-  })) as Attendance | null;
+    }) as Promise<Attendance | null>,
+    getExcusesOverlapping({ childId, from: today, to: today }),
+  ]);
 
   return {
     date: today,
@@ -144,7 +144,10 @@ export const getChildTodayStatus = async (
     attendance: attendance
       ? {
           presence: attendance.presence,
-          excuseStatus: attendance.excuseStatus,
+          excuseStatus: getExcuseStatusForDay(
+            attendance.presence,
+            getDayCoverage(excuses, today),
+          ),
         }
       : null,
   };
@@ -177,33 +180,33 @@ export const getChildAttendanceHistory = async (
   startDate.setDate(startDate.getDate() - limit);
   startDate.setHours(0, 0, 0, 0);
 
-  const attendance = (await db.attendance.list({
-    where: {
-      childId,
-      date: {
-        gte: startDate,
-        lte: today,
-      },
-    },
-    orderBy: { date: "desc" },
-    include: {
-      excuse: {
-        select: {
-          id: true,
-          reason: true,
-          autoApproved: true,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.list({
+      where: {
+        childId,
+        date: {
+          gte: startDate,
+          lte: today,
         },
       },
-    },
-  })) as ReadonlyArray<AttendanceWithOptionalExcuse>;
+      orderBy: { date: "desc" },
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ childId, from: startDate, to: today }),
+  ]);
 
-  return attendance.map((a) => ({
-    id: a.id,
-    date: a.date,
-    presence: a.presence,
-    excuseStatus: a.excuseStatus,
-    excuse: a.excuse,
-  }));
+  return attendance.map((a) => {
+    const coverage = getDayCoverage(excuses, a.date);
+
+    return {
+      id: a.id,
+      date: a.date,
+      presence: a.presence,
+      excuseStatus: getExcuseStatusForDay(a.presence, coverage),
+      excuse: coverage.excuse
+        ? { id: coverage.excuse.id, reason: coverage.excuse.reason ?? null }
+        : null,
+    };
+  });
 };
 
 /**
@@ -237,7 +240,6 @@ export const getChildExcuses = async (
     fromDate: e.fromDate,
     toDate: e.toDate,
     reason: e.reason,
-    autoApproved: e.autoApproved,
     submittedAt: e.submittedAt,
   }));
 };
@@ -269,24 +271,20 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     999,
   );
 
-  const [attendance, allExcuses, closedDays] = (await Promise.all([
+  const [attendance, excuses, closedDays] = await Promise.all([
     db.attendance.list({
       where: { childId, date: { gte: monthStart, lte: monthEnd } },
-    }),
-    db.excuses.list({ where: { childId } }),
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ childId, from: monthStart, to: monthEnd }),
     db.closedDays.list({
       where: { date: { gte: monthStart, lte: monthEnd } },
-    }),
-  ])) as [ReadonlyArray<Attendance>, ReadonlyArray<Excuse>, ReadonlyArray<ClosedDay>];
-
-  const overlappingExcuses = allExcuses.filter(
-    (excuse) => excuse.fromDate <= monthEnd && excuse.toDate >= monthStart,
-  );
+    }) as Promise<ReadonlyArray<ClosedDay>>,
+  ]);
 
   return buildParentCalendarMonth({
     month: monthStart,
     attendance,
-    excuses: overlappingExcuses,
+    excuses,
     closedDays: closedDays.map((day) => day.date),
   });
 };
@@ -341,7 +339,7 @@ export const submitExcuse = async (formData: FormData) => {
       childId: excuse.childId,
       fromDate: excuse.fromDate,
       toDate: excuse.toDate,
-      autoApproved: excuse.autoApproved,
+      isOnTime: getLateDays(excuse).length === 0,
     })),
   };
 };
@@ -433,27 +431,29 @@ export const getChildStats = async (
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  const attendance = (await db.attendance.list({
-    where: {
-      childId,
-      date: {
-        gte: startOfMonth,
-        lte: endOfMonth,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.list({
+      where: {
+        childId,
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
       },
-    },
-  })) as ReadonlyArray<Attendance>;
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ childId, from: startOfMonth, to: endOfMonth }),
+  ]);
 
-  const stats = {
+  const absences = attendance
+    .filter((a) => a.presence === Presence.ABSENT)
+    .map((a) => getDayCoverage(excuses, a.date).excused);
+  const excused = absences.filter(Boolean).length;
+
+  return {
     totalRecords: attendance.length,
     present: attendance.filter((a) => a.presence === Presence.PRESENT).length,
-    absent: attendance.filter((a) => a.presence === Presence.ABSENT).length,
-    excused: attendance.filter(
-      (a) => a.presence === Presence.ABSENT && a.excuseStatus === ExcuseStatus.EXCUSED
-    ).length,
-    unexcused: attendance.filter(
-      (a) => a.presence === Presence.ABSENT && a.excuseStatus === ExcuseStatus.UNEXCUSED
-    ).length,
+    absent: absences.length,
+    excused,
+    unexcused: absences.length - excused,
   };
-
-  return stats;
 };

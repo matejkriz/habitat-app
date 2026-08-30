@@ -14,7 +14,6 @@ const excuse = {
   fromDate: new Date(2024, 0, 2),
   toDate: new Date(2024, 0, 3),
   reason: "Nemoc",
-  autoApproved: true,
   submittedAt: new Date(2024, 0, 1),
 };
 
@@ -22,6 +21,31 @@ describe("ParentExcuses", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("shows a single-day excuse as one date, not a range", () => {
+    render(
+      <ParentExcuses
+        excuses={[{ ...excuse, fromDate: new Date(2026, 7, 20), toDate: new Date(2026, 7, 20) }]}
+      />,
+    );
+
+    expect(screen.getByText("20. 8.")).toBeTruthy();
+  });
+
+  it("shows a multi-day excuse as a range", () => {
+    render(<ParentExcuses excuses={[excuse]} />);
+
+    expect(screen.getByText("2. 1. – 3. 1.")).toBeTruthy();
+  });
+
+  // Whether a given day was on time is shown per day in the calendar; the card
+  // covers a whole range and would have to flatten that into one label.
+  it("does not label the range as on time or late", () => {
+    render(<ParentExcuses excuses={[excuse]} />);
+
+    expect(screen.queryByText("Včas")).toBeNull();
+    expect(screen.queryByText("Pozdě")).toBeNull();
   });
 
   it("saves changes through the parent action", async () => {
