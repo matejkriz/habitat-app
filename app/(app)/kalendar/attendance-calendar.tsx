@@ -424,7 +424,13 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
   );
 }
 
-export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceCalendarMonth }) {
+export function AttendanceCalendar({
+  initialMonth,
+  startMonthKey,
+}: {
+  readonly initialMonth: AttendanceCalendarMonth;
+  readonly startMonthKey: string | null;
+}) {
   const [calendar, setCalendar] = useState(initialMonth);
   const [selectedDay, setSelectedDay] = useState<AttendanceCalendarDay | null>(null);
   const [hoverPreview, setHoverPreview] = useState<{
@@ -444,8 +450,11 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
   );
   const workweekGridOffset = useMemo(() => getWorkweekGridOffset(workweekDays), [workweekDays]);
   const today = calendar.days.find((day) => day.isToday);
+  const canLoadPreviousMonth = !startMonthKey || calendar.monthKey > startMonthKey;
 
   async function loadMonth(monthKey: string) {
+    if (startMonthKey && monthKey < startMonthKey) return;
+
     setHoverPreview(null);
     setIsLoading(true);
     setError("");
@@ -525,15 +534,19 @@ export function AttendanceCalendar({ initialMonth }: { initialMonth: AttendanceC
 
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-cream-dark px-3 py-3 sm:px-5">
-          <button
-            type="button"
-            aria-label="Předchozí měsíc"
-            onClick={() => loadMonth(shiftMonth(calendar.monthKey, -1))}
-            disabled={isLoading}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-charcoal transition-colors hover:bg-cream disabled:opacity-50"
-          >
-            <ChevronIcon direction="left" />
-          </button>
+          {canLoadPreviousMonth ? (
+            <button
+              type="button"
+              aria-label="Předchozí měsíc"
+              onClick={() => loadMonth(shiftMonth(calendar.monthKey, -1))}
+              disabled={isLoading}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-charcoal transition-colors hover:bg-cream disabled:opacity-50"
+            >
+              <ChevronIcon direction="left" />
+            </button>
+          ) : (
+            <div aria-hidden="true" className="h-11 w-11" />
+          )}
           <div className="text-center">
             <h2 className="text-lg font-extrabold capitalize text-charcoal sm:text-xl">
               {formatMonth(calendar.monthKey)}

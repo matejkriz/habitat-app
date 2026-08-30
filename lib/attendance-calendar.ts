@@ -58,6 +58,28 @@ export type AttendanceCalendarDay = {
   };
 };
 
+export function getAttendanceCalendarStartMonthKey(
+  startDate: string | undefined,
+): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate ?? "");
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() !== month - 1 ||
+    parsedDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${match[1]}-${match[2]}`;
+}
+
 type BuildAttendanceCalendarInput = {
   readonly month: Date;
   readonly today: Date;

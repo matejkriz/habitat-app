@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAttendanceCalendarMonth } from "@/app/actions/calendar";
+import { getAttendanceCalendarStartMonthKey } from "@/lib/attendance-calendar";
 import { getDbUser } from "@/lib/auth";
 import { UserRole } from "@/lib/types";
 import { AttendanceCalendar } from "./attendance-calendar";
@@ -19,7 +20,13 @@ export default async function AttendanceCalendarPage() {
     redirect("/login");
   }
 
-  const initialMonth = await getAttendanceCalendarMonth(getCurrentMonthKey());
+  const currentMonthKey = getCurrentMonthKey();
+  const startMonthKey = getAttendanceCalendarStartMonthKey(
+    process.env.NEXT_PUBLIC_ATTENDANCE_CALENDAR_START_DATE,
+  );
+  const initialMonthKey =
+    startMonthKey && currentMonthKey < startMonthKey ? startMonthKey : currentMonthKey;
+  const initialMonth = await getAttendanceCalendarMonth(initialMonthKey);
 
-  return <AttendanceCalendar initialMonth={initialMonth} />;
+  return <AttendanceCalendar initialMonth={initialMonth} startMonthKey={startMonthKey} />;
 }

@@ -17,9 +17,10 @@ const children = [
   { id: "bo", firstName: "Bo", lastName: "Svoboda" },
 ];
 
-function renderCalendar() {
+function renderCalendar(startMonthKey: string | null = null) {
   render(
     <AttendanceCalendar
+      startMonthKey={startMonthKey}
       initialMonth={{
         monthKey: "2026-08",
         totalChildren: children.length,
@@ -120,5 +121,20 @@ describe("AttendanceCalendar supporting copy", () => {
     expect(document.body.textContent).not.toContain(
       "Na počítači přejeďte přes den pro rychlý náhled, kliknutím otevřete detail.",
     );
+  });
+});
+
+describe("AttendanceCalendar month limit", () => {
+  it("hides previous-month navigation in the configured first month", () => {
+    renderCalendar("2026-08");
+
+    expect(screen.queryByRole("button", { name: "Předchozí měsíc" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Další měsíc" })).toBeTruthy();
+  });
+
+  it("shows previous-month navigation after the configured first month", () => {
+    renderCalendar("2026-07");
+
+    expect(screen.getByRole("button", { name: "Předchozí měsíc" })).toBeTruthy();
   });
 });

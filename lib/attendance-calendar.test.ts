@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildAttendanceCalendar } from "./attendance-calendar";
+import {
+  buildAttendanceCalendar,
+  getAttendanceCalendarStartMonthKey,
+} from "./attendance-calendar";
 
 const children = [
   { id: "ada", firstName: "Ada", lastName: "Nováková" },
@@ -93,5 +96,17 @@ describe("buildAttendanceCalendar", () => {
       isClosed: true,
       closedReason: "Prázdniny",
     });
+  });
+});
+
+describe("getAttendanceCalendarStartMonthKey", () => {
+  it("returns the configured month for a valid date", () => {
+    expect(getAttendanceCalendarStartMonthKey("2026-07-01")).toBe("2026-07");
+  });
+
+  it("ignores missing and invalid dates", () => {
+    expect(getAttendanceCalendarStartMonthKey(undefined)).toBeNull();
+    expect(getAttendanceCalendarStartMonthKey("2026-13-01")).toBeNull();
+    expect(getAttendanceCalendarStartMonthKey("2026-02-30")).toBeNull();
   });
 });
