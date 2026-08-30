@@ -44,7 +44,7 @@ describe("NewExcusePage", () => {
           childId: "child-1",
           fromDate: new Date(2026, 8, 10),
           toDate: new Date(2026, 8, 10),
-          autoApproved: true,
+          isOnTime: true,
         },
       ],
     });

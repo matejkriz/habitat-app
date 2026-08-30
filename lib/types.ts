@@ -70,8 +70,6 @@ export type Attendance = {
   childId: string;
   date: Date;
   presence: Presence;
-  excuseStatus: ExcuseStatus;
-  excuseId: string | null;
   recordedById: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -85,7 +83,9 @@ export type Excuse = {
   reason: string | null;
   submittedById: string;
   submittedAt: Date;
-  autoApproved: boolean;
+  /** Set when the director forgives a late submission. Null means no decision. */
+  lateApprovedAt: Date | null;
+  lateApprovedById: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

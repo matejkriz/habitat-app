@@ -40,7 +40,8 @@ const makeExcuse = (childId: string): Excuse => ({
   reason: "Nemoc",
   submittedById: "parent-1",
   submittedAt: new Date(2026, 8, 1),
-  autoApproved: true,
+  lateApprovedAt: null,
+  lateApprovedById: null,
   createdAt: new Date(2026, 8, 1),
   updatedAt: new Date(2026, 8, 1),
 });

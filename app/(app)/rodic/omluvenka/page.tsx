@@ -33,7 +33,7 @@ export default function NewExcusePage() {
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ autoApproved: boolean; count: number } | null>(null);
+  const [success, setSuccess] = useState<{ isOnTime: boolean; count: number } | null>(null);
   const [willAutoApprove, setWillAutoApprove] = useState<boolean | null>(null);
   const [deadline, setDeadline] = useState("");
 
@@ -90,7 +90,7 @@ export default function NewExcusePage() {
 
       const result = await submitExcuse(formData);
       setSuccess({
-        autoApproved: result.excuses.every((excuse) => excuse.autoApproved),
+        isOnTime: result.excuses.every((excuse) => excuse.isOnTime),
         count: result.excuses.length,
       });
 
@@ -130,7 +130,7 @@ export default function NewExcusePage() {
 
             {success && (
               <div className={`p-4 rounded-lg text-sm ${
-                success.autoApproved
+                success.isOnTime
                   ? "bg-sage/10 border border-sage/20 text-sage-dark"
                   : "bg-gold/10 border border-gold/20 text-gold-dark"
               }`}>
@@ -142,7 +142,7 @@ export default function NewExcusePage() {
                     {success.count > 1 ? "Omluvenky odeslány" : "Omluvenka odeslána"}
                   </span>
                 </div>
-                {success.autoApproved ? (
+                {success.isOnTime ? (
                   <p>
                     {success.count > 1
                       ? `Omluvenky pro ${success.count} děti byly odeslány včas – obědy budou odhlášeny.`

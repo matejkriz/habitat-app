@@ -18,14 +18,15 @@ import {
   Badge,
   Select,
 } from "@/components/ui";
-import { formatShortDate, formatDate } from "@/lib/utils";
+import type { ExcuseRangeState } from "@/lib/excuse-coverage";
+import { formatDate, formatDateRange } from "@/lib/utils";
 
 interface Excuse {
   id: string;
   fromDate: Date;
   toDate: Date;
   reason: string | null;
-  autoApproved: boolean;
+  rangeState: ExcuseRangeState;
   submittedAt: Date;
   child: {
     id: string;
@@ -39,9 +40,18 @@ interface Excuse {
   };
 }
 
+const rangeStateBadge: Record<
+  ExcuseRangeState,
+  { readonly variant: "excused" | "unexcused"; readonly label: string }
+> = {
+  ON_TIME: { variant: "excused", label: "Včas" },
+  LATE: { variant: "unexcused", label: "Pozdě" },
+  LATE_APPROVED: { variant: "excused", label: "Pozdě – schváleno" },
+};
+
 export default function ExcuseManagementPage() {
   const [excuses, setExcuses] = useState<Excuse[]>([]);
-  const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "settled">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -52,8 +62,8 @@ export default function ExcuseManagementPage() {
         const options =
           filter === "pending"
             ? { pendingOnly: true }
-            : filter === "approved"
-            ? { autoApprovedOnly: true }
+            : filter === "settled"
+            ? { settledOnly: true }
             : undefined;
         const data = await getExcuses(options);
         setExcuses([...data]);
@@ -73,8 +83,10 @@ export default function ExcuseManagementPage() {
       // Update local state
       setExcuses((prev) =>
         prev.map((e) =>
-          e.id === excuseId ? { ...e, autoApproved: approve } : e
-        )
+          e.id === excuseId
+            ? { ...e, rangeState: approve ? "LATE_APPROVED" : "LATE" }
+            : e,
+        ),
       );
     } catch (error) {
       console.error("Failed to update excuse:", error);
@@ -118,7 +130,7 @@ export default function ExcuseManagementPage() {
           options={[
             { value: "all", label: "Všechny omluvenky" },
             { value: "pending", label: "Ke schválení" },
-            { value: "approved", label: "Včas" },
+            { value: "settled", label: "Vyřízené" },
           ]}
           className="w-[200px]"
         />
@@ -134,8 +146,8 @@ export default function ExcuseManagementPage() {
             <p className="text-charcoal-light text-center py-12">
               {filter === "pending"
                 ? "Žádné omluvenky ke schválení"
-                : filter === "approved"
-                ? "Žádné omluvenky odeslané včas"
+                : filter === "settled"
+                ? "Žádné vyřízené omluvenky"
                 : "Žádné omluvenky"}
             </p>
           ) : (
@@ -151,16 +163,13 @@ export default function ExcuseManagementPage() {
                         <h3 className="font-semibold text-charcoal">
                           {excuse.child.firstName} {excuse.child.lastName}
                         </h3>
-                        <Badge
-                          variant={excuse.autoApproved ? "excused" : "unexcused"}
-                        >
-                          {excuse.autoApproved ? "Včas" : "Pozdě"}
+                        <Badge variant={rangeStateBadge[excuse.rangeState].variant}>
+                          {rangeStateBadge[excuse.rangeState].label}
                         </Badge>
                       </div>
                       <p className="text-sm text-charcoal-light">
                         <span className="font-medium">Období:</span>{" "}
-                        {formatShortDate(excuse.fromDate)} -{" "}
-                        {formatShortDate(excuse.toDate)}
+                        {formatDateRange(excuse.fromDate, excuse.toDate)}
                       </p>
                       {excuse.reason && (
                         <p className="text-sm text-charcoal-light">
@@ -176,7 +185,7 @@ export default function ExcuseManagementPage() {
 
                     <div className="flex flex-col items-start gap-2 sm:items-end">
                       <div className="flex items-center gap-2">
-                        {!excuse.autoApproved && (
+                        {excuse.rangeState === "LATE" && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -186,7 +195,7 @@ export default function ExcuseManagementPage() {
                             Schválit
                           </Button>
                         )}
-                        {excuse.autoApproved && (
+                        {excuse.rangeState === "LATE_APPROVED" && (
                           <Button
                             variant="outline"
                             size="sm"

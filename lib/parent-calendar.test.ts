@@ -8,9 +8,12 @@ describe("buildParentCalendarMonth", () => {
       attendance: [],
       excuses: [
         {
+          id: "excuse-1",
+          childId: "child-1",
           fromDate: new Date(2026, 7, 10),
           toDate: new Date(2026, 7, 12),
-          autoApproved: true,
+          submittedAt: new Date(2026, 7, 1, 8),
+          lateApprovedAt: null,
         },
       ],
       closedDays: [],
@@ -27,14 +30,16 @@ describe("buildParentCalendarMonth", () => {
         {
           date: new Date(2026, 7, 4),
           presence: "ABSENT",
-          excuseStatus: "UNEXCUSED",
         },
       ],
       excuses: [
         {
+          id: "excuse-1",
+          childId: "child-1",
           fromDate: new Date(2026, 7, 3),
           toDate: new Date(2026, 7, 3),
-          autoApproved: false,
+          submittedAt: new Date(2026, 7, 3, 10),
+          lateApprovedAt: null,
         },
       ],
       closedDays: [],

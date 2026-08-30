@@ -8,10 +8,15 @@ import {
   ExcuseStatus,
   type Child,
   type Attendance,
-  type Excuse,
 } from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
 import { recordBulkAttendance, canEnterAttendance } from "@/lib/attendance";
+import { getExcusesOverlapping } from "@/lib/excuse";
+import {
+  getDayCoverage,
+  getExcuseStatusForDay,
+  groupExcusesByChild,
+} from "@/lib/excuse-coverage";
 import { revalidatePath } from "next/cache";
 
 type AttendanceRecord = {
@@ -67,7 +72,7 @@ export const getAttendanceForDate = async (
     return { isClosed: true, attendance: [], excuses: [] };
   }
 
-  const [attendance, possibleExcuses] = await Promise.all([
+  const [attendance, excuses] = await Promise.all([
     db.attendance.list({
       where: { date },
       include: {
@@ -80,29 +85,24 @@ export const getAttendanceForDate = async (
         },
       },
     }) as Promise<ReadonlyArray<Attendance>>,
-    db.excuses.list({
-      where: { fromDate: { lte: date } },
-      orderBy: { submittedAt: "desc" },
-    }) as Promise<ReadonlyArray<Excuse>>,
+    getExcusesOverlapping({ from: date, to: date }),
   ]);
 
-  const excusesByChild = new Map<string, DailyExcuse>();
-  for (const excuse of possibleExcuses) {
-    if (excuse.toDate < date || excusesByChild.has(excuse.childId)) continue;
-    excusesByChild.set(excuse.childId, {
-      childId: excuse.childId,
-      isOnTime: excuse.autoApproved,
-    });
-  }
+  const excusesByChild = groupExcusesByChild(excuses);
+  const coverageFor = (childId: string) =>
+    getDayCoverage(excusesByChild.get(childId) ?? [], date);
 
   return {
     isClosed: false,
     attendance: attendance.map((a) => ({
       childId: a.childId,
       presence: a.presence,
-      excuseStatus: a.excuseStatus,
+      excuseStatus: getExcuseStatusForDay(a.presence, coverageFor(a.childId)),
     })),
-    excuses: [...excusesByChild.values()],
+    excuses: [...excusesByChild.keys()].map((childId) => ({
+      childId,
+      isOnTime: coverageFor(childId).excused,
+    })),
   };
 };
 

@@ -14,7 +14,7 @@ import type {
   User,
   UserRole,
 } from "./types";
-import type { ExcuseStatus, AuditAction } from "./types";
+import type { AuditAction } from "./types";
 
 type TableName =
   | "users"
@@ -58,8 +58,6 @@ type RawAttendance = {
   readonly childId: string;
   readonly date: number;
   readonly presence: Presence;
-  readonly excuseStatus: ExcuseStatus;
-  readonly excuseId?: string | null;
   readonly recordedById?: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -73,7 +71,8 @@ type RawExcuse = {
   readonly reason?: string | null;
   readonly submittedById: string;
   readonly submittedAt: number;
-  readonly autoApproved: boolean;
+  readonly lateApprovedAt?: number | null;
+  readonly lateApprovedById?: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
 };
@@ -116,11 +115,6 @@ type CreateRecordArgs = {
 };
 
 type UpdateRecordArgs = {
-  readonly where: Record<string, unknown>;
-  readonly data: Record<string, unknown>;
-};
-
-type BulkUpdateRecordArgs = {
   readonly where: Record<string, unknown>;
   readonly data: Record<string, unknown>;
 };
@@ -230,8 +224,6 @@ const fromRawAttendance = (raw: RawAttendance): Attendance => ({
   childId: raw.childId,
   date: new Date(raw.date),
   presence: raw.presence,
-  excuseStatus: raw.excuseStatus,
-  excuseId: raw.excuseId ?? null,
   recordedById: raw.recordedById ?? null,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
@@ -245,7 +237,8 @@ const fromRawExcuse = (raw: RawExcuse): Excuse => ({
   reason: raw.reason ?? null,
   submittedById: raw.submittedById,
   submittedAt: new Date(raw.submittedAt),
-  autoApproved: raw.autoApproved,
+  lateApprovedAt: raw.lateApprovedAt == null ? null : new Date(raw.lateApprovedAt),
+  lateApprovedById: raw.lateApprovedById ?? null,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
 });
@@ -669,7 +662,6 @@ export const db: any = {
     list: async (args: ListArgs = {}) => {
       const attendance = (await listTable<RawAttendance>("attendance")).map(fromRawAttendance);
       const children = (await listTable<RawChild>("children")).map(fromRawChild);
-      const excuses = (await listTable<RawExcuse>("excuses")).map(fromRawExcuse);
 
       let filtered = attendance;
       const where = args.where;
@@ -678,7 +670,6 @@ export const db: any = {
         filtered = filtered.filter((row) => {
           if (where.childId && row.childId !== where.childId) return false;
           if (where.id && row.id !== where.id) return false;
-          if (where.excuseId !== undefined && row.excuseId !== where.excuseId) return false;
           if (where.presence && row.presence !== where.presence) return false;
           if (where.date && !matchesDateFilter(row.date.getTime(), where.date)) return false;
           return true;
@@ -704,26 +695,6 @@ export const db: any = {
               if (enabled) selected[key] = (child as Record<string, unknown>)[key];
             }
             output.child = selected;
-          }
-        }
-
-        if (args.include.excuse) {
-          const excuse = row.excuseId
-            ? excuses.find((e) => e.id === row.excuseId) ?? null
-            : null;
-          const excuseInclude = args.include.excuse as Record<string, unknown>;
-          if (!excuse) {
-            output.excuse = null;
-          } else if (!excuseInclude.select) {
-            output.excuse = excuse;
-          } else {
-            const selected: Record<string, unknown> = {};
-            for (const [key, enabled] of Object.entries(
-              excuseInclude.select as Record<string, unknown>,
-            )) {
-              if (enabled) selected[key] = (excuse as Record<string, unknown>)[key];
-            }
-            output.excuse = selected;
           }
         }
 
@@ -787,8 +758,6 @@ export const db: any = {
         childId: String(data.childId),
         date: toTimestamp(data.date),
         presence: data.presence as Presence,
-        excuseStatus: data.excuseStatus as ExcuseStatus,
-        excuseId: data.excuseId == null ? null : String(data.excuseId),
         recordedById: data.recordedById == null ? null : String(data.recordedById),
         createdAt: now,
         updatedAt: now,
@@ -834,8 +803,6 @@ export const db: any = {
         childId: String(args.create.childId),
         date: toTimestamp(args.create.date),
         presence: args.create.presence as Presence,
-        excuseStatus: args.create.excuseStatus as ExcuseStatus,
-        excuseId: args.create.excuseId == null ? null : String(args.create.excuseId),
         recordedById:
           args.create.recordedById == null ? null : String(args.create.recordedById),
         createdAt: now,
@@ -857,49 +824,9 @@ export const db: any = {
       const updated = await getById<RawAttendance>("attendance", id);
       return fromRawAttendance(assertFound(updated, "Attendance not found after update"));
     },
-
-    bulkUpdate: async (args: BulkUpdateRecordArgs) => {
-      const rows = (await listTable<RawAttendance>("attendance")).map(fromRawAttendance);
-      const where = args.where;
-
-      const matched = rows.filter((row) => {
-        if (where.childId && row.childId !== where.childId) return false;
-        if (where.excuseId !== undefined && row.excuseId !== where.excuseId) return false;
-        if (where.presence && row.presence !== where.presence) return false;
-        if (where.date && !matchesDateFilter(row.date.getTime(), where.date)) return false;
-        return true;
-      });
-
-      for (const row of matched) {
-        const patch = normalizeDates(args.data) as Record<string, unknown>;
-        await patchById("attendance", row.id, {
-          ...patch,
-          updatedAt: Date.now(),
-        } as Record<string, unknown>);
-      }
-
-      return { count: matched.length };
-    },
   },
 
   excuses: {
-    first: async (args: { where: Record<string, unknown> }) => {
-      const excuses = (await listTable<RawExcuse>("excuses")).map(fromRawExcuse);
-      const where = args.where;
-      const result =
-        excuses.find((excuse) => {
-          if (where.childId && excuse.childId !== where.childId) return false;
-          if (isRecord(where.fromDate) && where.fromDate.lte !== undefined) {
-            if (excuse.fromDate.getTime() > toTimestamp(where.fromDate.lte)) return false;
-          }
-          if (isRecord(where.toDate) && where.toDate.gte !== undefined) {
-            if (excuse.toDate.getTime() < toTimestamp(where.toDate.gte)) return false;
-          }
-          return true;
-        }) ?? null;
-      return result;
-    },
-
     get: async (args: GetArgs) => {
       const raw = await getById<RawExcuse>("excuses", String(args.where.id));
       return raw ? fromRawExcuse(raw) : null;
@@ -914,9 +841,6 @@ export const db: any = {
         const where = args.where;
         if (!where) return true;
         if (where.childId && excuse.childId !== where.childId) return false;
-        if (where.autoApproved !== undefined && excuse.autoApproved !== where.autoApproved) {
-          return false;
-        }
         if (where.fromDate && !matchesDateFilter(excuse.fromDate.getTime(), where.fromDate)) {
           return false;
         }
@@ -985,7 +909,10 @@ export const db: any = {
         reason: data.reason == null ? null : String(data.reason),
         submittedById: String(data.submittedById),
         submittedAt: data.submittedAt ? toTimestamp(data.submittedAt) : now,
-        autoApproved: Boolean(data.autoApproved),
+        lateApprovedAt:
+          data.lateApprovedAt == null ? null : toTimestamp(data.lateApprovedAt),
+        lateApprovedById:
+          data.lateApprovedById == null ? null : String(data.lateApprovedById),
         createdAt: now,
         updatedAt: now,
       };

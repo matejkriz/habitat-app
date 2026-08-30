@@ -1,9 +1,5 @@
-import {
-  ExcuseStatus,
-  Presence,
-  type ExcuseStatus as ExcuseStatusValue,
-  type Presence as PresenceValue,
-} from "./types";
+import { toDayKey, type DayCoverage } from "./excuse-coverage";
+import { Presence, type Presence as PresenceValue } from "./types";
 
 export const LunchStatus = {
   PRESENT: "present",
@@ -16,8 +12,6 @@ export type LunchStatus = (typeof LunchStatus)[keyof typeof LunchStatus];
 
 export type LunchAttendance = {
   readonly presence: PresenceValue;
-  readonly excuseStatus: ExcuseStatusValue;
-  readonly excuseId: string | null;
 };
 
 export type ChildWithFamily = {
@@ -29,6 +23,7 @@ export type ChildWithFamily = {
 
 export function getLunchStatus(
   attendance: LunchAttendance | undefined,
+  coverage: DayCoverage,
 ): LunchStatus | null {
   if (!attendance) return null;
 
@@ -36,13 +31,11 @@ export function getLunchStatus(
     return LunchStatus.PRESENT;
   }
 
-  if (attendance.excuseStatus === ExcuseStatus.EXCUSED) {
+  if (coverage.excused) {
     return LunchStatus.EXCUSED;
   }
 
-  return attendance.excuseId
-    ? LunchStatus.LATE
-    : LunchStatus.UNEXCUSED;
+  return coverage.covered ? LunchStatus.LATE : LunchStatus.UNEXCUSED;
 }
 
 export function isPayableLunch(status: LunchStatus | null): boolean {
@@ -53,12 +46,7 @@ export function isPayableLunch(status: LunchStatus | null): boolean {
   );
 }
 
-export function getLocalDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+export const getLocalDateKey = toDayKey;
 
 const compareChildren = (a: ChildWithFamily, b: ChildWithFamily): number => {
   const byLastName = a.lastName.localeCompare(b.lastName, "cs");

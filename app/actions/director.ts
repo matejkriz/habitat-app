@@ -6,7 +6,6 @@ import { getPresenceLabel } from "@/lib/presence-label";
 import {
   UserRole,
   Presence,
-  ExcuseStatus,
   AuditAction,
   type Attendance,
   type AuditLog,
@@ -27,8 +26,17 @@ import {
 import { revalidatePath } from "next/cache";
 import {
   deleteExcuse as deleteExcuseRecord,
+  getExcusesOverlapping,
   updateExcuse as updateExcuseRecord,
 } from "@/lib/excuse";
+import {
+  getDayCoverage,
+  getExcuseRangeState,
+  groupExcusesByChild,
+  isExcuseSettled,
+  NO_COVERAGE,
+  type ExcuseRangeState,
+} from "@/lib/excuse-coverage";
 import { parseExcuseDate } from "@/lib/excuse-rules";
 
 // Type for audit log with included user relation
@@ -47,9 +55,6 @@ type AttendanceWithChild = Attendance & {
     readonly lastName: string;
     readonly gender: ChildGender | null;
   };
-  readonly excuse?: {
-    readonly reason?: string | null;
-  } | null;
 };
 
 type ExcuseWithChildAndSubmitter = Excuse & {
@@ -171,7 +176,7 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
   const startOfMonth = new Date(year, monthIndex, 1);
   const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [schoolDays, children, attendance] = await Promise.all([
+  const [schoolDays, children, attendance, excuses] = await Promise.all([
     getSchoolDaysInRange(startOfMonth, endOfMonth),
     db.children.list({
       where: { active: true },
@@ -193,8 +198,10 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
         },
       },
     }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
   ]);
 
+  const excusesByChild = groupExcusesByChild(excuses);
   const sortedChildren = sortChildrenWithSiblings(
     children.map((child) => ({
       ...child,
@@ -208,6 +215,7 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
     ]),
   );
   const days = schoolDays.map((date) => ({
+    date,
     key: getLocalDateKey(date),
     day: date.getDate(),
     weekday: ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"][date.getDay()],
@@ -219,10 +227,14 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
       month: "long",
       year: "numeric",
     }).format(startOfMonth),
-    days,
+    days: days.map(({ key, day, weekday }) => ({ key, day, weekday })),
     children: sortedChildren.map((child) => {
+      const childExcuses = excusesByChild.get(child.id) ?? [];
       const statuses = days.map((day) =>
-        getLunchStatus(attendanceByChildAndDate.get(`${child.id}:${day.key}`)),
+        getLunchStatus(
+          attendanceByChildAndDate.get(`${child.id}:${day.key}`),
+          getDayCoverage(childExcuses, day.date),
+        ),
       );
 
       return {
@@ -263,17 +275,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     },
   })) as ReadonlyArray<Attendance>;
 
-  // Get unexcused absences this month
-  const unexcusedCount = monthAttendance.filter(
-    (a) =>
-      a.presence === Presence.ABSENT &&
-      a.excuseStatus === ExcuseStatus.UNEXCUSED
-  ).length;
+  const monthExcuses = groupExcusesByChild(
+    await getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
+  );
+  const monthAbsences = monthAttendance
+    .filter((a) => a.presence === Presence.ABSENT)
+    .map((a) =>
+      getDayCoverage(monthExcuses.get(a.childId) ?? [], a.date).excused,
+    );
+  const excusedCount = monthAbsences.filter(Boolean).length;
+  const unexcusedCount = monthAbsences.length - excusedCount;
 
-  // Get recent excuses pending review
-  const recentExcuses = (await db.excuses.list({
+  // Recent excuses still waiting for the director to forgive a late submission
+  const recentExcuses = ((await db.excuses.list({
     where: {
-      autoApproved: false,
       submittedAt: {
         gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
       },
@@ -287,8 +302,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       },
     },
     orderBy: { submittedAt: "desc" },
-    take: 5,
-  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string } }>;
+  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string } }>)
+    .filter((excuse) => !isExcuseSettled(excuse))
+    .slice(0, 5);
 
   // Get children count
   const childrenCount = await db.children.count({ where: { active: true } });
@@ -307,11 +323,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       presentCount: monthAttendance.filter(
         (a) => a.presence === Presence.PRESENT
       ).length,
-      absentCount: monthAttendance.filter((a) => a.presence === Presence.ABSENT)
-        .length,
-      excusedCount: monthAttendance.filter(
-        (a) => a.excuseStatus === ExcuseStatus.EXCUSED
-      ).length,
+      absentCount: monthAbsences.length,
+      excusedCount,
       unexcusedCount,
     },
     recentExcuses: recentExcuses.map((e) => ({
@@ -329,23 +342,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
  * Get all excuses with filters
  */
 export async function getExcuses(options?: {
-  autoApprovedOnly?: boolean;
+  settledOnly?: boolean;
   pendingOnly?: boolean;
 }) {
   await requireDirector();
 
-  const where: Record<string, unknown> = {};
-
-  if (options?.autoApprovedOnly) {
-    where.autoApproved = true;
-  }
-
-  if (options?.pendingOnly) {
-    where.autoApproved = false;
-  }
-
   const excuses = (await db.excuses.list({
-    where,
+    where: {},
     include: {
       child: {
         select: {
@@ -363,16 +366,27 @@ export async function getExcuses(options?: {
       },
     },
     orderBy: { submittedAt: "desc" },
-    take: 100,
   })) as ReadonlyArray<ExcuseWithChildAndSubmitter>;
 
-  return excuses;
+  // Whether an excuse still needs a decision is derived, so it cannot be
+  // pushed down into the query.
+  const filtered = excuses.filter((excuse) => {
+    if (options?.settledOnly) return isExcuseSettled(excuse);
+    if (options?.pendingOnly) return !isExcuseSettled(excuse);
+    return true;
+  });
+
+  return filtered.slice(0, 100).map((excuse) => ({
+    ...excuse,
+    rangeState: getExcuseRangeState(excuse) satisfies ExcuseRangeState,
+  }));
 }
 
 /**
- * Update an excuse (approve/reject)
+ * Forgive a late submission, or take that decision back. On-time excuses have
+ * nothing to decide; delete them instead if they should not stand.
  */
-export async function updateExcuse(excuseId: string, autoApproved: boolean) {
+export async function updateExcuse(excuseId: string, approveLate: boolean) {
   const user = await requireDirector();
 
   const excuse = await db.excuses.get({
@@ -383,6 +397,9 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
     throw new Error("Excuse not found");
   }
 
+  const lateApprovedAt = approveLate ? new Date() : null;
+  const lateApprovedById = approveLate ? user.id : null;
+
   // Create audit log
   await db.auditLogs.create({
     data: {
@@ -390,28 +407,18 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
       action: AuditAction.UPDATE,
       entityType: "Excuse",
       entityId: excuseId,
-      previousValue: { autoApproved: excuse.autoApproved },
-      newValue: { autoApproved },
+      previousValue: {
+        lateApprovedAt: excuse.lateApprovedAt?.toISOString() ?? null,
+      },
+      newValue: { lateApprovedAt: lateApprovedAt?.toISOString() ?? null },
     },
   });
 
-  // Update excuse
+  // The decision only lives on the excuse. Every day it covers picks it up on
+  // the next read, including days another overlapping excuse also covers.
   const updated = await db.excuses.update({
     where: { id: excuseId },
-    data: { autoApproved },
-  });
-
-  // Update related attendance records
-  await db.attendance.bulkUpdate({
-    where: {
-      excuseId,
-      presence: Presence.ABSENT,
-    },
-    data: {
-      excuseStatus: autoApproved
-        ? ExcuseStatus.EXCUSED
-        : ExcuseStatus.UNEXCUSED,
-    },
+    data: { lateApprovedAt, lateApprovedById },
   });
 
   revalidatePath("/reditel/omluvenky");
@@ -601,24 +608,24 @@ export async function exportAttendanceCSV(
     where.childId = childId;
   }
 
-  const attendance = (await db.attendance.list({
-    where,
-    include: {
-      child: {
-        select: {
-          firstName: true,
-          lastName: true,
-          gender: true,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.list({
+      where,
+      include: {
+        child: {
+          select: {
+            firstName: true,
+            lastName: true,
+            gender: true,
+          },
         },
       },
-      excuse: {
-        select: {
-          reason: true,
-        },
-      },
-    },
-    orderBy: [{ date: "asc" }, { child: { lastName: "asc" } }],
-  })) as ReadonlyArray<AttendanceWithChild>;
+      orderBy: [{ date: "asc" }, { child: { lastName: "asc" } }],
+    }) as Promise<ReadonlyArray<AttendanceWithChild>>,
+    getExcusesOverlapping({ childId, from: start, to: end }),
+  ]);
+
+  const excusesByChild = groupExcusesByChild(excuses);
 
   // Build CSV
   const headers = [
@@ -629,18 +636,25 @@ export async function exportAttendanceCSV(
     "Stav omluvy",
     "Důvod",
   ];
-  const rows = attendance.map((a) => [
-    a.date.toLocaleDateString("cs-CZ"),
-    a.child.firstName,
-    a.child.lastName,
-    getPresenceLabel(a.presence === Presence.PRESENT, a.child.gender),
-    a.excuseStatus === ExcuseStatus.NONE
-      ? ""
-      : a.excuseStatus === ExcuseStatus.EXCUSED
-      ? "Omluveno"
-      : "Neomluveno",
-    a.excuse?.reason || "",
-  ]);
+  const rows = attendance.map((a) => {
+    const coverage =
+      a.presence === Presence.ABSENT
+        ? getDayCoverage(excusesByChild.get(a.childId) ?? [], a.date)
+        : NO_COVERAGE;
+
+    return [
+      a.date.toLocaleDateString("cs-CZ"),
+      a.child.firstName,
+      a.child.lastName,
+      getPresenceLabel(a.presence === Presence.PRESENT, a.child.gender),
+      a.presence === Presence.PRESENT
+        ? ""
+        : coverage.excused
+        ? "Omluveno"
+        : "Neomluveno",
+      coverage.excuse?.reason || "",
+    ];
+  });
 
   const csvContent = [
     headers.join(";"),

@@ -33,7 +33,6 @@ function renderCalendar(startMonthKey: string | null = null) {
               childId: "ada",
               date: new Date(2026, 7, 3),
               presence: "PRESENT",
-              excuseStatus: "NONE",
             },
           ],
           excuses: [],

@@ -9,15 +9,13 @@ import {
   ExcuseEditor,
   type ExcuseEditValues,
 } from "@/components/excuses/excuse-editor";
-import { Badge } from "@/components/ui/badge";
-import { formatShortDate } from "@/lib/utils";
+import { formatDateRange } from "@/lib/utils";
 
 type ParentExcuse = {
   readonly id: string;
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason: string | null;
-  readonly autoApproved: boolean;
   readonly submittedAt: Date;
 };
 
@@ -55,14 +53,9 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
         <article key={excuse.id} className="rounded-lg border border-cream-dark bg-cream p-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold text-charcoal">
-                  {formatShortDate(excuse.fromDate)} – {formatShortDate(excuse.toDate)}
-                </p>
-                <Badge variant={excuse.autoApproved ? "excused" : "unexcused"}>
-                  {excuse.autoApproved ? "Včas" : "Pozdě"}
-                </Badge>
-              </div>
+              <p className="font-semibold text-charcoal">
+                {formatDateRange(excuse.fromDate, excuse.toDate)}
+              </p>
               <p className="text-sm text-charcoal-light">
                 {excuse.reason || "Bez uvedeného důvodu"}
               </p>

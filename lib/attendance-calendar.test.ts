@@ -10,6 +10,16 @@ const children = [
   { id: "cyril", firstName: "Cyril", lastName: "Dvořák" },
 ];
 
+const excuse = (overrides: {
+  readonly id: string;
+  readonly childId: string;
+  readonly fromDate: Date;
+  readonly toDate: Date;
+  readonly reason?: string | null;
+  readonly submittedAt: Date;
+  readonly lateApprovedAt?: Date | null;
+}) => ({ reason: null, lateApprovedAt: null, ...overrides });
+
 describe("buildAttendanceCalendar", () => {
   it("počítá budoucí očekávanou účast z aktivních dětí a omluvenek", () => {
     const [day] = buildAttendanceCalendar({
@@ -18,12 +28,14 @@ describe("buildAttendanceCalendar", () => {
       children,
       attendance: [],
       excuses: [
-        {
+        excuse({
+          id: "excuse-bo",
           childId: "bo",
           fromDate: new Date(2026, 7, 4),
           toDate: new Date(2026, 7, 5),
           reason: "Rodinná cesta",
-        },
+          submittedAt: new Date(2026, 7, 1, 8),
+        }),
       ],
       closedDays: [],
     }).filter((item) => item.dateKey === "2026-08-04");
@@ -45,10 +57,18 @@ describe("buildAttendanceCalendar", () => {
       today: new Date(2026, 7, 3),
       children,
       attendance: [
-        { childId: "ada", date: new Date(2026, 7, 3), presence: "PRESENT", excuseStatus: "NONE" },
-        { childId: "bo", date: new Date(2026, 7, 3), presence: "ABSENT", excuseStatus: "EXCUSED" },
+        { childId: "ada", date: new Date(2026, 7, 3), presence: "PRESENT" },
+        { childId: "bo", date: new Date(2026, 7, 3), presence: "ABSENT" },
       ],
-      excuses: [],
+      excuses: [
+        excuse({
+          id: "excuse-bo",
+          childId: "bo",
+          fromDate: new Date(2026, 7, 3),
+          toDate: new Date(2026, 7, 3),
+          submittedAt: new Date(2026, 7, 1, 8),
+        }),
+      ],
       closedDays: [],
     }).filter((item) => item.dateKey === "2026-08-03");
 
@@ -70,8 +90,8 @@ describe("buildAttendanceCalendar", () => {
       today: new Date(2026, 7, 3),
       children,
       attendance: [
-        { childId: "ada", date: new Date(2026, 6, 30), presence: "PRESENT", excuseStatus: "NONE" },
-        { childId: "bo", date: new Date(2026, 6, 30), presence: "ABSENT", excuseStatus: "UNEXCUSED" },
+        { childId: "ada", date: new Date(2026, 6, 30), presence: "PRESENT" },
+        { childId: "bo", date: new Date(2026, 6, 30), presence: "ABSENT" },
       ],
       excuses: [],
       closedDays: [],

@@ -1,5 +1,6 @@
-import type { ExcuseStatus, Presence } from "./types";
-import { isDefaultClosedDay } from "./school-days";
+import { getDayCoverage, type CoveringExcuse } from "./excuse-coverage";
+import type { Presence } from "./types";
+import { isDefaultClosedDay, toLocalDateKey as toKey } from "./school-calendar";
 
 export type ParentCalendarStatus =
   | "EXPECTED"
@@ -20,29 +21,17 @@ export interface ParentCalendarDay {
 interface CalendarAttendance {
   readonly date: Date;
   readonly presence: Presence;
-  readonly excuseStatus: ExcuseStatus;
-}
-
-interface CalendarExcuse {
-  readonly fromDate: Date;
-  readonly toDate: Date;
-  readonly autoApproved: boolean;
 }
 
 interface BuildParentCalendarMonthInput {
   readonly month: Date;
   readonly attendance: ReadonlyArray<CalendarAttendance>;
-  readonly excuses: ReadonlyArray<CalendarExcuse>;
+  readonly excuses: ReadonlyArray<CoveringExcuse>;
   readonly closedDays: ReadonlyArray<Date>;
   readonly today?: Date;
 }
 
-export function toLocalDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+export const toLocalDateKey = toKey;
 
 export function parseMonth(month: string | undefined, fallback = new Date()): Date {
   const match = /^(\d{4})-(\d{2})$/.exec(month ?? "");
@@ -74,19 +63,17 @@ export function buildParentCalendarMonth({
     const date = new Date(year, monthIndex, index + 1);
     const dateKey = toLocalDateKey(date);
     const attendanceItem = attendanceByDate.get(dateKey);
-    const excuse = excuses.find(
-      (item) => toLocalDateKey(item.fromDate) <= dateKey && toLocalDateKey(item.toDate) >= dateKey,
-    );
+    const coverage = getDayCoverage(excuses, date);
 
     let status: ParentCalendarStatus;
     if (isDefaultClosedDay(date) || closedDateKeys.has(dateKey)) {
       status = "CLOSED";
     } else if (attendanceItem?.presence === "PRESENT") {
       status = "PRESENT";
-    } else if (attendanceItem?.presence === "ABSENT" && attendanceItem.excuseStatus === "EXCUSED") {
+    } else if (coverage.excused) {
       status = "EXCUSED";
-    } else if (excuse) {
-      status = excuse.autoApproved ? "EXCUSED" : "PENDING";
+    } else if (coverage.covered) {
+      status = "PENDING";
     } else if (attendanceItem?.presence === "ABSENT") {
       status = "UNEXCUSED";
     } else if (dateKey < todayKey) {

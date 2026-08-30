@@ -6,22 +6,9 @@
  */
 
 import { db } from "./db";
+import { isDefaultClosedDay, isSchoolDay } from "./school-calendar";
 
-/**
- * Check if a date is a default closed day (Friday, Saturday, Sunday)
- */
-export function isDefaultClosedDay(date: Date): boolean {
-  const dayOfWeek = date.getDay();
-  // Sunday = 0, Friday = 5, Saturday = 6
-  return dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6;
-}
-
-/**
- * Check if a date is a school day (Mon-Thu)
- */
-export function isSchoolDay(date: Date): boolean {
-  return !isDefaultClosedDay(date);
-}
+export { isDefaultClosedDay, isSchoolDay } from "./school-calendar";
 
 /**
  * Get all custom closed days within a date range
