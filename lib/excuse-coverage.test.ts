@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   excusesDay,
   getDayCoverage,
+  getExcuseDayState,
   getExcuseRangeState,
   getExcuseStatusForDay,
   getLateDays,
@@ -45,6 +46,27 @@ describe("per-day lateness", () => {
 
   it("reports no late days when the whole range was submitted in time", () => {
     expect(getLateDays(excuse({ submittedAt: AUG(10, 8) }))).toEqual([]);
+  });
+
+  it("ignores configured school closures when deriving late days", () => {
+    const backdated = excuse({ submittedAt: AUG(19, 14) });
+    const openSchoolDays = [AUG(20), AUG(24), AUG(25), AUG(26)];
+
+    expect(getLateDays(backdated, openSchoolDays)).toEqual([AUG(20)]);
+  });
+
+  it("distinguishes an approved late day from an on-time excuse", () => {
+    const approvedLate = excuse({
+      fromDate: AUG(19),
+      toDate: AUG(19),
+      submittedAt: AUG(19, 14),
+      lateApprovedAt: AUG(20, 12),
+    });
+
+    expect(getExcuseDayState([approvedLate], AUG(19))).toBe("LATE_APPROVED");
+    expect(getExcuseDayState([excuse({ submittedAt: AUG(10, 8) })], AUG(19))).toBe(
+      "ON_TIME",
+    );
   });
 });
 

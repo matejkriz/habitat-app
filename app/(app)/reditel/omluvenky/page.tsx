@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   deleteExcuse,
   editExcuse,
@@ -55,39 +55,33 @@ export default function ExcuseManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadExcuses() {
-      setIsLoading(true);
-      try {
-        const options =
-          filter === "pending"
-            ? { pendingOnly: true }
-            : filter === "settled"
+  const loadExcuses = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
+    try {
+      const options =
+        filter === "pending"
+          ? { pendingOnly: true }
+          : filter === "settled"
             ? { settledOnly: true }
             : undefined;
-        const data = await getExcuses(options);
-        setExcuses([...data]);
-      } catch (error) {
-        console.error("Failed to load excuses:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      const data = await getExcuses(options);
+      setExcuses([...data]);
+    } catch (error) {
+      console.error("Failed to load excuses:", error);
+    } finally {
+      if (showLoading) setIsLoading(false);
     }
-    loadExcuses();
   }, [filter]);
+
+  useEffect(() => {
+    void loadExcuses();
+  }, [loadExcuses]);
 
   const handleApprove = async (excuseId: string, approve: boolean) => {
     setUpdatingId(excuseId);
     try {
       await updateExcuse(excuseId, approve);
-      // Update local state
-      setExcuses((prev) =>
-        prev.map((e) =>
-          e.id === excuseId
-            ? { ...e, rangeState: approve ? "LATE_APPROVED" : "LATE" }
-            : e,
-        ),
-      );
+      await loadExcuses(false);
     } catch (error) {
       console.error("Failed to update excuse:", error);
     } finally {
@@ -96,24 +90,13 @@ export default function ExcuseManagementPage() {
   };
 
   const handleEdit = async (excuseId: string, values: ExcuseEditValues) => {
-    const updated = await editExcuse(excuseId, values);
-    setExcuses((current) =>
-      current.map((excuse) =>
-        excuse.id === excuseId
-          ? {
-              ...excuse,
-              fromDate: updated.fromDate,
-              toDate: updated.toDate,
-              reason: updated.reason,
-            }
-          : excuse,
-      ),
-    );
+    await editExcuse(excuseId, values);
+    await loadExcuses(false);
   };
 
   const handleDelete = async (excuseId: string) => {
     await deleteExcuse(excuseId);
-    setExcuses((current) => current.filter((excuse) => excuse.id !== excuseId));
+    await loadExcuses(false);
   };
 
   return (

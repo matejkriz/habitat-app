@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   listParentLinks: vi.fn(),
   canManageExcuses: vi.fn(),
   createExcuse: vi.fn(),
+  getSchoolDaysInRange: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -15,7 +16,10 @@ vi.mock("@/lib/db", () => ({
     parentLinks: { list: mocks.listParentLinks },
   },
 }));
-vi.mock("@/lib/school-days", () => ({ isClosedDay: vi.fn() }));
+vi.mock("@/lib/school-days", () => ({
+  isClosedDay: vi.fn(),
+  getSchoolDaysInRange: mocks.getSchoolDaysInRange,
+}));
 vi.mock("@/lib/excuse", () => ({
   createExcuse: mocks.createExcuse,
   canManageExcuse: vi.fn(),
@@ -69,6 +73,7 @@ describe("submitExcuse", () => {
       role: "PARENT",
     });
     mocks.canManageExcuses.mockResolvedValue(true);
+    mocks.getSchoolDaysInRange.mockResolvedValue([new Date(2026, 8, 10)]);
     mocks.createExcuse.mockImplementation((childId: string) =>
       Promise.resolve(makeExcuse(childId)),
     );
@@ -89,11 +94,43 @@ describe("submitExcuse", () => {
       new Date(2026, 8, 10),
       "Nemoc",
       "parent-1",
+      [new Date(2026, 8, 10)],
     );
     expect(result.excuses.map((excuse) => excuse.childId)).toEqual([
       "child-1",
       "child-2",
     ]);
+    expect(result.summary).toEqual({
+      schoolDayCount: 2,
+      lateDayCount: 0,
+      onTimeDayCount: 2,
+    });
+  });
+
+  it("preserves a mixed on-time and late result per school day", async () => {
+    const formData = makeFormData();
+    formData.set("fromDate", "2026-08-19");
+    formData.set("toDate", "2026-08-20");
+    formData.delete("childIds");
+    formData.append("childIds", "child-1");
+    mocks.getSchoolDaysInRange.mockResolvedValue([
+      new Date(2026, 7, 19),
+      new Date(2026, 7, 20),
+    ]);
+    mocks.createExcuse.mockResolvedValue({
+      ...makeExcuse("child-1"),
+      fromDate: new Date(2026, 7, 19),
+      toDate: new Date(2026, 7, 20),
+      submittedAt: new Date(2026, 7, 18, 10),
+    });
+
+    const result = await submitExcuse(formData);
+
+    expect(result.summary).toEqual({
+      schoolDayCount: 2,
+      lateDayCount: 1,
+      onTimeDayCount: 1,
+    });
   });
 
   it("creates nothing when the parent lacks access to one selected child", async () => {

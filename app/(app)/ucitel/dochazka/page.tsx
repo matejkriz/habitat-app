@@ -43,8 +43,14 @@ const nativeSwitchAttribute = { switch: "" } as const;
 
 interface DailyExcuse {
   childId: string;
-  isOnTime: boolean;
+  state: "ON_TIME" | "LATE" | "LATE_APPROVED";
 }
+
+const excuseBadge = {
+  ON_TIME: { variant: "excused", label: "Omluveno včas" },
+  LATE: { variant: "unexcused", label: "Omluveno pozdě" },
+  LATE_APPROVED: { variant: "excused", label: "Pozdě – schváleno" },
+} as const;
 
 interface CachedAttendanceDay {
   readonly children: ReadonlyArray<Child>;
@@ -436,11 +442,9 @@ export default function TeacherAttendancePage() {
                         </span>
                         {excuses[child.id] && (
                           <Badge
-                            variant={excuses[child.id].isOnTime ? "excused" : "unexcused"}
+                            variant={excuseBadge[excuses[child.id].state].variant}
                           >
-                            {excuses[child.id].isOnTime
-                              ? "Omluveno včas"
-                              : "Omluveno pozdě"}
+                            {excuseBadge[excuses[child.id].state].label}
                           </Badge>
                         )}
                       </div>

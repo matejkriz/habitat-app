@@ -50,6 +50,7 @@ export const NO_COVERAGE: DayCoverage = {
 };
 
 export type ExcuseRangeState = "ON_TIME" | "LATE" | "LATE_APPROVED";
+export type ExcuseDayState = ExcuseRangeState;
 
 export const toDayKey = toLocalDateKey;
 
@@ -65,6 +66,19 @@ export function isLateForDay(excuse: CoveringExcuse, day: Date): boolean {
 
 export function excusesDay(excuse: CoveringExcuse, day: Date): boolean {
   return !isLateForDay(excuse, day) || excuse.lateApprovedAt !== null;
+}
+
+export function getExcuseDayState(
+  excuses: ReadonlyArray<CoveringExcuse>,
+  day: Date,
+): ExcuseDayState | null {
+  const covering = excuses.filter((excuse) => coversDay(excuse, day));
+  if (covering.length === 0) return null;
+  if (covering.some((excuse) => !isLateForDay(excuse, day))) return "ON_TIME";
+  if (covering.some((excuse) => excuse.lateApprovedAt !== null)) {
+    return "LATE_APPROVED";
+  }
+  return "LATE";
 }
 
 /**
@@ -119,10 +133,19 @@ export function getExcuseStatusForDay(
  * excuse was submitted. Because the submission is a single instant, these are
  * always the leading days of the range.
  *
- * Custom closed days are not considered here: this drives labels only, and the
- * caller would have to reach into the database for them.
+ * Callers that know the configured school calendar pass its open school days.
+ * Pure callers may omit them and get the default Monday-to-Thursday calendar.
  */
-export function getLateDays(excuse: CoveringExcuse): Date[] {
+export function getLateDays(
+  excuse: CoveringExcuse,
+  schoolDays?: ReadonlyArray<Date>,
+): Date[] {
+  if (schoolDays) {
+    return schoolDays
+      .filter((day) => coversDay(excuse, day) && isLateForDay(excuse, day))
+      .map((day) => new Date(day));
+  }
+
   const lateDays: Date[] = [];
   const current = new Date(excuse.fromDate);
   current.setHours(0, 0, 0, 0);
@@ -140,12 +163,18 @@ export function getLateDays(excuse: CoveringExcuse): Date[] {
   return lateDays;
 }
 
-export function getExcuseRangeState(excuse: CoveringExcuse): ExcuseRangeState {
-  if (getLateDays(excuse).length === 0) return "ON_TIME";
+export function getExcuseRangeState(
+  excuse: CoveringExcuse,
+  schoolDays?: ReadonlyArray<Date>,
+): ExcuseRangeState {
+  if (getLateDays(excuse, schoolDays).length === 0) return "ON_TIME";
   return excuse.lateApprovedAt !== null ? "LATE_APPROVED" : "LATE";
 }
 
 /** True once the director has nothing left to decide about this excuse. */
-export function isExcuseSettled(excuse: CoveringExcuse): boolean {
-  return getExcuseRangeState(excuse) !== "LATE";
+export function isExcuseSettled(
+  excuse: CoveringExcuse,
+  schoolDays?: ReadonlyArray<Date>,
+): boolean {
+  return getExcuseRangeState(excuse, schoolDays) !== "LATE";
 }

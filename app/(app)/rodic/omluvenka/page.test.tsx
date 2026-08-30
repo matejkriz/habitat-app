@@ -47,6 +47,11 @@ describe("NewExcusePage", () => {
           isOnTime: true,
         },
       ],
+      summary: {
+        schoolDayCount: 1,
+        lateDayCount: 0,
+        onTimeDayCount: 1,
+      },
     });
   });
 
@@ -107,5 +112,28 @@ describe("NewExcusePage", () => {
     await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalled());
     const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
     expect(formData.getAll("childIds")).toEqual(["child-1", "child-2"]);
+  });
+
+  it("explains a mixed range without claiming that no lunches were canceled", async () => {
+    mocks.submitExcuse.mockResolvedValueOnce({
+      success: true,
+      excuses: [{ id: "excuse-1", childId: "child-1" }],
+      summary: {
+        schoolDayCount: 2,
+        lateDayCount: 1,
+        onTimeDayCount: 1,
+      },
+    });
+    render(<NewExcusePage />);
+
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-08-19" } });
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-08-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+
+    expect(
+      await screen.findByText(/1 oběd bude odhlášen.*1 pozdně omluvený den/i),
+    ).toBeTruthy();
+    expect(screen.queryByText(/oběd nebude automaticky odhlášen/i)).toBeNull();
   });
 });

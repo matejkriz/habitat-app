@@ -4,6 +4,11 @@ import { v } from "convex/values";
 const role = v.union(v.literal("PARENT"), v.literal("TEACHER"), v.literal("DIRECTOR"));
 const presence = v.union(v.literal("PRESENT"), v.literal("ABSENT"));
 const childGender = v.union(v.literal("MALE"), v.literal("FEMALE"));
+const excuseStatus = v.union(
+  v.literal("NONE"),
+  v.literal("EXCUSED"),
+  v.literal("UNEXCUSED"),
+);
 const auditAction = v.union(v.literal("CREATE"), v.literal("UPDATE"), v.literal("DELETE"));
 
 export default defineSchema({
@@ -51,6 +56,10 @@ export default defineSchema({
     childId: v.string(),
     date: v.number(),
     presence,
+    // Legacy cache fields stay optional during the rollout. New reads ignore
+    // them because excuse state is derived from the overlapping excuses.
+    excuseStatus: v.optional(excuseStatus),
+    excuseId: v.optional(v.union(v.string(), v.null())),
     recordedById: v.optional(v.union(v.string(), v.null())),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -58,7 +67,8 @@ export default defineSchema({
     .index("by_app_id", { fields: ["id"] })
     .index("by_child_id", { fields: ["childId"] })
     .index("by_date", { fields: ["date"] })
-    .index("by_child_date", { fields: ["childId", "date"] }),
+    .index("by_child_date", { fields: ["childId", "date"] })
+    .index("by_excuse_id", { fields: ["excuseId"] }),
 
   excuses: defineTable({
     id: v.string(),
@@ -68,6 +78,9 @@ export default defineSchema({
     reason: v.optional(v.union(v.string(), v.null())),
     submittedById: v.string(),
     submittedAt: v.number(),
+    // Retained until legacy documents have been migrated. For old records,
+    // true is interpreted as a forgiven late submission when needed.
+    autoApproved: v.optional(v.boolean()),
     lateApprovedAt: v.optional(v.union(v.number(), v.null())),
     lateApprovedById: v.optional(v.union(v.string(), v.null())),
     createdAt: v.number(),
@@ -75,6 +88,8 @@ export default defineSchema({
   })
     .index("by_app_id", { fields: ["id"] })
     .index("by_child_id", { fields: ["childId"] })
+    .index("by_from_date", { fields: ["fromDate"] })
+    .index("by_child_from_date", { fields: ["childId", "fromDate"] })
     .index("by_submitted_by_id", { fields: ["submittedById"] })
     .index("by_submitted_at", { fields: ["submittedAt"] }),
 

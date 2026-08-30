@@ -12,7 +12,7 @@ vi.mock("@/lib/school-days", () => ({ isClosedDay: mocks.isClosedDay }));
 vi.mock("@/lib/db", () => ({
   db: {
     attendance: { list: mocks.attendanceList },
-    excuses: { list: mocks.excusesList },
+    excuses: { listOverlapping: mocks.excusesList },
   },
 }));
 vi.mock("@/lib/attendance", () => ({
@@ -31,7 +31,7 @@ describe("getAttendanceForDate", () => {
     mocks.attendanceList.mockResolvedValue([]);
   });
 
-  it("returns excuses covering the selected day with their timeliness", async () => {
+  it("returns excuses covering the selected day with their daily state", async () => {
     mocks.excusesList.mockResolvedValue([
       {
         id: "excuse-current",
@@ -56,7 +56,7 @@ describe("getAttendanceForDate", () => {
       excuses: [
         {
           childId: "child-1",
-          isOnTime: true,
+          state: "ON_TIME",
         },
       ],
     });
@@ -76,10 +76,27 @@ describe("getAttendanceForDate", () => {
     ]);
 
     await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({
-      excuses: [{ childId: "child-1", isOnTime: false }],
+      excuses: [{ childId: "child-1", state: "LATE" }],
     });
     await expect(getAttendanceForDate("2026-08-20")).resolves.toMatchObject({
-      excuses: [{ childId: "child-1", isOnTime: true }],
+      excuses: [{ childId: "child-1", state: "ON_TIME" }],
+    });
+  });
+
+  it("does not relabel a director-approved late excuse as on time", async () => {
+    mocks.excusesList.mockResolvedValue([
+      {
+        id: "excuse-approved-late",
+        childId: "child-1",
+        fromDate: new Date(2026, 7, 19),
+        toDate: new Date(2026, 7, 19),
+        submittedAt: new Date(2026, 7, 19, 14),
+        lateApprovedAt: new Date(2026, 7, 20, 12),
+      },
+    ]);
+
+    await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({
+      excuses: [{ childId: "child-1", state: "LATE_APPROVED" }],
     });
   });
 });
