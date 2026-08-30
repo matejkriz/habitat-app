@@ -129,11 +129,16 @@ type RemoveRecordArgs = {
   readonly where: Record<string, unknown>;
 };
 
+/**
+ * Deliberately server-only: a `NEXT_PUBLIC_` fallback would inline the
+ * deployment URL into the client bundle, which is the one thing standing
+ * between the internet and our Convex endpoints.
+ */
 const getConvexUrl = (): string => {
-  const url = process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
+  const url = process.env.CONVEX_URL;
   if (!url) {
     throw new Error(
-      "CONVEX_URL (or NEXT_PUBLIC_CONVEX_URL) is not set. Configure Convex deployment URL in your environment.",
+      "CONVEX_URL is not set. Configure Convex deployment URL in your environment.",
     );
   }
   return url;
@@ -154,7 +159,12 @@ const getClient = (): ConvexHttpClient => {
   return client;
 };
 
-const getPushInternalSecret = (): string => {
+/**
+ * Proves to Convex that a call comes from our own server. Convex publishes
+ * every `query`/`mutation` export as a public endpoint, so user auth in the
+ * Next.js layer alone would not protect them.
+ */
+const getServerSecret = (): string => {
   const secret = process.env.PUSH_INTERNAL_SECRET;
   if (!secret) {
     throw new Error("PUSH_INTERNAL_SECRET is not configured");
@@ -270,12 +280,19 @@ const fromRawAuditLog = (raw: RawAuditLog): AuditLog => ({
 });
 
 const listTable = async <TRaw>(table: TableName): Promise<ReadonlyArray<TRaw>> => {
-  const rows = await convexQuery(api.db.list, { table });
+  const rows = await convexQuery(api.db.list, {
+    secret: getServerSecret(),
+    table,
+  });
   return rows as unknown as ReadonlyArray<TRaw>;
 };
 
 const getById = async <TRaw>(table: TableName, id: string): Promise<TRaw | null> => {
-  const row = await convexQuery(api.db.getById, { table, id });
+  const row = await convexQuery(api.db.getById, {
+    secret: getServerSecret(),
+    table,
+    id,
+  });
   return row as unknown as TRaw | null;
 };
 
@@ -284,15 +301,28 @@ const patchById = async (
   id: string,
   patch: Record<string, unknown>,
 ): Promise<void> => {
-  await convexMutation(api.db.patchById, { table, id, patch });
+  await convexMutation(api.db.patchById, {
+    secret: getServerSecret(),
+    table,
+    id,
+    patch,
+  });
 };
 
 const insert = async (table: TableName, value: Record<string, unknown>): Promise<void> => {
-  await convexMutation(api.db.insert, { table, value });
+  await convexMutation(api.db.insert, {
+    secret: getServerSecret(),
+    table,
+    value,
+  });
 };
 
 const deleteById = async (table: TableName, id: string): Promise<boolean> =>
-  await convexMutation(api.db.deleteById, { table, id });
+  await convexMutation(api.db.deleteById, {
+    secret: getServerSecret(),
+    table,
+    id,
+  });
 
 const compareValues = (a: unknown, b: unknown): number => {
   if (a === b) return 0;
@@ -1142,13 +1172,13 @@ export const db: any = {
       auth: string;
     }) =>
       await convexMutation(api.pushNotifications.upsertDirectorSubscription, {
-        secret: getPushInternalSecret(),
+        secret: getServerSecret(),
         ...args,
       }),
 
     removeDirector: async (args: { userId: string; endpoint: string }) =>
       await convexMutation(api.pushNotifications.removeDirectorSubscription, {
-        secret: getPushInternalSecret(),
+        secret: getServerSecret(),
         ...args,
       }),
   },
@@ -1156,7 +1186,7 @@ export const db: any = {
   notifications: {
     enqueueExcuse: async (args: { excuseId: string }) =>
       await convexMutation(api.pushNotifications.enqueueExcuse, {
-        secret: getPushInternalSecret(),
+        secret: getServerSecret(),
         ...args,
       }),
   },

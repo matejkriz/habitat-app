@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireServerSecret } from "./serverSecret";
 
 const tableName = v.union(
   v.literal("users"),
@@ -14,49 +15,45 @@ const tableName = v.union(
 const documentValue = v.any();
 
 export const list = query({
-  args: { table: tableName },
+  args: { secret: v.string(), table: tableName },
   returns: v.array(v.any()),
-  handler: async ({ db }, args) => await db.query(args.table).collect(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    return await db.query(args.table).collect();
+  },
 });
 
 export const getById = query({
-  args: { table: tableName, id: v.string() },
+  args: { secret: v.string(), table: tableName, id: v.string() },
   returns: v.union(v.null(), v.any()),
-  handler: async ({ db }, args) =>
-    await db
-      .query(args.table)
-      .withIndex("by_app_id", (q) => q.eq("id", args.id))
-      .unique(),
-});
-
-export const insert = mutation({
-  args: { table: tableName, value: documentValue },
-  returns: v.string(),
-  handler: async ({ db }, args) => await db.insert(args.table, args.value),
-});
-
-export const replaceById = mutation({
-  args: { table: tableName, id: v.string(), value: documentValue },
-  returns: v.boolean(),
   handler: async ({ db }, args) => {
-    const current = await db
+    requireServerSecret(args.secret);
+    return await db
       .query(args.table)
       .withIndex("by_app_id", (q) => q.eq("id", args.id))
       .unique();
+  },
+});
 
-    if (!current) {
-      throw new Error(`Document not found in ${args.table} for id ${args.id}`);
-    }
-
-    await db.replace(current._id, args.value);
-    return true;
+export const insert = mutation({
+  args: { secret: v.string(), table: tableName, value: documentValue },
+  returns: v.string(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    return await db.insert(args.table, args.value);
   },
 });
 
 export const patchById = mutation({
-  args: { table: tableName, id: v.string(), patch: documentValue },
+  args: {
+    secret: v.string(),
+    table: tableName,
+    id: v.string(),
+    patch: documentValue,
+  },
   returns: v.boolean(),
   handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
     const current = await db
       .query(args.table)
       .withIndex("by_app_id", (q) => q.eq("id", args.id))
@@ -72,9 +69,10 @@ export const patchById = mutation({
 });
 
 export const deleteById = mutation({
-  args: { table: tableName, id: v.string() },
+  args: { secret: v.string(), table: tableName, id: v.string() },
   returns: v.boolean(),
   handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
     const current = await db
       .query(args.table)
       .withIndex("by_app_id", (q) => q.eq("id", args.id))

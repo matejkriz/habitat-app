@@ -16,6 +16,7 @@ import type * as pushDeliveryPolicy from "../pushDeliveryPolicy.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as seed from "../seed.js";
 import type * as seedData from "../seedData.js";
+import type * as serverSecret from "../serverSecret.js";
 
 import type {
   ApiFromModules,
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   pushNotifications: typeof pushNotifications;
   seed: typeof seed;
   seedData: typeof seedData;
+  serverSecret: typeof serverSecret;
 }>;
 
 /**

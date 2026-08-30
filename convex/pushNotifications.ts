@@ -7,17 +7,11 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { buildExcuseNotificationBody } from "./notificationContent";
+import { requireServerSecret } from "./serverSecret";
 
 export const DIRECTOR_EXCUSE_TOPIC = "DIRECTOR_EXCUSE_CREATED";
 const DELIVERY_LEASE_MS = 5 * 60 * 1000;
 const EXCUSE_RECONCILIATION_CURSOR = "EXCUSE_CREATED";
-
-function requireServerSecret(secret: string): void {
-  const expected = process.env.PUSH_INTERNAL_SECRET;
-  if (!expected || secret !== expected) {
-    throw new Error("Unauthorized");
-  }
-}
 
 async function isDirector(ctx: MutationCtx, userId: string): Promise<boolean> {
   const user = await ctx.db

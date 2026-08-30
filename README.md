@@ -43,7 +43,7 @@ cp .env.example .env.local
 4. Nastavte proměnné prostředí:
 
 ```env
-# Convex
+# Convex — záměrně bez NEXT_PUBLIC_ prefixu, viz „Přístup k databázi" níže
 CONVEX_URL="https://your-deployment.convex.cloud"
 
 # WorkOS AuthKit (https://dashboard.workos.com)
@@ -51,10 +51,28 @@ WORKOS_CLIENT_ID="client_..."
 WORKOS_API_KEY="sk_test_..."
 WORKOS_COOKIE_PASSWORD="replace-with-at-least-32-random-characters"
 
-# Push notifikace (veřejný VAPID klíč + sdílené serverové tajemství)
-NEXT_PUBLIC_VAPID_PUBLIC_KEY="..."
+# Sdílené tajemství mezi Next.js a Convexem (viz „Přístup k databázi")
 PUSH_INTERNAL_SECRET="..."
+
+# Push notifikace (veřejný VAPID klíč)
+NEXT_PUBLIC_VAPID_PUBLIC_KEY="..."
 ```
+
+### Přístup k databázi
+
+Convex publikuje každý `query`/`mutation` export jako veřejný HTTP endpoint —
+přihlášení v Next.js vrstvě je nechrání. Každá veřejná funkce proto vyžaduje
+`PUSH_INTERNAL_SECRET` a ověřuje ho přes `convex/serverSecret.ts`. Tajemství
+musí být nastavené **shodně v Next.js i v Convex deploymentu**; bez něj
+neprojde žádné čtení ani zápis. (Název proměnné je historický — dnes chrání
+veškerý přístup k datům, nejen push notifikace.)
+
+Autorizace na úrovni rolí a vazby rodič–dítě zůstává v Next.js vrstvě; tajemství
+jen dokazuje, že volání přišlo z našeho serveru. `CONVEX_URL` proto nikdy
+nenastavujte s prefixem `NEXT_PUBLIC_` — URL deploymentu by skončila
+v klientském bundlu.
+
+Invariant hlídá test `convex/public-function-auth.test.ts`.
 
 Lokální `NEXT_PUBLIC_WORKOS_REDIRECT_URI` se nenastavuje. Portless ji při
 každém spuštění odvodí z aktuální branche nebo worktree přes `PORTLESS_URL`.
@@ -110,8 +128,9 @@ WORKOS_COOKIE_PASSWORD="samostatný-náhodný-řetězec-minimálně-32-znaků"
 NEXT_PUBLIC_WORKOS_REDIRECT_URI="https://<produkční-doména>/callback"
 ```
 
-Pro push notifikace je navíc potřeba nastavit VAPID klíče a stejné
-`PUSH_INTERNAL_SECRET` v Next.js i Convexu. Přesný postup je v
+`PUSH_INTERNAL_SECRET` musí být nastavené shodně v Next.js i v Convexu — bez něj
+neprojde žádný přístup k databázi (viz „Přístup k databázi"). Pro push notifikace
+je navíc potřeba nastavit VAPID klíče; přesný postup je v
 [`docs/push-notifications.md`](docs/push-notifications.md).
 
 ### Reprodukovatelná testovací data
