@@ -951,6 +951,7 @@ export const db: any = {
       to: Date;
     }) => {
       const rows = await convexQuery(api.db.listExcusesOverlapping, {
+        secret: getServerSecret(),
         childId: args.childId,
         from: toTimestamp(args.from),
         to: toTimestamp(args.to),

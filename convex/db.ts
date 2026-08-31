@@ -25,12 +25,14 @@ export const list = query({
 
 export const listExcusesOverlapping = query({
   args: {
+    secret: v.string(),
     childId: v.optional(v.string()),
     from: v.number(),
     to: v.number(),
   },
   returns: v.array(v.any()),
   handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
     const childId = args.childId;
     const candidates = childId
       ? await db

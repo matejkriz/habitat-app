@@ -6,7 +6,7 @@ hromadnou zprávu bez změny formátu zařízení.
 
 ## Konfigurace
 
-Vygenerujte jedny VAPID klíče pro každé prostředí:
+Vygenerujte samostatný VAPID pár pro každé prostředí:
 
 ```bash
 pnpm exec web-push generate-vapid-keys --json
@@ -24,11 +24,15 @@ plus soukromý VAPID klíč. Soukromý klíč nepatří do Next.js ani do promě
 prefixem `NEXT_PUBLIC_`.
 
 ```bash
-pnpm exec convex env set PUSH_INTERNAL_SECRET "stejná dlouhá náhodná hodnota"
-pnpm exec convex env set VAPID_SUBJECT "mailto:spravce@example.cz"
-pnpm exec convex env set VAPID_PUBLIC_KEY "vygenerovaný veřejný klíč"
-pnpm exec convex env set VAPID_PRIVATE_KEY "vygenerovaný soukromý klíč"
+pnpm exec convex env set --deployment <deployment> PUSH_INTERNAL_SECRET
+pnpm exec convex env set --deployment <deployment> VAPID_SUBJECT
+pnpm exec convex env set --deployment <deployment> VAPID_PUBLIC_KEY
+pnpm exec convex env set --deployment <deployment> VAPID_PRIVATE_KEY
 ```
+
+Hodnoty předejte přes standardní vstup, aby se neuložily do historie shellu.
+Před každým příkazem ověřte jméno cílového deploymentu; bez `--deployment`
+příkaz používá lokálně vybraný deployment.
 
 Po změně `NEXT_PUBLIC_VAPID_PUBLIC_KEY` je nutný nový produkční build. Web Push
 funguje pouze přes HTTPS; na iOS/iPadOS musí mít uživatel PWA přidanou na plochu.

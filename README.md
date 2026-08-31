@@ -24,14 +24,14 @@ Pro lokální vývoj je potřeba Node.js 24 nebo novější.
 1. Naklonujte repozitář:
 
 ```bash
-git clone https://github.com/your-org/habitat-app.git
+git clone https://github.com/matejkriz/habitat-app.git
 cd habitat-app
 ```
 
 2. Nainstalujte závislosti:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 3. Vytvořte `.env.local` soubor:
@@ -56,6 +56,9 @@ PUSH_INTERNAL_SECRET="..."
 
 # Push notifikace (veřejný VAPID klíč)
 NEXT_PUBLIC_VAPID_PUBLIC_KEY="..."
+
+# Slack Incoming Webhook pro vývojový kanál
+SLACK_WEBHOOK_URL="..."
 ```
 
 ### Přístup k databázi
@@ -156,7 +159,7 @@ Testovací účty používají Gmail aliasy `krizmate+<role>-<jmeno>@gmail.com`:
 Testovací děti jsou Žofie Žížalka, Oskar Okurka, Božena Bublina, Max Mlsoun a
 Tobiáš Tornádo.
 
-V lokálním developmentu a na Preview větví `develop` a `workos` lze po přihlášení účtem
+V lokálním developmentu a na Preview větvi `develop` lze po přihlášení účtem
 `dev@habitatzbraslav.cz` přepínat tyto seed uživatele přímo v hlavičce. Funkce
 vyžaduje serverovou proměnnou `DEV_PERSONA_SWITCHER=true`, WorkOS staging klíč
 a je v kódu explicitně zakázaná pro Vercel Production.
@@ -176,13 +179,21 @@ například `https://fix-ui.habitat-app.localhost`.
 
 - `pnpm dev` - Spustí vývojový server přes Portless
 - `pnpm build` - Vytvoří produkční build
+- `pnpm build:vercel` - Nasadí Convex pomocí branch-specific deploy klíče a
+  vytvoří Vercel build
 - `pnpm start` - Spustí produkční server
 - `pnpm lint` - Spustí ESLint
 - `pnpm test` - Spustí testy (watch mode)
 - `pnpm test:run` - Spustí testy jednou
 - `pnpm convex:dev` - Spustí Convex vývojové prostředí
-- `pnpm convex:deploy` - Nasadí Convex backend
+- `pnpm convex:deploy` - Nasadí Convex backend; mimo Vercel vždy nejdřív
+  ověřte cílový deployment
 - `pnpm convex:codegen` - Vygeneruje Convex typy
+
+Přesný seznam proměnných, jejich Vercel scope, typ a viditelnost je v
+[`docs/environments.md`](docs/environments.md). Produkce a `develop` musí mít
+samostatný Convex projekt, WorkOS prostředí, interní tajemství, VAPID pár i
+Slack webhook. Žádná tajná proměnná se nenastavuje globálně pro více prostředí.
 
 ## Struktura projektu
 
