@@ -103,6 +103,11 @@ body {
   color: var(--habitat-charcoal);
 }
 
+/* iOS 26 WebKit adds temporal-input padding outside width: 100%. */
+.native-date-input {
+  width: -webkit-fill-available;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;

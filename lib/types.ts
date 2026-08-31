@@ -22,6 +22,13 @@ export const ExcuseStatus = {
 export type ExcuseStatus =
   (typeof ExcuseStatus)[keyof typeof ExcuseStatus];
 
+export const ChildGender = {
+  MALE: "MALE",
+  FEMALE: "FEMALE",
+} as const;
+
+export type ChildGender = (typeof ChildGender)[keyof typeof ChildGender];
+
 export const AuditAction = {
   CREATE: "CREATE",
   UPDATE: "UPDATE",
@@ -32,7 +39,7 @@ export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 
 export type User = {
   id: string;
-  clerkId: string;
+  workosId: string;
   name: string | null;
   email: string | null;
   image: string | null;
@@ -45,6 +52,7 @@ export type Child = {
   id: string;
   firstName: string;
   lastName: string;
+  gender: ChildGender | null;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -62,8 +70,6 @@ export type Attendance = {
   childId: string;
   date: Date;
   presence: Presence;
-  excuseStatus: ExcuseStatus;
-  excuseId: string | null;
   recordedById: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -77,7 +83,9 @@ export type Excuse = {
   reason: string | null;
   submittedById: string;
   submittedAt: Date;
-  autoApproved: boolean;
+  /** Set when the director forgives a late submission. Null means no decision. */
+  lateApprovedAt: Date | null;
+  lateApprovedById: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getDbUser } from "@/lib/auth";
-import { UserRole } from "@/lib/types";
+import { UserRole, type ChildGender } from "@/lib/types";
 import {
   getParentChildren,
   getChildTodayStatus,
   getChildAttendanceHistory,
+  getChildCalendarMonth,
+  getChildExcuses,
   getChildStats,
 } from "@/app/actions/parent";
 import {
@@ -14,12 +15,19 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
-  Button,
-  PresenceBadge,
   ExcuseStatusBadge,
 } from "@/components/ui";
 import { formatDateWithWeekday } from "@/lib/utils";
+import { parseMonth } from "@/lib/parent-calendar";
+import { getPresenceLabel } from "@/lib/presence-label";
 import { ChildSelector } from "./child-selector";
+import { AttendanceCalendar } from "./attendance-calendar";
+import {
+  AttendanceHistoryRow,
+  type AttendanceHistoryItem,
+} from "./attendance-history-row";
+import { NewExcuseLink } from "./new-excuse-link";
+import { ParentExcuses } from "./parent-excuses";
 
 export const metadata = {
   title: "Přehled dítěte",
@@ -28,24 +36,20 @@ export const metadata = {
 type ParentChildItem = {
   readonly id: string;
   readonly firstName: string;
-  readonly lastName: string;
+  readonly gender: ChildGender | null;
 };
 
-type AttendanceHistoryItem = {
-  readonly id: string;
-  readonly date: Date;
-  readonly presence: "PRESENT" | "ABSENT";
-  readonly excuseStatus: "NONE" | "EXCUSED" | "UNEXCUSED";
-  readonly excuse?: {
-    readonly reason?: string | null;
-  } | null;
-};
-
-async function TodayCard({ childId }: { childId: string }) {
+async function TodayCard({
+  childId,
+  childGender,
+}: {
+  childId: string;
+  childGender: ChildGender | null;
+}) {
   const status = await getChildTodayStatus(childId);
 
   return (
-    <Card className="bg-gradient-to-br from-gold/5 to-sage/5">
+    <Card className="bg-gold/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -89,9 +93,10 @@ async function TodayCard({ childId }: { childId: string }) {
               </div>
               <div>
                 <p className="font-semibold text-charcoal">
-                  {status.attendance.presence === "PRESENT"
-                    ? "Přítomen/a"
-                    : "Nepřítomen/a"}
+                  {getPresenceLabel(
+                    status.attendance.presence === "PRESENT",
+                    childGender,
+                  )}
                 </p>
                 {status.attendance.excuseStatus !== "NONE" && (
                   <ExcuseStatusBadge status={status.attendance.excuseStatus} />
@@ -154,7 +159,13 @@ async function StatsCard({ childId }: { childId: string }) {
   );
 }
 
-async function AttendanceHistory({ childId }: { childId: string }) {
+async function AttendanceHistory({
+  childId,
+  childGender,
+}: {
+  childId: string;
+  childGender: ChildGender | null;
+}) {
   const history =
     (await getChildAttendanceHistory(childId)) as ReadonlyArray<AttendanceHistoryItem>;
 
@@ -186,45 +197,33 @@ async function AttendanceHistory({ childId }: { childId: string }) {
       <CardContent>
         <div className="space-y-2">
           {history.map((record) => (
-            <div
+            <AttendanceHistoryRow
               key={record.id}
-              className="flex items-center justify-between p-3 bg-cream rounded-lg"
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${record.presence === "PRESENT"
-                    ? "bg-sage/20"
-                    : "bg-coral/20"
-                  }`}>
-                  {record.presence === "PRESENT" ? (
-                    <svg className="w-4 h-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 text-coral" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-charcoal">
-                    {formatDateWithWeekday(record.date)}
-                  </p>
-                  {record.excuse?.reason && (
-                    <p className="text-xs text-charcoal-light">
-                      {record.excuse.reason}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <PresenceBadge present={record.presence === "PRESENT"} />
-                {record.excuseStatus !== "NONE" && (
-                  <ExcuseStatusBadge status={record.excuseStatus} />
-                )}
-              </div>
-            </div>
+              record={record}
+              childGender={childGender}
+            />
           ))}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+async function ExcusesCard({ childId }: { childId: string }) {
+  const excuses = await getChildExcuses(childId);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="h-5 w-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Omluvenky
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ParentExcuses excuses={[...excuses]} />
       </CardContent>
     </Card>
   );
@@ -242,10 +241,34 @@ function LoadingCard() {
   );
 }
 
+async function CalendarCard({
+  childId,
+  childName,
+  childGender,
+  month,
+}: {
+  childId: string;
+  childName: string;
+  childGender: ChildGender | null;
+  month: string;
+}) {
+  const days = await getChildCalendarMonth(childId, month);
+
+  return (
+    <AttendanceCalendar
+      childId={childId}
+      childName={childName}
+      childGender={childGender}
+      month={month}
+      days={days}
+    />
+  );
+}
+
 export default async function ParentDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ child?: string }>;
+  searchParams: Promise<{ child?: string; month?: string }>;
 }) {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
@@ -278,6 +301,10 @@ export default async function ParentDashboard({
 
   const selectedChildId = params.child || children[0].id;
   const selectedChild = children.find((c) => c.id === selectedChildId) || children[0];
+  const selectedMonthDate = parseMonth(params.month);
+  const selectedMonth = `${selectedMonthDate.getFullYear()}-${String(
+    selectedMonthDate.getMonth() + 1,
+  ).padStart(2, "0")}`;
 
   return (
     <div className="space-y-6">
@@ -285,7 +312,7 @@ export default async function ParentDashboard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">
-            {selectedChild.firstName} {selectedChild.lastName}
+            {selectedChild.firstName}
           </h1>
           <p className="text-charcoal-light">Přehled docházky</p>
         </div>
@@ -295,26 +322,31 @@ export default async function ParentDashboard({
             <ChildSelector
               items={children.map((c) => ({
                 id: c.id,
-                name: `${c.firstName} ${c.lastName}`,
+                name: c.firstName,
               }))}
               selectedId={selectedChildId}
             />
           )}
-          <Link href={`/rodic/omluvenka?child=${selectedChildId}`}>
-            <Button>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Nová omluvenka
-            </Button>
-          </Link>
+          <NewExcuseLink childId={selectedChildId} />
         </div>
       </div>
+
+      <Suspense fallback={<LoadingCard />}>
+        <CalendarCard
+          childId={selectedChildId}
+          childName={selectedChild.firstName}
+          childGender={selectedChild.gender}
+          month={selectedMonth}
+        />
+      </Suspense>
 
       {/* Content Grid */}
       <div className="grid gap-6 md:grid-cols-2">
         <Suspense fallback={<LoadingCard />}>
-          <TodayCard childId={selectedChildId} />
+          <TodayCard
+            childId={selectedChildId}
+            childGender={selectedChild.gender}
+          />
         </Suspense>
 
         <Suspense fallback={<LoadingCard />}>
@@ -323,7 +355,14 @@ export default async function ParentDashboard({
       </div>
 
       <Suspense fallback={<LoadingCard />}>
-        <AttendanceHistory childId={selectedChildId} />
+        <AttendanceHistory
+          childId={selectedChildId}
+          childGender={selectedChild.gender}
+        />
+      </Suspense>
+
+      <Suspense fallback={<LoadingCard />}>
+        <ExcusesCard childId={selectedChildId} />
       </Suspense>
     </div>
   );

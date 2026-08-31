@@ -11,12 +11,31 @@ import {
 } from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
 import { recordBulkAttendance, canEnterAttendance } from "@/lib/attendance";
+import { getExcusesOverlapping } from "@/lib/excuse";
+import {
+  getDayCoverage,
+  getExcuseDayState,
+  getExcuseStatusForDay,
+  groupExcusesByChild,
+  type ExcuseDayState,
+} from "@/lib/excuse-coverage";
 import { revalidatePath } from "next/cache";
 
 type AttendanceRecord = {
   readonly childId: string;
   readonly presence: Presence;
   readonly excuseStatus: ExcuseStatus;
+};
+
+type DailyExcuse = {
+  readonly childId: string;
+  readonly state: ExcuseDayState;
+};
+
+type DailyAttendance = {
+  readonly isClosed: boolean;
+  readonly attendance: ReadonlyArray<AttendanceRecord>;
+  readonly excuses: ReadonlyArray<DailyExcuse>;
 };
 
 /**
@@ -41,7 +60,7 @@ export const getAllChildren = async (): Promise<ReadonlyArray<Child>> => {
  */
 export const getAttendanceForDate = async (
   dateStr: string,
-): Promise<{ readonly isClosed: boolean; readonly attendance: ReadonlyArray<AttendanceRecord> }> => {
+): Promise<DailyAttendance> => {
   const user = await getDbUser();
   if (!user || (user.role !== UserRole.TEACHER && user.role !== UserRole.DIRECTOR)) {
     throw new Error("Unauthorized");
@@ -52,28 +71,39 @@ export const getAttendanceForDate = async (
 
   const closed = await isClosedDay(date);
   if (closed) {
-    return { isClosed: true, attendance: [] };
+    return { isClosed: true, attendance: [], excuses: [] };
   }
 
-  const attendance = (await db.attendance.list({
-    where: { date },
-    include: {
-      child: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.list({
+      where: { date },
+      include: {
+        child: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
         },
       },
-    },
-  })) as ReadonlyArray<Attendance>;
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ from: date, to: date }),
+  ]);
+
+  const excusesByChild = groupExcusesByChild(excuses);
+  const coverageFor = (childId: string) =>
+    getDayCoverage(excusesByChild.get(childId) ?? [], date);
 
   return {
     isClosed: false,
     attendance: attendance.map((a) => ({
       childId: a.childId,
       presence: a.presence,
-      excuseStatus: a.excuseStatus,
+      excuseStatus: getExcuseStatusForDay(a.presence, coverageFor(a.childId)),
+    })),
+    excuses: [...excusesByChild.keys()].map((childId) => ({
+      childId,
+      state: getExcuseDayState(excusesByChild.get(childId) ?? [], date)!,
     })),
   };
 };
@@ -139,6 +169,8 @@ export const saveAttendance = async (
   });
 
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
   revalidatePath("/rodic");
 
   return { success: true, recordCount: records.length };

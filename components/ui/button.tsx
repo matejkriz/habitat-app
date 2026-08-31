@@ -23,7 +23,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      "inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+      "inline-flex touch-manipulation items-center justify-center whitespace-nowrap font-semibold leading-none rounded-lg transition-[background-color,color,border-color,box-shadow,opacity] duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed [&>svg]:shrink-0";
 
     const variants = {
       primary:
@@ -39,9 +39,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizes = {
-      sm: "h-8 px-3 text-sm gap-1.5",
-      md: "h-10 px-4 text-base gap-2",
-      lg: "h-12 px-6 text-lg gap-2.5",
+      sm: "h-8 px-3 text-sm leading-none gap-1.5",
+      md: "h-10 px-4 text-base leading-none gap-2",
+      lg: "h-12 px-6 text-lg leading-none gap-2.5",
     };
 
     return (

@@ -6,6 +6,7 @@ import type {
   Attendance,
   AuditLog,
   Child,
+  ChildGender,
   ClosedDay,
   Excuse,
   ParentChild,
@@ -13,7 +14,7 @@ import type {
   User,
   UserRole,
 } from "./types";
-import type { ExcuseStatus, AuditAction } from "./types";
+import type { AuditAction } from "./types";
 
 type TableName =
   | "users"
@@ -26,7 +27,7 @@ type TableName =
 
 type RawUser = {
   readonly id: string;
-  readonly clerkId: string;
+  readonly workosId?: string;
   readonly name?: string | null;
   readonly email?: string | null;
   readonly image?: string | null;
@@ -39,6 +40,7 @@ type RawChild = {
   readonly id: string;
   readonly firstName: string;
   readonly lastName: string;
+  readonly gender?: ChildGender;
   readonly active: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -56,7 +58,7 @@ type RawAttendance = {
   readonly childId: string;
   readonly date: number;
   readonly presence: Presence;
-  readonly excuseStatus: ExcuseStatus;
+  readonly excuseStatus?: string;
   readonly excuseId?: string | null;
   readonly recordedById?: string | null;
   readonly createdAt: number;
@@ -71,7 +73,9 @@ type RawExcuse = {
   readonly reason?: string | null;
   readonly submittedById: string;
   readonly submittedAt: number;
-  readonly autoApproved: boolean;
+  readonly autoApproved?: boolean;
+  readonly lateApprovedAt?: number | null;
+  readonly lateApprovedById?: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
 };
@@ -118,20 +122,20 @@ type UpdateRecordArgs = {
   readonly data: Record<string, unknown>;
 };
 
-type BulkUpdateRecordArgs = {
-  readonly where: Record<string, unknown>;
-  readonly data: Record<string, unknown>;
-};
-
 type RemoveRecordArgs = {
   readonly where: Record<string, unknown>;
 };
 
+/**
+ * Deliberately server-only: a `NEXT_PUBLIC_` fallback would inline the
+ * deployment URL into the client bundle, which is the one thing standing
+ * between the internet and our Convex endpoints.
+ */
 const getConvexUrl = (): string => {
-  const url = process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
+  const url = process.env.CONVEX_URL;
   if (!url) {
     throw new Error(
-      "CONVEX_URL (or NEXT_PUBLIC_CONVEX_URL) is not set. Configure Convex deployment URL in your environment.",
+      "CONVEX_URL is not set. Configure Convex deployment URL in your environment.",
     );
   }
   return url;
@@ -150,6 +154,19 @@ const getClient = (): ConvexHttpClient => {
     globalForConvex.convexClient = client;
   }
   return client;
+};
+
+/**
+ * Proves to Convex that a call comes from our own server. Convex publishes
+ * every `query`/`mutation` export as a public endpoint, so user auth in the
+ * Next.js layer alone would not protect them.
+ */
+const getServerSecret = (): string => {
+  const secret = process.env.PUSH_INTERNAL_SECRET;
+  if (!secret) {
+    throw new Error("PUSH_INTERNAL_SECRET is not configured");
+  }
+  return secret;
 };
 
 type ConvexQueryReference = FunctionReference<"query">;
@@ -189,7 +206,7 @@ const normalizeDates = (value: unknown): unknown => {
 
 const fromRawUser = (raw: RawUser): User => ({
   id: raw.id,
-  clerkId: raw.clerkId,
+  workosId: raw.workosId ?? "",
   name: raw.name ?? null,
   email: raw.email ?? null,
   image: raw.image ?? null,
@@ -202,6 +219,7 @@ const fromRawChild = (raw: RawChild): Child => ({
   id: raw.id,
   firstName: raw.firstName,
   lastName: raw.lastName,
+  gender: raw.gender ?? null,
   active: raw.active,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
@@ -219,25 +237,38 @@ const fromRawAttendance = (raw: RawAttendance): Attendance => ({
   childId: raw.childId,
   date: new Date(raw.date),
   presence: raw.presence,
-  excuseStatus: raw.excuseStatus,
-  excuseId: raw.excuseId ?? null,
   recordedById: raw.recordedById ?? null,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
 });
 
-const fromRawExcuse = (raw: RawExcuse): Excuse => ({
-  id: raw.id,
-  childId: raw.childId,
-  fromDate: new Date(raw.fromDate),
-  toDate: new Date(raw.toDate),
-  reason: raw.reason ?? null,
-  submittedById: raw.submittedById,
-  submittedAt: new Date(raw.submittedAt),
-  autoApproved: raw.autoApproved,
-  createdAt: new Date(raw.createdAt),
-  updatedAt: new Date(raw.updatedAt),
-});
+const fromRawExcuse = (raw: RawExcuse): Excuse => {
+  const hasLateApproval = Object.prototype.hasOwnProperty.call(
+    raw,
+    "lateApprovedAt",
+  );
+  const lateApprovedAt = hasLateApproval
+    ? raw.lateApprovedAt == null
+      ? null
+      : new Date(raw.lateApprovedAt)
+    : raw.autoApproved
+      ? new Date(raw.updatedAt)
+      : null;
+
+  return {
+    id: raw.id,
+    childId: raw.childId,
+    fromDate: new Date(raw.fromDate),
+    toDate: new Date(raw.toDate),
+    reason: raw.reason ?? null,
+    submittedById: raw.submittedById,
+    submittedAt: new Date(raw.submittedAt),
+    lateApprovedAt,
+    lateApprovedById: raw.lateApprovedById ?? null,
+    createdAt: new Date(raw.createdAt),
+    updatedAt: new Date(raw.updatedAt),
+  };
+};
 
 const fromRawClosedDay = (raw: RawClosedDay): ClosedDay => ({
   id: raw.id,
@@ -259,12 +290,19 @@ const fromRawAuditLog = (raw: RawAuditLog): AuditLog => ({
 });
 
 const listTable = async <TRaw>(table: TableName): Promise<ReadonlyArray<TRaw>> => {
-  const rows = await convexQuery(api.db.list, { table });
+  const rows = await convexQuery(api.db.list, {
+    secret: getServerSecret(),
+    table,
+  });
   return rows as unknown as ReadonlyArray<TRaw>;
 };
 
 const getById = async <TRaw>(table: TableName, id: string): Promise<TRaw | null> => {
-  const row = await convexQuery(api.db.getById, { table, id });
+  const row = await convexQuery(api.db.getById, {
+    secret: getServerSecret(),
+    table,
+    id,
+  });
   return row as unknown as TRaw | null;
 };
 
@@ -273,15 +311,28 @@ const patchById = async (
   id: string,
   patch: Record<string, unknown>,
 ): Promise<void> => {
-  await convexMutation(api.db.patchById, { table, id, patch });
+  await convexMutation(api.db.patchById, {
+    secret: getServerSecret(),
+    table,
+    id,
+    patch,
+  });
 };
 
 const insert = async (table: TableName, value: Record<string, unknown>): Promise<void> => {
-  await convexMutation(api.db.insert, { table, value });
+  await convexMutation(api.db.insert, {
+    secret: getServerSecret(),
+    table,
+    value,
+  });
 };
 
 const deleteById = async (table: TableName, id: string): Promise<boolean> =>
-  await convexMutation(api.db.deleteById, { table, id });
+  await convexMutation(api.db.deleteById, {
+    secret: getServerSecret(),
+    table,
+    id,
+  });
 
 const compareValues = (a: unknown, b: unknown): number => {
   if (a === b) return 0;
@@ -335,7 +386,9 @@ export const db: any = {
 
       const user =
         (where.id ? users.find((u) => u.id === where.id) : undefined) ??
-        (where.clerkId ? users.find((u) => u.clerkId === where.clerkId) : undefined) ??
+        (where.workosId
+          ? users.find((u) => u.workosId === where.workosId)
+          : undefined) ??
         (where.email ? users.find((u) => u.email === where.email) : undefined) ??
         null;
 
@@ -372,11 +425,14 @@ export const db: any = {
     create: async (args: CreateRecordArgs) => {
       const data = args.data;
       const users = (await listTable<RawUser>("users")).map(fromRawUser);
-      const clerkId = String(data.clerkId ?? "");
+      const workosId = String(data.workosId ?? "");
       const email = data.email == null ? null : String(data.email);
 
-      if (users.some((u) => u.clerkId === clerkId)) {
-        throw new Error("User with this clerkId already exists");
+      if (!workosId) {
+        throw new Error("WorkOS user ID is required");
+      }
+      if (users.some((u) => u.workosId === workosId)) {
+        throw new Error("User with this WorkOS ID already exists");
       }
       if (email && users.some((u) => u.email === email)) {
         throw new Error("User with this email already exists");
@@ -386,7 +442,7 @@ export const db: any = {
       const id = createId();
       const created: RawUser = {
         id,
-        clerkId,
+        workosId,
         email,
         image: data.image == null ? null : String(data.image),
         name: data.name == null ? null : String(data.name),
@@ -402,8 +458,8 @@ export const db: any = {
       const users = (await listTable<RawUser>("users")).map(fromRawUser);
       const current =
         (args.where.id ? users.find((u) => u.id === args.where.id) : undefined) ??
-        (args.where.clerkId
-          ? users.find((u) => u.clerkId === args.where.clerkId)
+        (args.where.workosId
+          ? users.find((u) => u.workosId === args.where.workosId)
           : undefined) ??
         null;
 
@@ -415,10 +471,12 @@ export const db: any = {
         const collision = users.find((u) => u.email === email && u.id !== existing.id);
         if (collision) throw new Error("User with this email already exists");
       }
-      if (patch.clerkId !== undefined) {
-        const clerkId = String(patch.clerkId);
-        const collision = users.find((u) => u.clerkId === clerkId && u.id !== existing.id);
-        if (collision) throw new Error("User with this clerkId already exists");
+      if (patch.workosId !== undefined) {
+        const workosId = String(patch.workosId);
+        const collision = users.find(
+          (u) => u.workosId === workosId && u.id !== existing.id,
+        );
+        if (collision) throw new Error("User with this WorkOS ID already exists");
       }
 
       await patchById("users", existing.id, { ...patch, updatedAt: Date.now() });
@@ -510,6 +568,7 @@ export const db: any = {
         id: createId(),
         firstName: String(args.data.firstName ?? ""),
         lastName: String(args.data.lastName ?? ""),
+        gender: args.data.gender as ChildGender,
         active: args.data.active === undefined ? true : Boolean(args.data.active),
         createdAt: now,
         updatedAt: now,
@@ -650,7 +709,6 @@ export const db: any = {
     list: async (args: ListArgs = {}) => {
       const attendance = (await listTable<RawAttendance>("attendance")).map(fromRawAttendance);
       const children = (await listTable<RawChild>("children")).map(fromRawChild);
-      const excuses = (await listTable<RawExcuse>("excuses")).map(fromRawExcuse);
 
       let filtered = attendance;
       const where = args.where;
@@ -659,7 +717,6 @@ export const db: any = {
         filtered = filtered.filter((row) => {
           if (where.childId && row.childId !== where.childId) return false;
           if (where.id && row.id !== where.id) return false;
-          if (where.excuseId !== undefined && row.excuseId !== where.excuseId) return false;
           if (where.presence && row.presence !== where.presence) return false;
           if (where.date && !matchesDateFilter(row.date.getTime(), where.date)) return false;
           return true;
@@ -685,26 +742,6 @@ export const db: any = {
               if (enabled) selected[key] = (child as Record<string, unknown>)[key];
             }
             output.child = selected;
-          }
-        }
-
-        if (args.include.excuse) {
-          const excuse = row.excuseId
-            ? excuses.find((e) => e.id === row.excuseId) ?? null
-            : null;
-          const excuseInclude = args.include.excuse as Record<string, unknown>;
-          if (!excuse) {
-            output.excuse = null;
-          } else if (!excuseInclude.select) {
-            output.excuse = excuse;
-          } else {
-            const selected: Record<string, unknown> = {};
-            for (const [key, enabled] of Object.entries(
-              excuseInclude.select as Record<string, unknown>,
-            )) {
-              if (enabled) selected[key] = (excuse as Record<string, unknown>)[key];
-            }
-            output.excuse = selected;
           }
         }
 
@@ -768,8 +805,6 @@ export const db: any = {
         childId: String(data.childId),
         date: toTimestamp(data.date),
         presence: data.presence as Presence,
-        excuseStatus: data.excuseStatus as ExcuseStatus,
-        excuseId: data.excuseId == null ? null : String(data.excuseId),
         recordedById: data.recordedById == null ? null : String(data.recordedById),
         createdAt: now,
         updatedAt: now,
@@ -815,8 +850,6 @@ export const db: any = {
         childId: String(args.create.childId),
         date: toTimestamp(args.create.date),
         presence: args.create.presence as Presence,
-        excuseStatus: args.create.excuseStatus as ExcuseStatus,
-        excuseId: args.create.excuseId == null ? null : String(args.create.excuseId),
         recordedById:
           args.create.recordedById == null ? null : String(args.create.recordedById),
         createdAt: now,
@@ -838,49 +871,9 @@ export const db: any = {
       const updated = await getById<RawAttendance>("attendance", id);
       return fromRawAttendance(assertFound(updated, "Attendance not found after update"));
     },
-
-    bulkUpdate: async (args: BulkUpdateRecordArgs) => {
-      const rows = (await listTable<RawAttendance>("attendance")).map(fromRawAttendance);
-      const where = args.where;
-
-      const matched = rows.filter((row) => {
-        if (where.childId && row.childId !== where.childId) return false;
-        if (where.excuseId !== undefined && row.excuseId !== where.excuseId) return false;
-        if (where.presence && row.presence !== where.presence) return false;
-        if (where.date && !matchesDateFilter(row.date.getTime(), where.date)) return false;
-        return true;
-      });
-
-      for (const row of matched) {
-        const patch = normalizeDates(args.data) as Record<string, unknown>;
-        await patchById("attendance", row.id, {
-          ...patch,
-          updatedAt: Date.now(),
-        } as Record<string, unknown>);
-      }
-
-      return { count: matched.length };
-    },
   },
 
   excuses: {
-    first: async (args: { where: Record<string, unknown> }) => {
-      const excuses = (await listTable<RawExcuse>("excuses")).map(fromRawExcuse);
-      const where = args.where;
-      const result =
-        excuses.find((excuse) => {
-          if (where.childId && excuse.childId !== where.childId) return false;
-          if (isRecord(where.fromDate) && where.fromDate.lte !== undefined) {
-            if (excuse.fromDate.getTime() > toTimestamp(where.fromDate.lte)) return false;
-          }
-          if (isRecord(where.toDate) && where.toDate.gte !== undefined) {
-            if (excuse.toDate.getTime() < toTimestamp(where.toDate.gte)) return false;
-          }
-          return true;
-        }) ?? null;
-      return result;
-    },
-
     get: async (args: GetArgs) => {
       const raw = await getById<RawExcuse>("excuses", String(args.where.id));
       return raw ? fromRawExcuse(raw) : null;
@@ -895,9 +888,6 @@ export const db: any = {
         const where = args.where;
         if (!where) return true;
         if (where.childId && excuse.childId !== where.childId) return false;
-        if (where.autoApproved !== undefined && excuse.autoApproved !== where.autoApproved) {
-          return false;
-        }
         if (where.fromDate && !matchesDateFilter(excuse.fromDate.getTime(), where.fromDate)) {
           return false;
         }
@@ -955,6 +945,20 @@ export const db: any = {
       return applyTake(withInclude, args.take);
     },
 
+    listOverlapping: async (args: {
+      childId?: string;
+      from: Date;
+      to: Date;
+    }) => {
+      const rows = await convexQuery(api.db.listExcusesOverlapping, {
+        secret: getServerSecret(),
+        childId: args.childId,
+        from: toTimestamp(args.from),
+        to: toTimestamp(args.to),
+      });
+      return (rows as unknown as ReadonlyArray<RawExcuse>).map(fromRawExcuse);
+    },
+
     create: async (args: CreateRecordArgs) => {
       const data = args.data;
       const now = Date.now();
@@ -966,7 +970,10 @@ export const db: any = {
         reason: data.reason == null ? null : String(data.reason),
         submittedById: String(data.submittedById),
         submittedAt: data.submittedAt ? toTimestamp(data.submittedAt) : now,
-        autoApproved: Boolean(data.autoApproved),
+        lateApprovedAt:
+          data.lateApprovedAt == null ? null : toTimestamp(data.lateApprovedAt),
+        lateApprovedById:
+          data.lateApprovedById == null ? null : String(data.lateApprovedById),
         createdAt: now,
         updatedAt: now,
       };
@@ -1113,5 +1120,32 @@ export const db: any = {
 
       return applyTake(withInclude, args.take);
     },
+  },
+
+  pushSubscriptions: {
+    upsertDirector: async (args: {
+      userId: string;
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+    }) =>
+      await convexMutation(api.pushNotifications.upsertDirectorSubscription, {
+        secret: getServerSecret(),
+        ...args,
+      }),
+
+    removeDirector: async (args: { userId: string; endpoint: string }) =>
+      await convexMutation(api.pushNotifications.removeDirectorSubscription, {
+        secret: getServerSecret(),
+        ...args,
+      }),
+  },
+
+  notifications: {
+    enqueueExcuse: async (args: { excuseId: string }) =>
+      await convexMutation(api.pushNotifications.enqueueExcuse, {
+        secret: getServerSecret(),
+        ...args,
+      }),
   },
 };

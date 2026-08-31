@@ -33,6 +33,18 @@ export function formatShortDate(date: Date | string): string {
 }
 
 /**
+ * Format a date range, collapsing a single day to one date.
+ */
+export function formatDateRange(
+  from: Date | string,
+  to: Date | string,
+): string {
+  const fromLabel = formatShortDate(from);
+  const toLabel = formatShortDate(to);
+  return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
+}
+
+/**
  * Format a date with weekday (e.g., "Pondělí, 15. ledna")
  */
 export function formatDateWithWeekday(date: Date | string): string {

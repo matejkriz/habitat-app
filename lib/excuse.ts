@@ -3,8 +3,9 @@
  */
 
 import { db } from "./db";
-import { ExcuseStatus, type Excuse } from "./types";
-import { isAutoApproved, validateExcuseDates } from "./excuse-rules";
+import { UserRole, type Excuse, type UserRole as UserRoleType } from "./types";
+import { validateExcuseDates } from "./excuse-rules";
+import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
 
@@ -20,6 +21,31 @@ export type ExcuseWithChild = Excuse & {
   };
 };
 
+const startOfDay = (date: Date): number => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized.getTime();
+};
+
+/**
+ * Every excuse that spans any part of the range, for deriving per-day state.
+ * The Convex adapter bounds candidates by indexed start date and then applies
+ * the remaining end-date condition server-side.
+ */
+export async function getExcusesOverlapping(range: {
+  readonly childId?: string;
+  readonly from: Date;
+  readonly to: Date;
+}): Promise<CoveringExcuse[]> {
+  const excuses = (await db.excuses.listOverlapping(range)) as ReadonlyArray<Excuse>;
+  const from = startOfDay(range.from);
+  const to = startOfDay(range.to);
+  return excuses.filter(
+    (excuse) =>
+      startOfDay(excuse.fromDate) <= to && startOfDay(excuse.toDate) >= from,
+  );
+}
+
 /**
  * Create a new excuse
  */
@@ -28,7 +54,8 @@ export async function createExcuse(
   fromDate: Date,
   toDate: Date,
   reason: string | null,
-  submittedById: string
+  submittedById: string,
+  schoolDays?: ReadonlyArray<Date>,
 ): Promise<Excuse> {
   // Validate dates
   const validation = validateExcuseDates(fromDate, toDate);
@@ -43,10 +70,7 @@ export async function createExcuse(
   const normalizedTo = new Date(toDate);
   normalizedTo.setHours(0, 0, 0, 0);
 
-  const now = new Date();
-  const autoApproved = isAutoApproved(now, normalizedFrom);
-
-  // Create the excuse
+  // A late submission is forgiven per excuse, and only the director can do it.
   const excuse = await db.excuses.create({
     data: {
       childId,
@@ -54,26 +78,16 @@ export async function createExcuse(
       toDate: normalizedTo,
       reason,
       submittedById,
-      autoApproved,
+      lateApprovedAt: null,
+      lateApprovedById: null,
     },
   });
 
-  // Update any existing attendance records in the date range
-  const schoolDays = await getSchoolDaysInRange(normalizedFrom, normalizedTo);
-
-  for (const day of schoolDays) {
-    await db.attendance.bulkUpdate({
-      where: {
-        childId,
-        date: day,
-        presence: "ABSENT",
-      },
-      data: {
-        excuseId: excuse.id,
-        excuseStatus: autoApproved ? ExcuseStatus.EXCUSED : ExcuseStatus.UNEXCUSED,
-      },
-    });
-  }
+  // Attendance is untouched: whether these days count as excused is derived
+  // from this record whenever it is read.
+  const openSchoolDays =
+    schoolDays ?? (await getSchoolDaysInRange(normalizedFrom, normalizedTo));
+  const isOnTime = getLateDays(excuse, openSchoolDays).length === 0;
 
   // Create audit log
   await db.auditLogs.create({
@@ -87,10 +101,18 @@ export async function createExcuse(
         fromDate: normalizedFrom.toISOString(),
         toDate: normalizedTo.toISOString(),
         reason,
-        autoApproved,
+        isOnTime,
       },
     },
   });
+
+  // Await the durable outbox write. Convex also reconciles recent excuses so a
+  // temporary failure between these writes is repaired automatically.
+  try {
+    await db.notifications.enqueueExcuse({ excuseId: excuse.id });
+  } catch (error) {
+    console.error("Failed to enqueue push notification; reconciliation will retry:", error);
+  }
 
   // Send Slack notification (non-blocking)
   // Fetch child and parent details for the notification
@@ -113,7 +135,7 @@ export async function createExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason,
-      isOnTime: autoApproved,
+      isOnTime,
     }).catch((error) => {
       console.error("Failed to send Slack notification:", error);
     });
@@ -143,7 +165,6 @@ export async function getAllExcuses(options?: {
   childId?: string;
   startDate?: Date;
   endDate?: Date;
-  autoApproved?: boolean;
 }): Promise<ExcuseWithChild[]> {
   const where: Record<string, unknown> = {};
 
@@ -159,10 +180,6 @@ export async function getAllExcuses(options?: {
     if (options?.endDate) {
       (where.fromDate as Record<string, Date>).lte = options.endDate;
     }
-  }
-
-  if (options?.autoApproved !== undefined) {
-    where.autoApproved = options.autoApproved;
   }
 
   return db.excuses.list({
@@ -187,7 +204,7 @@ export async function getAllExcuses(options?: {
 }
 
 /**
- * Update an excuse (Director only)
+ * Update an excuse after authorization has been checked by the caller.
  */
 export async function updateExcuse(
   excuseId: string,
@@ -195,7 +212,6 @@ export async function updateExcuse(
     fromDate?: Date;
     toDate?: Date;
     reason?: string | null;
-    autoApproved?: boolean;
   },
   userId: string
 ): Promise<Excuse> {
@@ -215,6 +231,19 @@ export async function updateExcuse(
     throw new Error(validation.error);
   }
 
+  // Growing the range would carry the original submission time onto days whose
+  // deadline has since passed, which is how a stale excuse could be edited into
+  // covering a day for free. Those days belong to a new excuse with its own
+  // submission time; overlapping excuses are combined when they are read.
+  if (
+    startOfDay(newFromDate) < startOfDay(current.fromDate) ||
+    startOfDay(newToDate) > startOfDay(current.toDate)
+  ) {
+    throw new Error(
+      "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.",
+    );
+  }
+
   // Create audit log
   await db.auditLogs.create({
     data: {
@@ -226,16 +255,11 @@ export async function updateExcuse(
         fromDate: current.fromDate.toISOString(),
         toDate: current.toDate.toISOString(),
         reason: current.reason,
-        autoApproved: current.autoApproved,
       },
       newValue: {
         fromDate: newFromDate.toISOString(),
         toDate: newToDate.toISOString(),
         reason: updates.reason !== undefined ? updates.reason : current.reason,
-        autoApproved:
-          updates.autoApproved !== undefined
-            ? updates.autoApproved
-            : current.autoApproved,
       },
     },
   });
@@ -247,44 +271,18 @@ export async function updateExcuse(
   const normalizedTo = new Date(newToDate);
   normalizedTo.setHours(0, 0, 0, 0);
 
-  const updatedExcuse = await db.excuses.update({
+  return db.excuses.update({
     where: { id: excuseId },
     data: {
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason: updates.reason !== undefined ? updates.reason : current.reason,
-      autoApproved:
-        updates.autoApproved !== undefined
-          ? updates.autoApproved
-          : current.autoApproved,
     },
   });
-
-  // Update related attendance records
-  const newAutoApproved =
-    updates.autoApproved !== undefined ? updates.autoApproved : current.autoApproved;
-
-  const schoolDays = await getSchoolDaysInRange(normalizedFrom, normalizedTo);
-
-  for (const day of schoolDays) {
-    await db.attendance.bulkUpdate({
-      where: {
-        childId: current.childId,
-        date: day,
-        presence: "ABSENT",
-        excuseId: excuseId,
-      },
-      data: {
-        excuseStatus: newAutoApproved ? ExcuseStatus.EXCUSED : ExcuseStatus.UNEXCUSED,
-      },
-    });
-  }
-
-  return updatedExcuse;
 }
 
 /**
- * Delete an excuse (Director only)
+ * Delete an excuse after authorization has been checked by the caller.
  */
 export async function deleteExcuse(excuseId: string, userId: string): Promise<void> {
   const excuse = await db.excuses.get({
@@ -307,19 +305,13 @@ export async function deleteExcuse(excuseId: string, userId: string): Promise<vo
         fromDate: excuse.fromDate.toISOString(),
         toDate: excuse.toDate.toISOString(),
         reason: excuse.reason,
-        autoApproved: excuse.autoApproved,
+        lateApprovedAt: excuse.lateApprovedAt?.toISOString() ?? null,
       },
     },
   });
 
-  // Update related attendance records to UNEXCUSED
-  await db.attendance.bulkUpdate({
-    where: { excuseId },
-    data: {
-      excuseId: null,
-      excuseStatus: ExcuseStatus.UNEXCUSED,
-    },
-  });
+  // Attendance carries no excuse state, so the remaining excuses for those days
+  // take effect on the next read without any cleanup here.
 
   // Delete the excuse
   await db.excuses.remove({
@@ -344,4 +336,29 @@ export async function canSubmitExcuse(
   });
 
   return !!parentChild;
+}
+
+export async function canManageExcuse(
+  user: { readonly id: string; readonly role: UserRoleType },
+  childId: string,
+): Promise<boolean> {
+  if (user.role === UserRole.DIRECTOR) {
+    return true;
+  }
+
+  if (user.role !== UserRole.PARENT) {
+    return false;
+  }
+
+  return canSubmitExcuse(user.id, childId);
+}
+
+export async function canManageExcuses(
+  user: { readonly id: string; readonly role: UserRoleType },
+  childIds: ReadonlyArray<string>,
+): Promise<boolean> {
+  const access = await Promise.all(
+    childIds.map((childId) => canManageExcuse(user, childId)),
+  );
+  return access.every(Boolean);
 }

@@ -8,14 +8,37 @@ import {
   ExcuseStatus,
   type Attendance,
   type Child,
+  type ChildGender,
+  type ClosedDay,
   type Excuse,
 } from "@/lib/types";
-import { isClosedDay } from "@/lib/school-days";
-import { createExcuse, canSubmitExcuse } from "@/lib/excuse";
+import { getSchoolDaysInRange, isClosedDay } from "@/lib/school-days";
+import {
+  createExcuse,
+  canManageExcuse,
+  canManageExcuses,
+  canSubmitExcuse,
+  deleteExcuse as deleteExcuseRecord,
+  getExcusesOverlapping,
+  updateExcuse as updateExcuseRecord,
+} from "@/lib/excuse";
+import {
+  getDayCoverage,
+  getExcuseStatusForDay,
+  getLateDays,
+} from "@/lib/excuse-coverage";
+import { parseExcuseDate, resolveExcuseChildIds } from "@/lib/excuse-rules";
+import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
 
 type ParentChildWithChild = {
   readonly child: Child;
+};
+
+export type ParentVisibleChild = {
+  readonly id: string;
+  readonly firstName: string;
+  readonly gender: ChildGender | null;
 };
 
 type ChildTodayStatus = {
@@ -28,20 +51,12 @@ type ChildTodayStatus = {
   } | null;
 };
 
-type AttendanceWithOptionalExcuse = Attendance & {
-  readonly excuse?: {
-    readonly id: string;
-    readonly reason: string | null;
-    readonly autoApproved: boolean;
-  } | null;
-};
-
 type AttendanceHistoryItem = {
   readonly id: string;
   readonly date: Date;
   readonly presence: Presence;
   readonly excuseStatus: ExcuseStatus;
-  readonly excuse: AttendanceWithOptionalExcuse["excuse"];
+  readonly excuse: { readonly id: string; readonly reason: string | null } | null;
 };
 
 type ChildExcuseItem = {
@@ -49,14 +64,15 @@ type ChildExcuseItem = {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason: string | null;
-  readonly autoApproved: boolean;
   readonly submittedAt: Date;
 };
 
 /**
  * Get children for the current parent
  */
-export const getParentChildren = async (): Promise<ReadonlyArray<Child>> => {
+export const getParentChildren = async (): Promise<
+  ReadonlyArray<ParentVisibleChild>
+> => {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
@@ -69,7 +85,11 @@ export const getParentChildren = async (): Promise<ReadonlyArray<Child>> => {
     },
   })) as ReadonlyArray<ParentChildWithChild>;
 
-  return parentChildren.map((pc) => pc.child);
+  return parentChildren.map(({ child }) => ({
+    id: child.id,
+    firstName: child.firstName,
+    gender: child.gender,
+  }));
 };
 
 /**
@@ -105,14 +125,17 @@ export const getChildTodayStatus = async (
     };
   }
 
-  const attendance = (await db.attendance.get({
-    where: {
-      childId_date: {
-        childId,
-        date: today,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.get({
+      where: {
+        childId_date: {
+          childId,
+          date: today,
+        },
       },
-    },
-  })) as Attendance | null;
+    }) as Promise<Attendance | null>,
+    getExcusesOverlapping({ childId, from: today, to: today }),
+  ]);
 
   return {
     date: today,
@@ -121,7 +144,10 @@ export const getChildTodayStatus = async (
     attendance: attendance
       ? {
           presence: attendance.presence,
-          excuseStatus: attendance.excuseStatus,
+          excuseStatus: getExcuseStatusForDay(
+            attendance.presence,
+            getDayCoverage(excuses, today),
+          ),
         }
       : null,
   };
@@ -154,33 +180,33 @@ export const getChildAttendanceHistory = async (
   startDate.setDate(startDate.getDate() - limit);
   startDate.setHours(0, 0, 0, 0);
 
-  const attendance = (await db.attendance.list({
-    where: {
-      childId,
-      date: {
-        gte: startDate,
-        lte: today,
-      },
-    },
-    orderBy: { date: "desc" },
-    include: {
-      excuse: {
-        select: {
-          id: true,
-          reason: true,
-          autoApproved: true,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.list({
+      where: {
+        childId,
+        date: {
+          gte: startDate,
+          lte: today,
         },
       },
-    },
-  })) as ReadonlyArray<AttendanceWithOptionalExcuse>;
+      orderBy: { date: "desc" },
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ childId, from: startDate, to: today }),
+  ]);
 
-  return attendance.map((a) => ({
-    id: a.id,
-    date: a.date,
-    presence: a.presence,
-    excuseStatus: a.excuseStatus,
-    excuse: a.excuse,
-  }));
+  return attendance.map((a) => {
+    const coverage = getDayCoverage(excuses, a.date);
+
+    return {
+      id: a.id,
+      date: a.date,
+      presence: a.presence,
+      excuseStatus: getExcuseStatusForDay(a.presence, coverage),
+      excuse: coverage.excuse
+        ? { id: coverage.excuse.id, reason: coverage.excuse.reason ?? null }
+        : null,
+    };
+  });
 };
 
 /**
@@ -214,9 +240,53 @@ export const getChildExcuses = async (
     fromDate: e.fromDate,
     toDate: e.toDate,
     reason: e.reason,
-    autoApproved: e.autoApproved,
     submittedAt: e.submittedAt,
   }));
+};
+
+/**
+ * Get one calendar month with attendance, excuse and closure states.
+ */
+export const getChildCalendarMonth = async (childId: string, month: string) => {
+  const user = await getDbUser();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  if (user.role === UserRole.PARENT) {
+    const hasAccess = await canSubmitExcuse(user.id, childId);
+    if (!hasAccess) {
+      throw new Error("Access denied");
+    }
+  }
+
+  const monthStart = parseMonth(month);
+  const monthEnd = new Date(
+    monthStart.getFullYear(),
+    monthStart.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999,
+  );
+
+  const [attendance, excuses, closedDays] = await Promise.all([
+    db.attendance.list({
+      where: { childId, date: { gte: monthStart, lte: monthEnd } },
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ childId, from: monthStart, to: monthEnd }),
+    db.closedDays.list({
+      where: { date: { gte: monthStart, lte: monthEnd } },
+    }) as Promise<ReadonlyArray<ClosedDay>>,
+  ]);
+
+  return buildParentCalendarMonth({
+    month: monthStart,
+    attendance,
+    excuses,
+    closedDays: closedDays.map((day) => day.date),
+  });
 };
 
 /**
@@ -228,44 +298,117 @@ export const submitExcuse = async (formData: FormData) => {
     throw new Error("Unauthorized");
   }
 
-  const childId = formData.get("childId") as string;
-  const fromDateStr = formData.get("fromDate") as string;
-  const toDateStr = formData.get("toDate") as string;
-  const reason = formData.get("reason") as string | null;
+  const fromDateStr = formData.get("fromDate");
+  const toDateStr = formData.get("toDate");
+  const reasonValue = formData.get("reason");
 
-  if (!childId || !fromDateStr || !toDateStr) {
+  if (
+    typeof fromDateStr !== "string" ||
+    typeof toDateStr !== "string"
+  ) {
     throw new Error("Missing required fields");
   }
 
-  // Verify parent has access to this child
-  const hasAccess = await canSubmitExcuse(user.id, childId);
-  if (!hasAccess) {
+  const requestedChildIds = formData
+    .getAll("childIds")
+    .filter((value): value is string => typeof value === "string");
+  const childIds = resolveExcuseChildIds(requestedChildIds);
+
+  if (!(await canManageExcuses(user, childIds))) {
     throw new Error("Access denied");
   }
 
-  const fromDate = new Date(fromDateStr);
-  const toDate = new Date(toDateStr);
+  const fromDate = parseExcuseDate(fromDateStr);
+  const toDate = parseExcuseDate(toDateStr);
+  const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
+  const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
 
-  const excuse = await createExcuse(
-    childId,
-    fromDate,
-    toDate,
-    reason || null,
-    user.id
+  const excuses = await Promise.all(
+    childIds.map((childId) =>
+      createExcuse(childId, fromDate, toDate, reason, user.id, schoolDays),
+    ),
   );
+  const lateDayCount = excuses.reduce(
+    (count, excuse) => count + getLateDays(excuse, schoolDays).length,
+    0,
+  );
+  const schoolDayCount = schoolDays.length * excuses.length;
 
   revalidatePath("/rodic");
   revalidatePath("/rodic/omluvenka");
+  revalidatePath("/kalendar");
 
   return {
     success: true,
-    excuse: {
+    excuses: excuses.map((excuse) => ({
       id: excuse.id,
+      childId: excuse.childId,
       fromDate: excuse.fromDate,
       toDate: excuse.toDate,
-      autoApproved: excuse.autoApproved,
+    })),
+    summary: {
+      schoolDayCount,
+      lateDayCount,
+      onTimeDayCount: schoolDayCount - lateDayCount,
     },
   };
+};
+
+type ExcuseEditInput = {
+  readonly fromDate: string;
+  readonly toDate: string;
+  readonly reason: string;
+};
+
+export const editParentExcuse = async (
+  excuseId: string,
+  input: ExcuseEditInput,
+) => {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.PARENT) {
+    throw new Error("Unauthorized");
+  }
+
+  const excuse = await db.excuses.get({ where: { id: excuseId } });
+  if (!excuse) {
+    throw new Error("Omluvenka nebyla nalezena.");
+  }
+
+  if (!(await canManageExcuse(user, excuse.childId))) {
+    throw new Error("Access denied");
+  }
+
+  const updated = await updateExcuseRecord(
+    excuseId,
+    {
+      fromDate: parseExcuseDate(input.fromDate),
+      toDate: parseExcuseDate(input.toDate),
+      reason: input.reason.trim() || null,
+    },
+    user.id,
+  );
+
+  revalidatePath("/rodic");
+  return updated;
+};
+
+export const deleteParentExcuse = async (excuseId: string): Promise<void> => {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.PARENT) {
+    throw new Error("Unauthorized");
+  }
+
+  const excuse = await db.excuses.get({ where: { id: excuseId } });
+  if (!excuse) {
+    throw new Error("Omluvenka nebyla nalezena.");
+  }
+
+  if (!(await canManageExcuse(user, excuse.childId))) {
+    throw new Error("Access denied");
+  }
+
+  await deleteExcuseRecord(excuseId, user.id);
+  revalidatePath("/rodic");
 };
 
 /**
@@ -298,27 +441,29 @@ export const getChildStats = async (
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  const attendance = (await db.attendance.list({
-    where: {
-      childId,
-      date: {
-        gte: startOfMonth,
-        lte: endOfMonth,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.list({
+      where: {
+        childId,
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
       },
-    },
-  })) as ReadonlyArray<Attendance>;
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ childId, from: startOfMonth, to: endOfMonth }),
+  ]);
 
-  const stats = {
+  const absences = attendance
+    .filter((a) => a.presence === Presence.ABSENT)
+    .map((a) => getDayCoverage(excuses, a.date).excused);
+  const excused = absences.filter(Boolean).length;
+
+  return {
     totalRecords: attendance.length,
     present: attendance.filter((a) => a.presence === Presence.PRESENT).length,
-    absent: attendance.filter((a) => a.presence === Presence.ABSENT).length,
-    excused: attendance.filter(
-      (a) => a.presence === Presence.ABSENT && a.excuseStatus === ExcuseStatus.EXCUSED
-    ).length,
-    unexcused: attendance.filter(
-      (a) => a.presence === Presence.ABSENT && a.excuseStatus === ExcuseStatus.UNEXCUSED
-    ).length,
+    absent: absences.length,
+    excused,
+    unexcused: absences.length - excused,
   };
-
-  return stats;
 };

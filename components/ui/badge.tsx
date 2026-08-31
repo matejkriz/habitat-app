@@ -1,5 +1,7 @@
 import { type HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
+import { getPresenceLabel } from "@/lib/presence-label";
+import type { ChildGender } from "@/lib/types";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: "present" | "absent" | "excused" | "unexcused" | "default" | "info";
@@ -22,7 +24,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold",
+        "inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-semibold leading-5",
         variants[variant],
         className
       )}
@@ -34,10 +36,16 @@ export function Badge({
 /**
  * Presence badge component
  */
-export function PresenceBadge({ present }: { present: boolean }) {
+export function PresenceBadge({
+  present,
+  gender,
+}: {
+  present: boolean;
+  gender: ChildGender | null;
+}) {
   return (
     <Badge variant={present ? "present" : "absent"}>
-      {present ? "Přítomen/a" : "Nepřítomen/a"}
+      {getPresenceLabel(present, gender)}
     </Badge>
   );
 }

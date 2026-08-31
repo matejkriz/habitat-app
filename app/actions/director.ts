@@ -2,19 +2,42 @@
 
 import { getDbUser, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getPresenceLabel } from "@/lib/presence-label";
 import {
   UserRole,
   Presence,
-  ExcuseStatus,
   AuditAction,
   type Attendance,
   type AuditLog,
   type Child,
+  type ChildGender,
   type Excuse,
   type ParentChild,
   type User,
 } from "@/lib/types";
+import { getSchoolDaysInRange } from "@/lib/school-days";
+import {
+  getLocalDateKey,
+  getLunchStatus,
+  isPayableLunch,
+  sortChildrenWithSiblings,
+  type LunchStatus,
+} from "@/lib/lunches";
 import { revalidatePath } from "next/cache";
+import {
+  deleteExcuse as deleteExcuseRecord,
+  getExcusesOverlapping,
+  updateExcuse as updateExcuseRecord,
+} from "@/lib/excuse";
+import {
+  getDayCoverage,
+  getExcuseRangeState,
+  groupExcusesByChild,
+  isExcuseSettled,
+  NO_COVERAGE,
+  type ExcuseRangeState,
+} from "@/lib/excuse-coverage";
+import { parseExcuseDate } from "@/lib/excuse-rules";
 
 // Type for audit log with included user relation
 export type AuditLogWithUser = AuditLog & {
@@ -30,10 +53,8 @@ type AttendanceWithChild = Attendance & {
     readonly id: string;
     readonly firstName: string;
     readonly lastName: string;
+    readonly gender: ChildGender | null;
   };
-  readonly excuse?: {
-    readonly reason?: string | null;
-  } | null;
 };
 
 type ExcuseWithChildAndSubmitter = Excuse & {
@@ -56,6 +77,31 @@ type ChildWithParentsRow = Child & {
       readonly name: string | null;
       readonly email: string | null;
     };
+  }>;
+};
+
+type LunchChildWithParentsRow = Child & {
+  readonly parents: ReadonlyArray<{
+    readonly parent: {
+      readonly id: string;
+    };
+  }>;
+};
+
+export type LunchOverview = {
+  readonly month: string;
+  readonly monthLabel: string;
+  readonly days: ReadonlyArray<{
+    readonly key: string;
+    readonly day: number;
+    readonly weekday: string;
+  }>;
+  readonly children: ReadonlyArray<{
+    readonly id: string;
+    readonly firstName: string;
+    readonly lastName: string;
+    readonly statuses: ReadonlyArray<LunchStatus | null>;
+    readonly payableLunches: number;
   }>;
 };
 
@@ -106,6 +152,116 @@ async function requireDirector(): Promise<SessionUser> {
   return user;
 }
 
+async function getSchoolDaysCoveringExcuses(
+  excuses: ReadonlyArray<Excuse>,
+): Promise<ReadonlyArray<Date>> {
+  if (excuses.length === 0) return [];
+  const { from, to } = excuses.reduce(
+    (range, excuse) => ({
+      from: Math.min(range.from, excuse.fromDate.getTime()),
+      to: Math.max(range.to, excuse.toDate.getTime()),
+    }),
+    { from: Number.POSITIVE_INFINITY, to: Number.NEGATIVE_INFINITY },
+  );
+  return getSchoolDaysInRange(new Date(from), new Date(to));
+}
+
+/**
+ * Get the monthly lunch billing overview for all active children.
+ */
+export async function getLunchOverview(month: string): Promise<LunchOverview> {
+  await requireDirector();
+
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  const year = match ? Number(match[1]) : Number.NaN;
+  const monthIndex = match ? Number(match[2]) - 1 : Number.NaN;
+
+  if (
+    !Number.isInteger(year) ||
+    year < 2000 ||
+    year > 2100 ||
+    !Number.isInteger(monthIndex) ||
+    monthIndex < 0 ||
+    monthIndex > 11
+  ) {
+    throw new Error("Neplatný měsíc");
+  }
+
+  const startOfMonth = new Date(year, monthIndex, 1);
+  const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+  const [schoolDays, children, attendance, excuses] = await Promise.all([
+    getSchoolDaysInRange(startOfMonth, endOfMonth),
+    db.children.list({
+      where: { active: true },
+      include: {
+        parents: {
+          include: {
+            parent: {
+              select: { id: true },
+            },
+          },
+        },
+      },
+    }) as Promise<ReadonlyArray<LunchChildWithParentsRow>>,
+    db.attendance.list({
+      where: {
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+    }) as Promise<ReadonlyArray<Attendance>>,
+    getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
+  ]);
+
+  const excusesByChild = groupExcusesByChild(excuses);
+  const sortedChildren = sortChildrenWithSiblings(
+    children.map((child) => ({
+      ...child,
+      parentIds: child.parents.map(({ parent }) => parent.id),
+    })),
+  );
+  const attendanceByChildAndDate = new Map(
+    attendance.map((record) => [
+      `${record.childId}:${getLocalDateKey(record.date)}`,
+      record,
+    ]),
+  );
+  const days = schoolDays.map((date) => ({
+    date,
+    key: getLocalDateKey(date),
+    day: date.getDate(),
+    weekday: ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"][date.getDay()],
+  }));
+
+  return {
+    month,
+    monthLabel: new Intl.DateTimeFormat("cs-CZ", {
+      month: "long",
+      year: "numeric",
+    }).format(startOfMonth),
+    days: days.map(({ key, day, weekday }) => ({ key, day, weekday })),
+    children: sortedChildren.map((child) => {
+      const childExcuses = excusesByChild.get(child.id) ?? [];
+      const statuses = days.map((day) =>
+        getLunchStatus(
+          attendanceByChildAndDate.get(`${child.id}:${day.key}`),
+          getDayCoverage(childExcuses, day.date),
+        ),
+      );
+
+      return {
+        id: child.id,
+        firstName: child.firstName,
+        lastName: child.lastName,
+        statuses,
+        payableLunches: statuses.filter(isPayableLunch).length,
+      };
+    }),
+  };
+}
+
 /**
  * Get dashboard overview stats
  */
@@ -133,17 +289,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     },
   })) as ReadonlyArray<Attendance>;
 
-  // Get unexcused absences this month
-  const unexcusedCount = monthAttendance.filter(
-    (a) =>
-      a.presence === Presence.ABSENT &&
-      a.excuseStatus === ExcuseStatus.UNEXCUSED
-  ).length;
+  const monthExcuses = groupExcusesByChild(
+    await getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
+  );
+  const monthAbsences = monthAttendance
+    .filter((a) => a.presence === Presence.ABSENT)
+    .map((a) =>
+      getDayCoverage(monthExcuses.get(a.childId) ?? [], a.date).excused,
+    );
+  const excusedCount = monthAbsences.filter(Boolean).length;
+  const unexcusedCount = monthAbsences.length - excusedCount;
 
-  // Get recent excuses pending review
-  const recentExcuses = (await db.excuses.list({
+  // Recent excuses still waiting for the director to forgive a late submission
+  const recentExcuseCandidates = (await db.excuses.list({
     where: {
-      autoApproved: false,
       submittedAt: {
         gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
       },
@@ -157,8 +316,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       },
     },
     orderBy: { submittedAt: "desc" },
-    take: 5,
   })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string } }>;
+  const recentSchoolDays = await getSchoolDaysCoveringExcuses(
+    recentExcuseCandidates,
+  );
+  const recentExcuses = recentExcuseCandidates
+    .filter((excuse) => !isExcuseSettled(excuse, recentSchoolDays))
+    .slice(0, 5);
 
   // Get children count
   const childrenCount = await db.children.count({ where: { active: true } });
@@ -177,11 +341,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       presentCount: monthAttendance.filter(
         (a) => a.presence === Presence.PRESENT
       ).length,
-      absentCount: monthAttendance.filter((a) => a.presence === Presence.ABSENT)
-        .length,
-      excusedCount: monthAttendance.filter(
-        (a) => a.excuseStatus === ExcuseStatus.EXCUSED
-      ).length,
+      absentCount: monthAbsences.length,
+      excusedCount,
       unexcusedCount,
     },
     recentExcuses: recentExcuses.map((e) => ({
@@ -199,23 +360,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
  * Get all excuses with filters
  */
 export async function getExcuses(options?: {
-  autoApprovedOnly?: boolean;
+  settledOnly?: boolean;
   pendingOnly?: boolean;
 }) {
   await requireDirector();
 
-  const where: Record<string, unknown> = {};
-
-  if (options?.autoApprovedOnly) {
-    where.autoApproved = true;
-  }
-
-  if (options?.pendingOnly) {
-    where.autoApproved = false;
-  }
-
   const excuses = (await db.excuses.list({
-    where,
+    where: {},
     include: {
       child: {
         select: {
@@ -233,16 +384,28 @@ export async function getExcuses(options?: {
       },
     },
     orderBy: { submittedAt: "desc" },
-    take: 100,
   })) as ReadonlyArray<ExcuseWithChildAndSubmitter>;
+  const schoolDays = await getSchoolDaysCoveringExcuses(excuses);
 
-  return excuses;
+  // Whether an excuse still needs a decision is derived, so it cannot be
+  // pushed down into the query.
+  const filtered = excuses.filter((excuse) => {
+    if (options?.settledOnly) return isExcuseSettled(excuse, schoolDays);
+    if (options?.pendingOnly) return !isExcuseSettled(excuse, schoolDays);
+    return true;
+  });
+
+  return filtered.slice(0, 100).map((excuse) => ({
+    ...excuse,
+    rangeState: getExcuseRangeState(excuse, schoolDays) satisfies ExcuseRangeState,
+  }));
 }
 
 /**
- * Update an excuse (approve/reject)
+ * Forgive a late submission, or take that decision back. On-time excuses have
+ * nothing to decide; delete them instead if they should not stand.
  */
-export async function updateExcuse(excuseId: string, autoApproved: boolean) {
+export async function updateExcuse(excuseId: string, approveLate: boolean) {
   const user = await requireDirector();
 
   const excuse = await db.excuses.get({
@@ -253,6 +416,9 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
     throw new Error("Excuse not found");
   }
 
+  const lateApprovedAt = approveLate ? new Date() : null;
+  const lateApprovedById = approveLate ? user.id : null;
+
   // Create audit log
   await db.auditLogs.create({
     data: {
@@ -260,34 +426,59 @@ export async function updateExcuse(excuseId: string, autoApproved: boolean) {
       action: AuditAction.UPDATE,
       entityType: "Excuse",
       entityId: excuseId,
-      previousValue: { autoApproved: excuse.autoApproved },
-      newValue: { autoApproved },
+      previousValue: {
+        lateApprovedAt: excuse.lateApprovedAt?.toISOString() ?? null,
+      },
+      newValue: { lateApprovedAt: lateApprovedAt?.toISOString() ?? null },
     },
   });
 
-  // Update excuse
+  // The decision only lives on the excuse. Every day it covers picks it up on
+  // the next read, including days another overlapping excuse also covers.
   const updated = await db.excuses.update({
     where: { id: excuseId },
-    data: { autoApproved },
-  });
-
-  // Update related attendance records
-  await db.attendance.bulkUpdate({
-    where: {
-      excuseId,
-      presence: Presence.ABSENT,
-    },
-    data: {
-      excuseStatus: autoApproved
-        ? ExcuseStatus.EXCUSED
-        : ExcuseStatus.UNEXCUSED,
-    },
+    data: { lateApprovedAt, lateApprovedById },
   });
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
 
   return updated;
+}
+
+type ExcuseEditInput = {
+  readonly fromDate: string;
+  readonly toDate: string;
+  readonly reason: string;
+};
+
+export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
+  const user = await requireDirector();
+
+  const updated = await updateExcuseRecord(
+    excuseId,
+    {
+      fromDate: parseExcuseDate(input.fromDate),
+      toDate: parseExcuseDate(input.toDate),
+      reason: input.reason.trim() || null,
+    },
+    user.id,
+  );
+
+  revalidatePath("/reditel/omluvenky");
+  revalidatePath("/rodic");
+  revalidatePath("/reditel/obedy");
+  return updated;
+}
+
+export async function deleteExcuse(excuseId: string): Promise<void> {
+  const user = await requireDirector();
+  await deleteExcuseRecord(excuseId, user.id);
+  revalidatePath("/reditel/omluvenky");
+  revalidatePath("/rodic");
+  revalidatePath("/reditel/obedy");
 }
 
 /**
@@ -341,6 +532,8 @@ export async function addClosedDay(dateStr: string, description?: string) {
   });
 
   revalidatePath("/reditel/volne-dny");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
 
   return closedDay;
 }
@@ -378,6 +571,8 @@ export async function removeClosedDay(id: string) {
   });
 
   revalidatePath("/reditel/volne-dny");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
 }
 
 /**
@@ -432,23 +627,24 @@ export async function exportAttendanceCSV(
     where.childId = childId;
   }
 
-  const attendance = (await db.attendance.list({
-    where,
-    include: {
-      child: {
-        select: {
-          firstName: true,
-          lastName: true,
+  const [attendance, excuses] = await Promise.all([
+    db.attendance.list({
+      where,
+      include: {
+        child: {
+          select: {
+            firstName: true,
+            lastName: true,
+            gender: true,
+          },
         },
       },
-      excuse: {
-        select: {
-          reason: true,
-        },
-      },
-    },
-    orderBy: [{ date: "asc" }, { child: { lastName: "asc" } }],
-  })) as ReadonlyArray<AttendanceWithChild>;
+      orderBy: [{ date: "asc" }, { child: { lastName: "asc" } }],
+    }) as Promise<ReadonlyArray<AttendanceWithChild>>,
+    getExcusesOverlapping({ childId, from: start, to: end }),
+  ]);
+
+  const excusesByChild = groupExcusesByChild(excuses);
 
   // Build CSV
   const headers = [
@@ -459,18 +655,25 @@ export async function exportAttendanceCSV(
     "Stav omluvy",
     "Důvod",
   ];
-  const rows = attendance.map((a) => [
-    a.date.toLocaleDateString("cs-CZ"),
-    a.child.firstName,
-    a.child.lastName,
-    a.presence === Presence.PRESENT ? "Přítomen" : "Nepřítomen",
-    a.excuseStatus === ExcuseStatus.NONE
-      ? ""
-      : a.excuseStatus === ExcuseStatus.EXCUSED
-      ? "Omluveno"
-      : "Neomluveno",
-    a.excuse?.reason || "",
-  ]);
+  const rows = attendance.map((a) => {
+    const coverage =
+      a.presence === Presence.ABSENT
+        ? getDayCoverage(excusesByChild.get(a.childId) ?? [], a.date)
+        : NO_COVERAGE;
+
+    return [
+      a.date.toLocaleDateString("cs-CZ"),
+      a.child.firstName,
+      a.child.lastName,
+      getPresenceLabel(a.presence === Presence.PRESENT, a.child.gender),
+      a.presence === Presence.PRESENT
+        ? ""
+        : coverage.excused
+        ? "Omluveno"
+        : "Neomluveno",
+      coverage.excuse?.reason || "",
+    ];
+  });
 
   const csvContent = [
     headers.join(";"),
@@ -491,6 +694,7 @@ export type ChildWithParents = {
   id: string;
   firstName: string;
   lastName: string;
+  gender: ChildGender | null;
   active: boolean;
   createdAt: Date;
   parents: Array<{
@@ -527,6 +731,7 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
     id: child.id,
     firstName: child.firstName,
     lastName: child.lastName,
+    gender: child.gender,
     active: child.active,
     createdAt: child.createdAt,
     parents: child.parents.map((pc) => ({
@@ -559,17 +764,25 @@ export async function getAllParents() {
 /**
  * Create a new child
  */
-export async function createChild(firstName: string, lastName: string) {
+export async function createChild(
+  firstName: string,
+  lastName: string,
+  gender: ChildGender,
+) {
   const user = await requireDirector();
 
   if (!firstName.trim() || !lastName.trim()) {
     throw new Error("Jméno a příjmení jsou povinné");
+  }
+  if (gender !== "MALE" && gender !== "FEMALE") {
+    throw new Error("Pohlaví je povinné");
   }
 
   const child = await db.children.create({
     data: {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
+      gender,
       active: true,
     },
   });
@@ -581,12 +794,14 @@ export async function createChild(firstName: string, lastName: string) {
       action: AuditAction.CREATE,
       entityType: "Child",
       entityId: child.id,
-      newValue: { firstName: child.firstName, lastName: child.lastName },
+      newValue: { firstName: child.firstName, lastName: child.lastName, gender: child.gender },
     },
   });
 
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
 
   return child;
 }
@@ -596,7 +811,7 @@ export async function createChild(firstName: string, lastName: string) {
  */
 export async function updateChild(
   childId: string,
-  data: { firstName?: string; lastName?: string }
+  data: { firstName?: string; lastName?: string; gender?: ChildGender }
 ) {
   const user = await requireDirector();
 
@@ -608,7 +823,7 @@ export async function updateChild(
     throw new Error("Dítě nebylo nalezeno");
   }
 
-  const updateData: { firstName?: string; lastName?: string } = {};
+  const updateData: { firstName?: string; lastName?: string; gender?: ChildGender } = {};
   if (data.firstName !== undefined) {
     if (!data.firstName.trim()) {
       throw new Error("Jméno je povinné");
@@ -621,6 +836,12 @@ export async function updateChild(
     }
     updateData.lastName = data.lastName.trim();
   }
+  if (data.gender !== undefined) {
+    if (data.gender !== "MALE" && data.gender !== "FEMALE") {
+      throw new Error("Neplatné pohlaví");
+    }
+    updateData.gender = data.gender;
+  }
 
   // Create audit log
   await db.auditLogs.create({
@@ -629,7 +850,7 @@ export async function updateChild(
       action: AuditAction.UPDATE,
       entityType: "Child",
       entityId: childId,
-      previousValue: { firstName: child.firstName, lastName: child.lastName },
+      previousValue: { firstName: child.firstName, lastName: child.lastName, gender: child.gender },
       newValue: updateData,
     },
   });
@@ -642,6 +863,8 @@ export async function updateChild(
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/rodic");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
 
   return updated;
 }
@@ -679,6 +902,8 @@ export async function toggleChildActive(childId: string, active: boolean) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
 
   return updated;
 }
@@ -747,6 +972,7 @@ export async function assignParentToChild(parentId: string, childId: string) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/rodic");
+  revalidatePath("/reditel/obedy");
 
   return parentChild;
 }
@@ -806,4 +1032,5 @@ export async function removeParentFromChild(parentId: string, childId: string) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/rodic");
+  revalidatePath("/reditel/obedy");
 }

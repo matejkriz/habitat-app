@@ -1,15 +1,6 @@
 import type { NextConfig } from "next";
-import withSerwistInit from "@serwist/next";
-
-const withSerwist = withSerwistInit({
-  swSrc: "app/sw.ts",
-  swDest: "public/sw.js",
-  disable: process.env.NODE_ENV !== "production",
-});
 
 const nextConfig: NextConfig = {
-  // Use webpack for production builds with PWA support
-  // Turbopack doesn't support Serwist yet
   turbopack: {},
   images: {
     remotePatterns: [
@@ -23,10 +14,10 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "img.clerk.com",
+        hostname: "workoscdn.com",
       },
     ],
   },
 };
 
-export default withSerwist(nextConfig);
+export default nextConfig;

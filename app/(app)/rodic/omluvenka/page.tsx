@@ -11,24 +11,54 @@ import {
   Button,
   Input,
   Textarea,
-  Select,
 } from "@/components/ui";
-import { getParentChildren, submitExcuse } from "@/app/actions/parent";
+import {
+  getParentChildren,
+  submitExcuse,
+  type ParentVisibleChild,
+} from "@/app/actions/parent";
 import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
+
+type SubmissionSummary = {
+  readonly count: number;
+  readonly schoolDayCount: number;
+  readonly lateDayCount: number;
+  readonly onTimeDayCount: number;
+};
+
+function mixedLunchMessage(summary: SubmissionSummary): string {
+  const canceled =
+    summary.onTimeDayCount === 1
+      ? "1 oběd bude odhlášen"
+      : `${summary.onTimeDayCount} obědy budou odhlášeny`;
+  const lateDays =
+    summary.lateDayCount === 1
+      ? "1 pozdně omluvený den"
+      : summary.lateDayCount < 5
+        ? `${summary.lateDayCount} pozdně omluvené dny`
+        : `${summary.lateDayCount} pozdně omluvených dnů`;
+  const charged =
+    summary.lateDayCount === 1
+      ? "zůstane oběd započítaný"
+      : "zůstanou obědy započítané";
+  return `${canceled}; za ${lateDays} ${charged} do schválení ředitelkou.`;
+}
 
 export default function NewExcusePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedChildId = searchParams.get("child");
+  const preselectedDate = searchParams.get("date") || "";
 
-  const [children, setChildren] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
+  const [children, setChildren] = useState<ParentVisibleChild[]>([]);
   const [selectedChildId, setSelectedChildId] = useState(preselectedChildId || "");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState(preselectedDate);
+  const [toDate, setToDate] = useState(preselectedDate);
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ autoApproved: boolean } | null>(null);
+  const [success, setSuccess] = useState<SubmissionSummary | null>(null);
   const [willAutoApprove, setWillAutoApprove] = useState<boolean | null>(null);
   const [deadline, setDeadline] = useState("");
 
@@ -37,15 +67,19 @@ export default function NewExcusePage() {
       try {
         const loadedChildren = await getParentChildren();
         setChildren([...loadedChildren]);
-        if (!selectedChildId && loadedChildren.length > 0) {
-          setSelectedChildId(loadedChildren[0].id);
+        if (loadedChildren.length > 0) {
+          const fallbackChild =
+            loadedChildren.find((child) => child.id === preselectedChildId) ??
+            loadedChildren[0];
+          setSelectedChildId(fallbackChild.id);
+          setSelectedChildIds([fallbackChild.id]);
         }
       } catch {
         setError("Nepodařilo se načíst seznam dětí.");
       }
     }
     loadChildren();
-  }, [selectedChildId]);
+  }, [preselectedChildId]);
 
   useEffect(() => {
     if (fromDate) {
@@ -63,21 +97,31 @@ export default function NewExcusePage() {
     e.preventDefault();
     setError("");
     setSuccess(null);
+
+    if (selectedChildIds.length === 0) {
+      setError("Vyberte alespoň jedno dítě.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const formData = new FormData();
       formData.set("childId", selectedChildId);
+      selectedChildIds.forEach((childId) => formData.append("childIds", childId));
       formData.set("fromDate", fromDate);
       formData.set("toDate", toDate || fromDate);
       if (reason) formData.set("reason", reason);
 
       const result = await submitExcuse(formData);
-      setSuccess({ autoApproved: result.excuse.autoApproved });
+      setSuccess({
+        count: result.excuses.length,
+        ...result.summary,
+      });
 
       // Redirect after short delay
       setTimeout(() => {
-        router.push(`/rodic?child=${selectedChildId}`);
+        router.push(`/rodic?child=${selectedChildIds[0] ?? selectedChildId}`);
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nepodařilo se odeslat omluvenku.");
@@ -85,8 +129,6 @@ export default function NewExcusePage() {
       setIsSubmitting(false);
     }
   };
-
-  const today = new Date().toISOString().split("T")[0];
 
   return (
     <div className="max-w-lg mx-auto">
@@ -103,14 +145,17 @@ export default function NewExcusePage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm">
+              <div
+                className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm"
+                role="alert"
+              >
                 {error}
               </div>
             )}
 
             {success && (
               <div className={`p-4 rounded-lg text-sm ${
-                success.autoApproved
+                success.lateDayCount === 0
                   ? "bg-sage/10 border border-sage/20 text-sage-dark"
                   : "bg-gold/10 border border-gold/20 text-gold-dark"
               }`}>
@@ -118,26 +163,67 @@ export default function NewExcusePage() {
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span className="font-semibold">Omluvenka odeslána</span>
+                  <span className="font-semibold">
+                    {success.count > 1 ? "Omluvenky odeslány" : "Omluvenka odeslána"}
+                  </span>
                 </div>
-                {success.autoApproved ? (
-                  <p>Omluvenka byla odeslána včas – oběd bude odhlášen.</p>
+                {success.schoolDayCount === 0 ? (
+                  <p>V zadaném období nejsou žádné školní dny.</p>
+                ) : success.lateDayCount === 0 ? (
+                  <p>
+                    {success.count > 1
+                      ? `Omluvenky pro ${success.count} děti byly odeslány včas – obědy budou odhlášeny.`
+                      : "Omluvenka byla odeslána včas – oběd bude odhlášen."}
+                  </p>
+                ) : success.onTimeDayCount === 0 ? (
+                  <p>
+                    {success.count > 1
+                      ? `Omluvenky pro ${success.count} děti byly odeslány pozdě – obědy nebudou automaticky odhlášeny.`
+                      : "Omluvenka byla odeslána pozdě – oběd nebude automaticky odhlášen."}
+                  </p>
                 ) : (
-                  <p>Omluvenka byla odeslána pozdě – oběd nebude automaticky odhlášen.</p>
+                  <p>{mixedLunchMessage(success)}</p>
                 )}
               </div>
             )}
 
             {children.length > 1 && (
-              <Select
-                label="Dítě"
-                value={selectedChildId}
-                onChange={(e) => setSelectedChildId(e.target.value)}
-                options={children.map((child) => ({
-                  value: child.id,
-                  label: `${child.firstName} ${child.lastName}`,
-                }))}
-              />
+              <fieldset>
+                <legend className="mb-2 block text-sm font-medium text-charcoal">
+                  Děti
+                </legend>
+                <div className="space-y-2 rounded-lg border-2 border-cream-dark bg-white p-3">
+                  {children.map((child) => {
+                    return (
+                      <label
+                        key={child.id}
+                        className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-cream"
+                      >
+                        <input
+                          type="checkbox"
+                          name="childIds"
+                          value={child.id}
+                          checked={selectedChildIds.includes(child.id)}
+                          onChange={(event) => {
+                            setSelectedChildIds((current) =>
+                              event.target.checked
+                                ? [...current, child.id]
+                                : current.filter((id) => id !== child.id),
+                            );
+                          }}
+                          className="h-5 w-5 rounded border-cream-dark accent-gold"
+                        />
+                        <span className="font-medium text-charcoal">
+                          {child.firstName}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-sm text-charcoal-light">
+                  Můžete zapsat stejné období jednomu nebo více dětem.
+                </p>
+              </fieldset>
             )}
 
             <Input
@@ -150,7 +236,6 @@ export default function NewExcusePage() {
                   setToDate(e.target.value);
                 }
               }}
-              min={today}
               required
             />
 
@@ -159,7 +244,7 @@ export default function NewExcusePage() {
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              min={fromDate || today}
+              min={fromDate}
               required
             />
 

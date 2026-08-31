@@ -1,7 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getExcuses, updateExcuse } from "@/app/actions/director";
+import { useCallback, useEffect, useState } from "react";
+import {
+  deleteExcuse,
+  editExcuse,
+  getExcuses,
+  updateExcuse,
+} from "@/app/actions/director";
+import {
+  ExcuseEditor,
+  type ExcuseEditValues,
+} from "@/components/excuses/excuse-editor";
 import {
   Card,
   CardContent,
@@ -9,14 +18,15 @@ import {
   Badge,
   Select,
 } from "@/components/ui";
-import { formatShortDate, formatDate } from "@/lib/utils";
+import type { ExcuseRangeState } from "@/lib/excuse-coverage";
+import { formatDate, formatDateRange } from "@/lib/utils";
 
 interface Excuse {
   id: string;
   fromDate: Date;
   toDate: Date;
   reason: string | null;
-  autoApproved: boolean;
+  rangeState: ExcuseRangeState;
   submittedAt: Date;
   child: {
     id: string;
@@ -30,48 +40,63 @@ interface Excuse {
   };
 }
 
+const rangeStateBadge: Record<
+  ExcuseRangeState,
+  { readonly variant: "excused" | "unexcused"; readonly label: string }
+> = {
+  ON_TIME: { variant: "excused", label: "Včas" },
+  LATE: { variant: "unexcused", label: "Pozdě" },
+  LATE_APPROVED: { variant: "excused", label: "Pozdě – schváleno" },
+};
+
 export default function ExcuseManagementPage() {
   const [excuses, setExcuses] = useState<Excuse[]>([]);
-  const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "settled">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadExcuses() {
-      setIsLoading(true);
-      try {
-        const options =
-          filter === "pending"
-            ? { pendingOnly: true }
-            : filter === "approved"
-            ? { autoApprovedOnly: true }
+  const loadExcuses = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
+    try {
+      const options =
+        filter === "pending"
+          ? { pendingOnly: true }
+          : filter === "settled"
+            ? { settledOnly: true }
             : undefined;
-        const data = await getExcuses(options);
-        setExcuses([...data]);
-      } catch (error) {
-        console.error("Failed to load excuses:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      const data = await getExcuses(options);
+      setExcuses([...data]);
+    } catch (error) {
+      console.error("Failed to load excuses:", error);
+    } finally {
+      if (showLoading) setIsLoading(false);
     }
-    loadExcuses();
   }, [filter]);
+
+  useEffect(() => {
+    void loadExcuses();
+  }, [loadExcuses]);
 
   const handleApprove = async (excuseId: string, approve: boolean) => {
     setUpdatingId(excuseId);
     try {
       await updateExcuse(excuseId, approve);
-      // Update local state
-      setExcuses((prev) =>
-        prev.map((e) =>
-          e.id === excuseId ? { ...e, autoApproved: approve } : e
-        )
-      );
+      await loadExcuses(false);
     } catch (error) {
       console.error("Failed to update excuse:", error);
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const handleEdit = async (excuseId: string, values: ExcuseEditValues) => {
+    await editExcuse(excuseId, values);
+    await loadExcuses(false);
+  };
+
+  const handleDelete = async (excuseId: string) => {
+    await deleteExcuse(excuseId);
+    await loadExcuses(false);
   };
 
   return (
@@ -88,7 +113,7 @@ export default function ExcuseManagementPage() {
           options={[
             { value: "all", label: "Všechny omluvenky" },
             { value: "pending", label: "Ke schválení" },
-            { value: "approved", label: "Včas" },
+            { value: "settled", label: "Vyřízené" },
           ]}
           className="w-[200px]"
         />
@@ -104,8 +129,8 @@ export default function ExcuseManagementPage() {
             <p className="text-charcoal-light text-center py-12">
               {filter === "pending"
                 ? "Žádné omluvenky ke schválení"
-                : filter === "approved"
-                ? "Žádné omluvenky odeslané včas"
+                : filter === "settled"
+                ? "Žádné vyřízené omluvenky"
                 : "Žádné omluvenky"}
             </p>
           ) : (
@@ -121,16 +146,13 @@ export default function ExcuseManagementPage() {
                         <h3 className="font-semibold text-charcoal">
                           {excuse.child.firstName} {excuse.child.lastName}
                         </h3>
-                        <Badge
-                          variant={excuse.autoApproved ? "excused" : "unexcused"}
-                        >
-                          {excuse.autoApproved ? "Včas" : "Pozdě"}
+                        <Badge variant={rangeStateBadge[excuse.rangeState].variant}>
+                          {rangeStateBadge[excuse.rangeState].label}
                         </Badge>
                       </div>
                       <p className="text-sm text-charcoal-light">
                         <span className="font-medium">Období:</span>{" "}
-                        {formatShortDate(excuse.fromDate)} -{" "}
-                        {formatShortDate(excuse.toDate)}
+                        {formatDateRange(excuse.fromDate, excuse.toDate)}
                       </p>
                       {excuse.reason && (
                         <p className="text-sm text-charcoal-light">
@@ -144,27 +166,34 @@ export default function ExcuseManagementPage() {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {!excuse.autoApproved && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleApprove(excuse.id, true)}
-                          isLoading={updatingId === excuse.id}
-                        >
-                          Schválit
-                        </Button>
-                      )}
-                      {excuse.autoApproved && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleApprove(excuse.id, false)}
-                          isLoading={updatingId === excuse.id}
-                        >
-                          Zrušit schválení
-                        </Button>
-                      )}
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <div className="flex items-center gap-2">
+                        {excuse.rangeState === "LATE" && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleApprove(excuse.id, true)}
+                            isLoading={updatingId === excuse.id}
+                          >
+                            Schválit
+                          </Button>
+                        )}
+                        {excuse.rangeState === "LATE_APPROVED" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleApprove(excuse.id, false)}
+                            isLoading={updatingId === excuse.id}
+                          >
+                            Zrušit schválení
+                          </Button>
+                        )}
+                      </div>
+                      <ExcuseEditor
+                        excuse={excuse}
+                        onSave={handleEdit}
+                        onDelete={handleDelete}
+                      />
                     </div>
                   </div>
                 </div>
