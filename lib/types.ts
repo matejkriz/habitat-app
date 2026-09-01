@@ -98,6 +98,14 @@ export type ClosedDay = {
   updatedAt: Date;
 };
 
+export type NoLunchDay = {
+  id: string;
+  date: Date;
+  recordedById: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type AuditLog = {
   id: string;
   userId: string | null;

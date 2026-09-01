@@ -36,6 +36,18 @@ describe("lunch overview", () => {
     expect(isPayableLunch(null)).toBe(false);
   });
 
+  it("marks a day without lunch gray and never charges it", () => {
+    const status = getLunchStatus(
+      { presence: Presence.PRESENT },
+      NO_COVERAGE,
+      true,
+    );
+
+    expect(status).toBe(LunchStatus.NO_LUNCH);
+    expect(isPayableLunch(status)).toBe(false);
+    expect(getLunchStatus(undefined, NO_COVERAGE, true)).toBe(LunchStatus.NO_LUNCH);
+  });
+
   it("keeps siblings together even when their surnames differ", () => {
     const sorted = sortChildrenWithSiblings([
       { id: "1", firstName: "Adam", lastName: "Bílý", parentIds: ["parent-a"] },

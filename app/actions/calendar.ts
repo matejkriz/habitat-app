@@ -4,7 +4,13 @@ import { buildAttendanceCalendar, type AttendanceCalendarDay } from "@/lib/atten
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getExcusesOverlapping } from "@/lib/excuse";
-import { UserRole, type Attendance, type Child, type ClosedDay } from "@/lib/types";
+import {
+  UserRole,
+  type Attendance,
+  type Child,
+  type ClosedDay,
+  type NoLunchDay,
+} from "@/lib/types";
 
 export type AttendanceCalendarMonth = {
   readonly monthKey: string;
@@ -36,7 +42,7 @@ export async function getAttendanceCalendarMonth(
   const startDate = new Date(year, monthIndex, 1);
   const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [children, attendance, excuses, closedDays] = await Promise.all([
+  const [children, attendance, excuses, closedDays, noLunchDays] = await Promise.all([
     db.children.list({
       where: { active: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -48,6 +54,9 @@ export async function getAttendanceCalendarMonth(
     db.closedDays.list({
       where: { date: { gte: startDate, lte: endDate } },
     }) as Promise<ReadonlyArray<ClosedDay>>,
+    db.noLunchDays.list({
+      where: { date: { gte: startDate, lte: endDate } },
+    }) as Promise<ReadonlyArray<NoLunchDay>>,
   ]);
 
   const today = new Date();
@@ -63,6 +72,7 @@ export async function getAttendanceCalendarMonth(
       attendance,
       excuses,
       closedDays,
+      noLunchDays,
     }),
   };
 }

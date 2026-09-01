@@ -2,6 +2,7 @@ import { toDayKey, type DayCoverage } from "./excuse-coverage";
 import { Presence, type Presence as PresenceValue } from "./types";
 
 export const LunchStatus = {
+  NO_LUNCH: "no-lunch",
   PRESENT: "present",
   EXCUSED: "excused",
   LATE: "late",
@@ -24,7 +25,9 @@ export type ChildWithFamily = {
 export function getLunchStatus(
   attendance: LunchAttendance | undefined,
   coverage: DayCoverage,
+  noLunch = false,
 ): LunchStatus | null {
+  if (noLunch) return LunchStatus.NO_LUNCH;
   if (!attendance) return null;
 
   if (attendance.presence === Presence.PRESENT) {

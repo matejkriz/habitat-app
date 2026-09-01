@@ -68,6 +68,20 @@ function ChevronIcon({ direction }: { direction: "left" | "right" }) {
   );
 }
 
+function NoLunchIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 3v6m3-6v6M4 3v4a4 4 0 004 4v10m8-18v18m0-18c2.2 0 4 2.24 4 5s-1.8 5-4 5M3 3l18 18" />
+    </svg>
+  );
+}
+
 function CalendarDayButton({
   day,
   onOpen,
@@ -85,11 +99,12 @@ function CalendarDayButton({
   const accessibleStatus = day.isClosed
     ? day.closedReason || "zavřeno"
     : `${day.counts.expected} ${statusLabel}`;
+  const accessibleLunchStatus = day.isLunchCancelled ? ", bez oběda" : "";
 
   return (
     <button
       type="button"
-      aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}`}
+      aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}${accessibleLunchStatus}`}
       onClick={onOpen}
       onPointerEnter={(event) => event.pointerType === "mouse" && onHoverStart(event)}
       onPointerMove={(event) => event.pointerType === "mouse" && onHoverMove(event)}
@@ -114,11 +129,21 @@ function CalendarDayButton({
         >
           {day.dayNumber}
         </span>
-        {day.isToday && (
-          <span className="hidden rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold-dark sm:block">
-            Dnes
-          </span>
-        )}
+        <span className="flex items-center gap-1">
+          {day.isLunchCancelled && (
+            <span
+              title="Bez oběda"
+              className="grid size-7 place-items-center rounded-full bg-charcoal/10 text-charcoal-light"
+            >
+              <NoLunchIcon />
+            </span>
+          )}
+          {day.isToday && (
+            <span className="hidden rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold-dark sm:block">
+              Dnes
+            </span>
+          )}
+        </span>
       </div>
 
       {day.isClosed ? (
