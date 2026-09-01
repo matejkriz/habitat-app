@@ -14,4 +14,9 @@ describe("WorkOS unauthenticated routes", () => {
     expect(UNAUTHENTICATED_PATHS).toContain("/api/webhooks/:path*");
     expect(UNAUTHENTICATED_PATHS).not.toContain("/api/webhooks/**");
   });
+
+  it("leaves bearer-authenticated MCP discovery outside cookie auth", () => {
+    expect(UNAUTHENTICATED_PATHS).toContain("/api/mcp/:path*");
+    expect(UNAUTHENTICATED_PATHS).toContain("/.well-known/:path*");
+  });
 });

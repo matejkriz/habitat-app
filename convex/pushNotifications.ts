@@ -154,6 +154,18 @@ export const enqueueExcuse = mutation({
   },
 });
 
+export const enqueueExcuseInternal = internalMutation({
+  args: { excuseId: v.string() },
+  returns: v.union(v.null(), v.id("notificationEvents")),
+  handler: async (ctx, { excuseId }) => {
+    const excuse = await ctx.db
+      .query("excuses")
+      .withIndex("by_app_id", (query) => query.eq("id", excuseId))
+      .unique();
+    return excuse ? await enqueueExcuseEvent(ctx, excuse) : null;
+  },
+});
+
 export const reconcileExcuseNotifications = internalMutation({
   args: {},
   returns: v.number(),

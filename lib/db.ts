@@ -99,6 +99,26 @@ type RawAuditLog = {
   readonly createdAt: number;
 };
 
+type McpParentProfile = {
+  readonly userId: string;
+  readonly children: ReadonlyArray<{
+    readonly id: string;
+    readonly firstName: string;
+    readonly gender: ChildGender | null;
+  }>;
+};
+
+type McpExcuseResult = {
+  readonly replayed: boolean;
+  readonly submittedAt: number;
+  readonly excuses: ReadonlyArray<{
+    readonly id: string;
+    readonly childId: string;
+    readonly fromDate: number;
+    readonly toDate: number;
+  }>;
+};
+
 type GetArgs = {
   readonly where: Record<string, unknown>;
   readonly include?: Record<string, unknown>;
@@ -1144,6 +1164,29 @@ export const db: any = {
   notifications: {
     enqueueExcuse: async (args: { excuseId: string }) =>
       await convexMutation(api.pushNotifications.enqueueExcuse, {
+        secret: getServerSecret(),
+        ...args,
+      }),
+  },
+
+  mcp: {
+    getParentProfile: async (args: {
+      workosUserId: string;
+    }): Promise<McpParentProfile | null> =>
+      await convexQuery(api.mcp.getParentProfile, {
+        secret: getServerSecret(),
+        ...args,
+      }),
+
+    createParentExcuses: async (args: {
+      workosUserId: string;
+      requestId: string;
+      childIds: string[];
+      fromDate: number;
+      toDate: number;
+      reason: string | null;
+    }): Promise<McpExcuseResult> =>
+      await convexMutation(api.mcp.createParentExcuses, {
         secret: getServerSecret(),
         ...args,
       }),

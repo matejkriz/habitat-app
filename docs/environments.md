@@ -19,6 +19,9 @@ nechtěně by zpřístupnil stejné služby všem feature větvím.
 | `WORKOS_CLIENT_ID` | Encrypted | pouze server | Production / Preview (`develop`) | Client ID samostatného WorkOS prostředí. |
 | `WORKOS_API_KEY` | Sensitive | pouze server | Production / Preview (`develop`) | `sk_live_...` v produkci, `sk_test_...` na developu. |
 | `WORKOS_COOKIE_PASSWORD` | Sensitive | pouze server | Production / Preview (`develop`) | Unikátní náhodná hodnota, minimálně 32 znaků. |
+| `WORKOS_AUTHKIT_DOMAIN` | Encrypted | pouze server | Production / Preview (`develop`) | HTTPS origin AuthKit domény bez cesty. |
+| `MCP_RESOURCE_URL` | Encrypted | pouze server | Production / Preview (`develop`) | Přesná veřejná URL MCP endpointu; na developu `https://developapp.habitatzbraslav.cz/api/mcp`. |
+| `MCP_CONFIRMATION_SECRET` | Sensitive | pouze server | Production / Preview (`develop`) | Samostatný náhodný secret, minimálně 32 znaků; nesdílet s Convexem. |
 | `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Encrypted | veřejná v browser bundlu | Production / Preview (`develop`) | Přesně `https://<doména>/callback`; změna vyžaduje nový build. |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Encrypted | veřejná v browser bundlu | Production / Preview (`develop`) | Veřejná polovina unikátního VAPID páru; změna vyžaduje nový build. |
 | `NEXT_PUBLIC_ATTENDANCE_CALENDAR_START_DATE` | Encrypted | veřejná v browser bundlu | Production / Preview (`develop`) | Formát `YYYY-MM-DD`; nejde o tajemství. |
@@ -40,6 +43,36 @@ ne Vercel runtime konfigurace.
 | --- | --- | --- | --- |
 | develop | `https://developapp.habitatzbraslav.cz` | `https://developapp.habitatzbraslav.cz/callback` | `https://developapp.habitatzbraslav.cz/login` |
 | production | `https://app.habitatzbraslav.cz` | `https://app.habitatzbraslav.cz/callback` | `https://app.habitatzbraslav.cz/login` |
+
+## MCP pro rodičovské omluvenky
+
+Pilot na developu používá `https://developapp.habitatzbraslav.cz/api/mcp` jako
+OAuth Resource Indicator i jako hodnotu `MCP_RESOURCE_URL`. Hodnota
+`WORKOS_AUTHKIT_DOMAIN` pro WorkOS Staging je
+`https://decent-flower-49-staging.authkit.app`. Ve WorkOS develop
+prostředí v **Connect → Configuration**:
+
+1. zapněte Client ID Metadata Document (CIMD),
+2. kvůli starším klientům ponechte zapnutou i Dynamic Client Registration,
+3. přidejte přesnou Resource Indicator URL MCP endpointu a nastavte ji jako výchozí.
+
+MCP server publikuje OAuth discovery na
+`/.well-known/oauth-protected-resource` a kompatibilní proxy metadat na
+`/.well-known/oauth-authorization-server`. WorkOS vydává token; Habitat ověřuje
+jeho podpis, issuer, audience, expiraci a scope `openid` při každém požadavku.
+
+Pro první test přidejte vzdálený MCP server do MCP Inspectoru nebo do vývojářské
+konfigurace klienta URL výše. Očekávaný průchod je:
+
+1. klient otevře WorkOS přihlášení a souhlas,
+2. `list_my_children` vrátí jen křestní jména a interní ID vlastních dětí,
+3. `preview_excuse` vrátí přesný náhled a desetiminutové potvrzení,
+4. po výslovném potvrzení rodiče `create_excuse` uloží dávku atomicky,
+5. opakování stejného zápisu vrátí původní výsledek bez duplicit.
+
+Pro tento pilot není potřeba samostatný skill ani klientský plugin. MCP je
+společná integrační vrstva pro kompatibilní klienty; případný veřejný ChatGPT
+plugin může později tento endpoint zabalit a projít publikační kontrolou.
 
 ## Convex
 
