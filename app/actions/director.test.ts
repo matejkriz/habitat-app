@@ -238,7 +238,9 @@ describe("createDirectorExcuse", () => {
     formData.set("toDate", "2026-08-19");
     formData.set("reason", " Nemoc ");
 
-    await createDirectorExcuse(formData);
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: true,
+    });
 
     expect(mocks.excusesCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -258,9 +260,24 @@ describe("createDirectorExcuse", () => {
     formData.set("fromDate", "2026-08-19");
     formData.set("toDate", "2026-08-19");
 
-    await expect(createDirectorExcuse(formData)).rejects.toThrow(
-      "Dítě nebylo nalezeno",
-    );
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: false,
+      error: "Dítě nebylo nalezeno.",
+    });
+    expect(mocks.excusesCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe validation result for an invalid date range", async () => {
+    const formData = new FormData();
+    formData.set("childId", "tobias");
+    formData.set("fromDate", "2026-08-20");
+    formData.set("toDate", "2026-08-19");
+
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: false,
+      error: "Datum konce nesmí být před datem začátku.",
+    });
+    expect(mocks.getSchoolDaysInRange).not.toHaveBeenCalled();
     expect(mocks.excusesCreate).not.toHaveBeenCalled();
   });
 

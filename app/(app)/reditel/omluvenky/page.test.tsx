@@ -59,7 +59,7 @@ describe("ExcuseManagementPage", () => {
 
   it("lets the director create an excuse for any active child", async () => {
     mocks.getExcuses.mockResolvedValueOnce([]).mockResolvedValueOnce([lateExcuse]);
-    mocks.createDirectorExcuse.mockResolvedValue(undefined);
+    mocks.createDirectorExcuse.mockResolvedValue({ success: true });
     render(<ExcuseManagementPage />);
 
     await screen.findByText("Žádné omluvenky");
@@ -87,5 +87,50 @@ describe("ExcuseManagementPage", () => {
       reason: "Nemoc",
     });
     await waitFor(() => expect(mocks.getExcuses).toHaveBeenCalledTimes(2));
+  });
+
+  it("copies the start date into an empty or earlier end date", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    render(<ExcuseManagementPage />);
+
+    await screen.findByText("Žádné omluvenky");
+    fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
+
+    const fromDate = screen.getByLabelText("Od");
+    const toDate = screen.getByLabelText("Do");
+    fireEvent.change(fromDate, { target: { value: "2026-09-10" } });
+
+    expect((toDate as HTMLInputElement).value).toBe("2026-09-10");
+
+    fireEvent.change(toDate, { target: { value: "2026-09-12" } });
+    fireEvent.change(fromDate, { target: { value: "2026-09-11" } });
+    expect((toDate as HTMLInputElement).value).toBe("2026-09-12");
+
+    fireEvent.change(fromDate, { target: { value: "2026-09-13" } });
+    expect((toDate as HTMLInputElement).value).toBe("2026-09-13");
+  });
+
+  it("shows a safe validation error returned by the server action", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    mocks.createDirectorExcuse.mockResolvedValue({
+      success: false,
+      error: "Datum konce nesmí být před datem začátku.",
+    });
+    render(<ExcuseManagementPage />);
+
+    await screen.findByText("Žádné omluvenky");
+    fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
+    fireEvent.change(screen.getByLabelText("Dítě"), {
+      target: { value: "child-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-09-10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit omluvenku" }));
+
+    expect(
+      await screen.findByText("Datum konce nesmí být před datem začátku."),
+    ).toBeTruthy();
+    expect(mocks.getExcuses).toHaveBeenCalledOnce();
   });
 });

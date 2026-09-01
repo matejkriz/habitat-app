@@ -67,6 +67,8 @@ export default function ExcuseManagementPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [createFromDate, setCreateFromDate] = useState("");
+  const [createToDate, setCreateToDate] = useState("");
   const [notice, setNotice] = useState("");
 
   const loadExcuses = useCallback(async (showLoading = true) => {
@@ -136,9 +138,16 @@ export default function ExcuseManagementPage() {
     setIsCreating(true);
 
     try {
-      await createDirectorExcuse(new FormData(event.currentTarget));
+      const result = await createDirectorExcuse(new FormData(event.currentTarget));
+      if (!result.success) {
+        setCreateError(result.error);
+        return;
+      }
+
       await loadExcuses(false);
       setShowCreateForm(false);
+      setCreateFromDate("");
+      setCreateToDate("");
       setNotice("Omluvenka byla uložena a rovnou schválena.");
     } catch (error) {
       setCreateError(
@@ -162,6 +171,8 @@ export default function ExcuseManagementPage() {
             type="button"
             onClick={() => {
               setCreateError("");
+              setCreateFromDate("");
+              setCreateToDate("");
               setNotice("");
               setShowCreateForm(true);
             }}
@@ -226,12 +237,26 @@ export default function ExcuseManagementPage() {
                   label="Od"
                   name="fromDate"
                   type="date"
+                  value={createFromDate}
+                  onChange={(event) => {
+                    const nextFromDate = event.target.value;
+                    setCreateFromDate(nextFromDate);
+                    setCreateToDate((currentToDate) =>
+                      nextFromDate &&
+                      (!currentToDate || currentToDate < nextFromDate)
+                        ? nextFromDate
+                        : currentToDate,
+                    );
+                  }}
                   required
                 />
                 <Input
                   label="Do"
                   name="toDate"
                   type="date"
+                  value={createToDate}
+                  min={createFromDate || undefined}
+                  onChange={(event) => setCreateToDate(event.target.value)}
                   required
                 />
               </div>
@@ -249,6 +274,8 @@ export default function ExcuseManagementPage() {
                 onClick={() => {
                   setShowCreateForm(false);
                   setCreateError("");
+                  setCreateFromDate("");
+                  setCreateToDate("");
                 }}
                 disabled={isCreating}
               >

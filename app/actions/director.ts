@@ -38,7 +38,7 @@ import {
   NO_COVERAGE,
   type ExcuseRangeState,
 } from "@/lib/excuse-coverage";
-import { parseExcuseDate } from "@/lib/excuse-rules";
+import { parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
 
 // Type for audit log with included user relation
 export type AuditLogWithUser = AuditLog & {
@@ -408,6 +408,10 @@ export type ExcuseChild = {
   readonly lastName: string;
 };
 
+export type CreateDirectorExcuseResult =
+  | { readonly success: true }
+  | { readonly success: false; readonly error: string };
+
 /**
  * Get the minimal child data needed by the director excuse form.
  */
@@ -425,7 +429,9 @@ export async function getExcuseChildren(): Promise<ReadonlyArray<ExcuseChild>> {
  * Create an excuse on behalf of any active child. Because the director is the
  * submitter and approver, a late range is approved in the initial insert.
  */
-export async function createDirectorExcuse(formData: FormData) {
+export async function createDirectorExcuse(
+  formData: FormData,
+): Promise<CreateDirectorExcuseResult> {
   const user = await requireDirector();
   const childId = formData.get("childId");
   const fromDateValue = formData.get("fromDate");
@@ -438,7 +444,7 @@ export async function createDirectorExcuse(formData: FormData) {
     typeof fromDateValue !== "string" ||
     typeof toDateValue !== "string"
   ) {
-    throw new Error("Vyplňte dítě a platné období.");
+    return { success: false, error: "Vyplňte dítě a platné období." };
   }
 
   const child = await db.children.get({
@@ -446,15 +452,30 @@ export async function createDirectorExcuse(formData: FormData) {
     select: { id: true, active: true },
   });
   if (!child || !child.active) {
-    throw new Error("Dítě nebylo nalezeno.");
+    return { success: false, error: "Dítě nebylo nalezeno." };
   }
 
-  const fromDate = parseExcuseDate(fromDateValue);
-  const toDate = parseExcuseDate(toDateValue);
+  let fromDate: Date;
+  let toDate: Date;
+  try {
+    fromDate = parseExcuseDate(fromDateValue);
+    toDate = parseExcuseDate(toDateValue);
+  } catch {
+    return { success: false, error: "Zadejte platné datum." };
+  }
+
+  const validation = validateExcuseDates(fromDate, toDate);
+  if (!validation.valid) {
+    return {
+      success: false,
+      error: validation.error ?? "Zadejte platné období.",
+    };
+  }
+
   const reason =
     typeof reasonValue === "string" ? reasonValue.trim() || null : null;
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
-  const excuse = await createExcuse(
+  await createExcuse(
     childId,
     fromDate,
     toDate,
@@ -469,7 +490,7 @@ export async function createDirectorExcuse(formData: FormData) {
   revalidatePath("/kalendar");
   revalidatePath("/reditel/obedy");
 
-  return excuse;
+  return { success: true };
 }
 
 /**
