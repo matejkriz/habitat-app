@@ -25,6 +25,7 @@ import {
 } from "@/lib/lunches";
 import { revalidatePath } from "next/cache";
 import {
+  createExcuse,
   deleteExcuse as deleteExcuseRecord,
   getExcusesOverlapping,
   updateExcuse as updateExcuseRecord,
@@ -399,6 +400,76 @@ export async function getExcuses(options?: {
     ...excuse,
     rangeState: getExcuseRangeState(excuse, schoolDays) satisfies ExcuseRangeState,
   }));
+}
+
+export type ExcuseChild = {
+  readonly id: string;
+  readonly firstName: string;
+  readonly lastName: string;
+};
+
+/**
+ * Get the minimal child data needed by the director excuse form.
+ */
+export async function getExcuseChildren(): Promise<ReadonlyArray<ExcuseChild>> {
+  await requireDirector();
+
+  return db.children.list({
+    where: { active: true },
+    select: { id: true, firstName: true, lastName: true },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+  }) as Promise<ReadonlyArray<ExcuseChild>>;
+}
+
+/**
+ * Create an excuse on behalf of any active child. Because the director is the
+ * submitter and approver, a late range is approved in the initial insert.
+ */
+export async function createDirectorExcuse(formData: FormData) {
+  const user = await requireDirector();
+  const childId = formData.get("childId");
+  const fromDateValue = formData.get("fromDate");
+  const toDateValue = formData.get("toDate");
+  const reasonValue = formData.get("reason");
+
+  if (
+    typeof childId !== "string" ||
+    !childId ||
+    typeof fromDateValue !== "string" ||
+    typeof toDateValue !== "string"
+  ) {
+    throw new Error("Vyplňte dítě a platné období.");
+  }
+
+  const child = await db.children.get({
+    where: { id: childId },
+    select: { id: true, active: true },
+  });
+  if (!child || !child.active) {
+    throw new Error("Dítě nebylo nalezeno.");
+  }
+
+  const fromDate = parseExcuseDate(fromDateValue);
+  const toDate = parseExcuseDate(toDateValue);
+  const reason =
+    typeof reasonValue === "string" ? reasonValue.trim() || null : null;
+  const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
+  const excuse = await createExcuse(
+    childId,
+    fromDate,
+    toDate,
+    reason,
+    user.id,
+    schoolDays,
+    { approvedById: user.id },
+  );
+
+  revalidatePath("/reditel/omluvenky");
+  revalidatePath("/rodic");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
+
+  return excuse;
 }
 
 /**

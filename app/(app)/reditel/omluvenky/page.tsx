@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  createDirectorExcuse,
   deleteExcuse,
   editExcuse,
+  getExcuseChildren,
   getExcuses,
+  type ExcuseChild,
   updateExcuse,
 } from "@/app/actions/director";
 import {
@@ -13,10 +16,15 @@ import {
 } from "@/components/excuses/excuse-editor";
 import {
   Card,
+  CardFooter,
+  CardHeader,
+  CardTitle,
   CardContent,
   Button,
   Badge,
+  Input,
   Select,
+  Textarea,
 } from "@/components/ui";
 import type { ExcuseRangeState } from "@/lib/excuse-coverage";
 import { formatDate, formatDateRange } from "@/lib/utils";
@@ -51,9 +59,15 @@ const rangeStateBadge: Record<
 
 export default function ExcuseManagementPage() {
   const [excuses, setExcuses] = useState<Excuse[]>([]);
+  const [children, setChildren] = useState<ExcuseChild[]>([]);
   const [filter, setFilter] = useState<"all" | "pending" | "settled">("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [isChildrenLoading, setIsChildrenLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const loadExcuses = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
@@ -77,6 +91,22 @@ export default function ExcuseManagementPage() {
     void loadExcuses();
   }, [loadExcuses]);
 
+  useEffect(() => {
+    async function loadChildren() {
+      try {
+        const data = await getExcuseChildren();
+        setChildren([...data]);
+      } catch (error) {
+        console.error("Failed to load children for excuses:", error);
+        setCreateError("Nepodařilo se načíst seznam dětí.");
+      } finally {
+        setIsChildrenLoading(false);
+      }
+    }
+
+    void loadChildren();
+  }, []);
+
   const handleApprove = async (excuseId: string, approve: boolean) => {
     setUpdatingId(excuseId);
     try {
@@ -99,6 +129,26 @@ export default function ExcuseManagementPage() {
     await loadExcuses(false);
   };
 
+  const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreateError("");
+    setNotice("");
+    setIsCreating(true);
+
+    try {
+      await createDirectorExcuse(new FormData(event.currentTarget));
+      await loadExcuses(false);
+      setShowCreateForm(false);
+      setNotice("Omluvenka byla uložena a rovnou schválena.");
+    } catch (error) {
+      setCreateError(
+        error instanceof Error ? error.message : "Omluvenku se nepodařilo uložit.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -107,17 +157,123 @@ export default function ExcuseManagementPage() {
           <p className="text-charcoal-light">Správa a schvalování omluvenek</p>
         </div>
 
-        <Select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as typeof filter)}
-          options={[
-            { value: "all", label: "Všechny omluvenky" },
-            { value: "pending", label: "Ke schválení" },
-            { value: "settled", label: "Vyřízené" },
-          ]}
-          className="w-[200px]"
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button
+            type="button"
+            onClick={() => {
+              setCreateError("");
+              setNotice("");
+              setShowCreateForm(true);
+            }}
+            disabled={showCreateForm}
+          >
+            Přidat omluvenku
+          </Button>
+          <Select
+            aria-label="Filtr omluvenek"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as typeof filter)}
+            options={[
+              { value: "all", label: "Všechny omluvenky" },
+              { value: "pending", label: "Ke schválení" },
+              { value: "settled", label: "Vyřízené" },
+            ]}
+            className="sm:w-[200px]"
+          />
+        </div>
       </div>
+
+      {showCreateForm ? (
+        <Card>
+          <form onSubmit={handleCreate}>
+            <CardHeader>
+              <CardTitle>Nová omluvenka</CardTitle>
+              <p className="text-sm text-charcoal-light">
+                Omluvenka zadaná ředitelkou se schválí okamžitě bez ohledu na datum.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {createError ? (
+                <p
+                  className="rounded-lg border border-coral/20 bg-coral/10 p-3 text-sm text-coral"
+                  role="alert"
+                >
+                  {createError}
+                </p>
+              ) : null}
+              <Select
+                label="Dítě"
+                name="childId"
+                required
+                disabled={isChildrenLoading || children.length === 0}
+                options={[
+                  {
+                    value: "",
+                    label: isChildrenLoading
+                      ? "Načítání dětí…"
+                      : children.length === 0
+                        ? "Žádné aktivní dítě"
+                        : "Vyberte dítě",
+                  },
+                  ...children.map((child) => ({
+                    value: child.id,
+                    label: `${child.lastName} ${child.firstName}`,
+                  })),
+                ]}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  label="Od"
+                  name="fromDate"
+                  type="date"
+                  required
+                />
+                <Input
+                  label="Do"
+                  name="toDate"
+                  type="date"
+                  required
+                />
+              </div>
+              <Textarea
+                label="Důvod (volitelné)"
+                name="reason"
+                placeholder="Např. nemoc, rodinné důvody…"
+                rows={3}
+              />
+            </CardContent>
+            <CardFooter className="justify-end gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setCreateError("");
+                }}
+                disabled={isCreating}
+              >
+                Zrušit
+              </Button>
+              <Button
+                type="submit"
+                isLoading={isCreating}
+                disabled={isChildrenLoading || children.length === 0}
+              >
+                Uložit omluvenku
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      ) : null}
+
+      {notice ? (
+        <p
+          className="rounded-lg border border-sage/20 bg-sage/10 p-3 text-sm text-sage-dark"
+          role="status"
+        >
+          {notice}
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="pt-6">
