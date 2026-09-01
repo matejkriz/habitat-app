@@ -56,6 +56,9 @@ export async function createExcuse(
   reason: string | null,
   submittedById: string,
   schoolDays?: ReadonlyArray<Date>,
+  options?: {
+    readonly approvedById?: string;
+  },
 ): Promise<Excuse> {
   // Validate dates
   const validation = validateExcuseDates(fromDate, toDate);
@@ -70,7 +73,10 @@ export async function createExcuse(
   const normalizedTo = new Date(toDate);
   normalizedTo.setHours(0, 0, 0, 0);
 
-  // A late submission is forgiven per excuse, and only the director can do it.
+  const lateApprovedAt = options?.approvedById ? new Date() : null;
+
+  // Director-created excuses are approved in the initial write. The caller is
+  // responsible for authorizing the approving user before reaching this layer.
   const excuse = await db.excuses.create({
     data: {
       childId,
@@ -78,8 +84,8 @@ export async function createExcuse(
       toDate: normalizedTo,
       reason,
       submittedById,
-      lateApprovedAt: null,
-      lateApprovedById: null,
+      lateApprovedAt,
+      lateApprovedById: options?.approvedById ?? null,
     },
   });
 
@@ -102,6 +108,8 @@ export async function createExcuse(
         toDate: normalizedTo.toISOString(),
         reason,
         isOnTime,
+        lateApprovedAt: lateApprovedAt?.toISOString() ?? null,
+        lateApprovedById: options?.approvedById ?? null,
       },
     },
   });

@@ -118,6 +118,20 @@ export default defineSchema({
     .index("by_entity", { fields: ["entityType", "entityId"] })
     .index("by_created_at", { fields: ["createdAt"] }),
 
+  mcpExcuseRequests: defineTable({
+    requestId: v.string(),
+    workosUserId: v.string(),
+    userId: v.string(),
+    childIds: v.array(v.string()),
+    excuseIds: v.array(v.string()),
+    fromDate: v.number(),
+    toDate: v.number(),
+    reason: v.union(v.string(), v.null()),
+    createdAt: v.number(),
+  })
+    .index("by_request_id", { fields: ["requestId"] })
+    .index("by_user_created_at", { fields: ["userId", "createdAt"] }),
+
   pushSubscriptions: defineTable({
     userId: v.string(),
     endpoint: v.string(),

@@ -63,4 +63,23 @@ describe("createExcuse push notification", () => {
 
     expect(mocks.enqueueExcuse).toHaveBeenCalledWith({ excuseId: "excuse-1" });
   });
+
+  it("stores a director approval in the initial insert", async () => {
+    await createExcuse(
+      "child-1",
+      new Date(2026, 7, 24),
+      new Date(2026, 7, 25),
+      "Nemoc",
+      "director-1",
+      undefined,
+      { approvedById: "director-1" },
+    );
+
+    expect(mocks.createExcuseRecord).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        lateApprovedById: "director-1",
+        lateApprovedAt: expect.any(Date),
+      }),
+    });
+  });
 });
