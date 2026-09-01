@@ -9,6 +9,7 @@ const tableName = v.union(
   v.literal("attendance"),
   v.literal("excuses"),
   v.literal("closedDays"),
+  v.literal("noLunchDays"),
   v.literal("auditLogs"),
 );
 
@@ -47,6 +48,47 @@ export const listExcusesOverlapping = query({
           .collect();
 
     return candidates.filter((excuse) => excuse.toDate >= args.from);
+  },
+});
+
+export const setNoLunchDay = mutation({
+  args: {
+    secret: v.string(),
+    id: v.string(),
+    date: v.number(),
+    noLunch: v.boolean(),
+    recordedById: v.string(),
+    now: v.number(),
+  },
+  returns: v.boolean(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const existing = await db
+      .query("noLunchDays")
+      .withIndex("by_date", (query) => query.eq("date", args.date))
+      .unique();
+
+    if (!args.noLunch) {
+      if (existing) await db.delete(existing._id);
+      return false;
+    }
+
+    if (existing) {
+      await db.patch(existing._id, {
+        recordedById: args.recordedById,
+        updatedAt: args.now,
+      });
+    } else {
+      await db.insert("noLunchDays", {
+        id: args.id,
+        date: args.date,
+        recordedById: args.recordedById,
+        createdAt: args.now,
+        updatedAt: args.now,
+      });
+    }
+
+    return true;
   },
 });
 

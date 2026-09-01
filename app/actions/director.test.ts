@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   childrenList: vi.fn(),
   childrenGet: vi.fn(),
   attendanceList: vi.fn(),
+  noLunchDaysList: vi.fn(),
   excusesList: vi.fn(),
   excusesGet: vi.fn(),
   excusesCreate: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/lib/db", () => ({
       count: vi.fn(),
     },
     attendance: { list: mocks.attendanceList },
+    noLunchDays: { list: mocks.noLunchDaysList },
     excuses: {
       list: mocks.excusesList,
       listOverlapping: mocks.excusesList,
@@ -99,6 +101,7 @@ describe("getLunchOverview", () => {
       { id: "a-19", childId: "tobias", date: AUG(19), presence: "ABSENT" },
       { id: "a-20", childId: "tobias", date: AUG(20), presence: "ABSENT" },
     ]);
+    mocks.noLunchDaysList.mockResolvedValue([]);
   });
 
   it("shows an approved day as excused even when a late excuse also covers it", async () => {
@@ -125,6 +128,16 @@ describe("getLunchOverview", () => {
 
     expect(overview.children[0].statuses).toEqual(["late", "late"]);
     expect(overview.children[0].payableLunches).toBe(2);
+  });
+
+  it("marks every child gray and charges nobody on a day without lunch", async () => {
+    mocks.excusesList.mockResolvedValue([]);
+    mocks.noLunchDaysList.mockResolvedValue([{ date: AUG(19) }]);
+
+    const overview = await getLunchOverview("2026-08");
+
+    expect(overview.children[0].statuses).toEqual(["no-lunch", "unexcused"]);
+    expect(overview.children[0].payableLunches).toBe(1);
   });
 });
 

@@ -27,6 +27,10 @@ export type CalendarClosedDay = {
   readonly description: string | null;
 };
 
+export type CalendarNoLunchDay = {
+  readonly date: Date;
+};
+
 export type CalendarChildDetail = {
   readonly childId: string;
   readonly name: string;
@@ -40,6 +44,7 @@ export type AttendanceCalendarDay = {
   readonly isPast: boolean;
   readonly isFuture: boolean;
   readonly isClosed: boolean;
+  readonly isLunchCancelled: boolean;
   readonly closedReason: string | null;
   readonly isResolved: boolean;
   readonly counts: {
@@ -89,6 +94,7 @@ type BuildAttendanceCalendarInput = {
   readonly attendance: ReadonlyArray<CalendarAttendance>;
   readonly excuses: ReadonlyArray<CalendarExcuse>;
   readonly closedDays: ReadonlyArray<CalendarClosedDay>;
+  readonly noLunchDays: ReadonlyArray<CalendarNoLunchDay>;
 };
 
 function getChildDetail(child: CalendarChild, reason?: string | null): CalendarChildDetail {
@@ -105,6 +111,7 @@ function buildOpenDay(
   children: ReadonlyArray<CalendarChild>,
   attendance: ReadonlyArray<CalendarAttendance>,
   excusesByChild: ReadonlyMap<string, CalendarExcuse[]>,
+  isLunchCancelled: boolean,
 ): AttendanceCalendarDay {
   const dateKey = toLocalDateKey(date);
   const isPast = dateKey < todayKey;
@@ -148,6 +155,7 @@ function buildOpenDay(
     isPast,
     isFuture,
     isClosed: false,
+    isLunchCancelled,
     closedReason: null,
     isResolved: isFuture || (waiting.length === 0 && unknown.length === 0),
     counts: {
@@ -175,6 +183,7 @@ function buildClosedDay(
     isPast: dateKey < todayKey,
     isFuture: dateKey > todayKey,
     isClosed: true,
+    isLunchCancelled: false,
     closedReason,
     isResolved: true,
     counts: { expected: 0, present: 0, excused: 0, unexcused: 0, waiting: 0, unknown: 0 },
@@ -189,12 +198,14 @@ export function buildAttendanceCalendar({
   attendance,
   excuses,
   closedDays,
+  noLunchDays,
 }: BuildAttendanceCalendarInput): ReadonlyArray<AttendanceCalendarDay> {
   const todayKey = toLocalDateKey(today);
   const excusesByChild = groupExcusesByChild(excuses);
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
   const dayCount = new Date(year, monthIndex + 1, 0).getDate();
+  const noLunchDateKeys = new Set(noLunchDays.map((day) => toLocalDateKey(day.date)));
 
   return Array.from({ length: dayCount }, (_, index) => {
     const date = new Date(year, monthIndex, index + 1);
@@ -206,6 +217,13 @@ export function buildAttendanceCalendar({
       return buildClosedDay(date, todayKey, customClosedDay?.description ?? null);
     }
 
-    return buildOpenDay(date, todayKey, children, attendance, excusesByChild);
+    return buildOpenDay(
+      date,
+      todayKey,
+      children,
+      attendance,
+      excusesByChild,
+      noLunchDateKeys.has(toLocalDateKey(date)),
+    );
   });
 }

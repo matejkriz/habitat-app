@@ -27,6 +27,7 @@ const entityLabels: Record<string, string> = {
   Attendance: "Docházka",
   Excuse: "Omluvenka",
   ClosedDay: "Volný den",
+  LunchDay: "Oběd",
   User: "Uživatel",
   Child: "Dítě",
 };

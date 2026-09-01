@@ -38,6 +38,7 @@ describe("buildAttendanceCalendar", () => {
         }),
       ],
       closedDays: [],
+      noLunchDays: [],
     }).filter((item) => item.dateKey === "2026-08-04");
 
     expect(day.counts).toEqual({
@@ -70,6 +71,7 @@ describe("buildAttendanceCalendar", () => {
         }),
       ],
       closedDays: [],
+      noLunchDays: [],
     }).filter((item) => item.dateKey === "2026-08-03");
 
     expect(day.counts).toEqual({
@@ -95,6 +97,7 @@ describe("buildAttendanceCalendar", () => {
       ],
       excuses: [],
       closedDays: [],
+      noLunchDays: [],
     }).filter((item) => item.dateKey === "2026-07-30");
 
     expect(day.counts).toMatchObject({ present: 1, unexcused: 1, unknown: 1, expected: 1 });
@@ -109,6 +112,7 @@ describe("buildAttendanceCalendar", () => {
       attendance: [],
       excuses: [],
       closedDays: [{ date: new Date(2026, 7, 6), description: "Prázdniny" }],
+      noLunchDays: [],
     });
 
     expect(calendar.find((day) => day.dateKey === "2026-08-01")).toMatchObject({ isClosed: true });
@@ -116,6 +120,20 @@ describe("buildAttendanceCalendar", () => {
       isClosed: true,
       closedReason: "Prázdniny",
     });
+  });
+
+  it("označí otevřený den bez oběda", () => {
+    const day = buildAttendanceCalendar({
+      month: new Date(2026, 7, 1),
+      today: new Date(2026, 7, 3),
+      children,
+      attendance: [],
+      excuses: [],
+      closedDays: [],
+      noLunchDays: [{ date: new Date(2026, 7, 4) }],
+    }).find((item) => item.dateKey === "2026-08-04");
+
+    expect(day).toMatchObject({ isClosed: false, isLunchCancelled: true });
   });
 });
 

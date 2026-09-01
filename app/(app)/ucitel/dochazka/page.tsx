@@ -17,6 +17,7 @@ import {
   getAllChildren,
   getAttendanceForDate,
   saveAttendance,
+  setNoLunchForDate,
 } from "@/app/actions/teacher";
 import { formatDateWithWeekday } from "@/lib/utils";
 import {
@@ -57,6 +58,8 @@ interface CachedAttendanceDay {
   readonly attendance: Readonly<Record<string, boolean>>;
   readonly excuses: Readonly<Record<string, DailyExcuse>>;
   readonly isClosed: boolean;
+  readonly noLunch: boolean;
+  readonly canManageLunch: boolean;
 }
 
 function shiftCalendarDate(date: string, days: number) {
@@ -119,11 +122,15 @@ export default function TeacherAttendancePage() {
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [excuses, setExcuses] = useState<Record<string, DailyExcuse>>({});
   const [isClosed, setIsClosed] = useState(false);
+  const [noLunch, setNoLunch] = useState(false);
+  const [canManageLunch, setCanManageLunch] = useState(false);
   const [loadedDate, setLoadedDate] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingNoLunch, setIsSavingNoLunch] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const dayCache = useRef(new Map<string, CachedAttendanceDay>());
+  const selectedDateRef = useRef(selectedDate);
 
   // Load children and attendance data
   useEffect(() => {
@@ -141,6 +148,8 @@ export default function TeacherAttendancePage() {
             readonly isClosed: boolean;
             readonly attendance: ReadonlyArray<AttendanceRecord>;
             readonly excuses: ReadonlyArray<DailyExcuse>;
+            readonly noLunch: boolean;
+            readonly canManageLunch: boolean;
           },
         ];
 
@@ -170,11 +179,15 @@ export default function TeacherAttendancePage() {
           attendance: nextAttendance,
           excuses: nextExcuses,
           isClosed: attendanceData.isClosed,
+          noLunch: attendanceData.noLunch,
+          canManageLunch: attendanceData.canManageLunch,
         });
         setChildren(nextChildren);
         setIsClosed(attendanceData.isClosed);
         setExcuses(nextExcuses);
         setAttendance(nextAttendance);
+        setNoLunch(attendanceData.noLunch);
+        setCanManageLunch(attendanceData.canManageLunch);
         setLoadedDate(selectedDate);
       } catch {
         if (!isCurrentDate) return;
@@ -209,12 +222,15 @@ export default function TeacherAttendancePage() {
   };
 
   const handleDateChange = (date: string) => {
+    selectedDateRef.current = date;
     const cachedDay = dayCache.current.get(date);
     if (cachedDay) {
       setChildren([...cachedDay.children]);
       setAttendance({ ...cachedDay.attendance });
       setExcuses({ ...cachedDay.excuses });
       setIsClosed(cachedDay.isClosed);
+      setNoLunch(cachedDay.noLunch);
+      setCanManageLunch(cachedDay.canManageLunch);
       setLoadedDate(date);
       setError("");
     }
@@ -247,12 +263,47 @@ export default function TeacherAttendancePage() {
         attendance: { ...attendance },
         excuses: { ...excuses },
         isClosed,
+        noLunch,
+        canManageLunch,
       });
       setSuccess(`Docházka uložena (${result.recordCount} záznamů)`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nepodařilo se uložit docházku.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleNoLunchChange = async () => {
+    const targetDate = selectedDate;
+    const previousNoLunch = noLunch;
+    const nextNoLunch = !previousNoLunch;
+    setNoLunch(nextNoLunch);
+    setIsSavingNoLunch(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const result = await setNoLunchForDate(targetDate, nextNoLunch);
+      const cachedDay = dayCache.current.get(targetDate);
+      if (cachedDay) {
+        dayCache.current.set(targetDate, { ...cachedDay, noLunch: result.noLunch });
+      }
+      if (selectedDateRef.current === targetDate) {
+        setNoLunch(result.noLunch);
+        setSuccess(
+          result.noLunch
+            ? "Tento den byl označený jako den bez oběda."
+            : "Oběd je pro tento den znovu započítaný.",
+        );
+      }
+    } catch (err) {
+      if (selectedDateRef.current === targetDate) {
+        setNoLunch(previousNoLunch);
+        setError(err instanceof Error ? err.message : "Nepodařilo se uložit stav oběda.");
+      }
+    } finally {
+      setIsSavingNoLunch(false);
     }
   };
 
@@ -385,6 +436,27 @@ export default function TeacherAttendancePage() {
                   </svg>
                   {success}
                 </div>
+              )}
+
+              {canManageLunch && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-cream-dark bg-cream/50 p-4">
+                  <input
+                    type="checkbox"
+                    aria-label="Tento den nebyl oběd"
+                    checked={noLunch}
+                    disabled={isSavingNoLunch}
+                    onChange={handleNoLunchChange}
+                    className="mt-0.5 size-5 shrink-0 accent-charcoal disabled:cursor-wait"
+                  />
+                  <span>
+                    <span className="block font-semibold text-charcoal">
+                      Tento den nebyl oběd
+                    </span>
+                    <span className="mt-0.5 block text-sm text-charcoal-light">
+                      Den se v přehledu obědů označí šedě a žádnému dítěti se nezapočítá.
+                    </span>
+                  </span>
+                </label>
               )}
 
               {/* Summary */}

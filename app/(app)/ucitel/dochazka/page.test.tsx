@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getAllChildren: vi.fn(),
   getAttendanceForDate: vi.fn(),
   saveAttendance: vi.fn(),
+  setNoLunchForDate: vi.fn(),
 }));
 
 vi.mock("@/app/actions/teacher", () => mocks);
@@ -74,6 +75,33 @@ describe("TeacherAttendancePage", () => {
     expect(
       screen.getByText("Nepřítomen", { selector: "span" }),
     ).toBeTruthy();
+  });
+
+  it("lets the director mark the selected day as a day without lunch", async () => {
+    mocks.getAllChildren.mockResolvedValue([]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [],
+      noLunch: false,
+      canManageLunch: true,
+    });
+    mocks.setNoLunchForDate.mockResolvedValue({ noLunch: true });
+
+    render(<TeacherAttendancePage />);
+
+    const checkbox = await screen.findByRole<HTMLInputElement>("checkbox", {
+      name: "Tento den nebyl oběd",
+    });
+    fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect(mocks.setNoLunchForDate).toHaveBeenCalledWith(
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        true,
+      );
+    });
+    expect(await screen.findByText("Tento den byl označený jako den bez oběda.")).toBeTruthy();
   });
 
   it("shows whether each excused child was excused on time", async () => {

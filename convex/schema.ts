@@ -103,6 +103,16 @@ export default defineSchema({
     .index("by_app_id", { fields: ["id"] })
     .index("by_date", { fields: ["date"] }),
 
+  noLunchDays: defineTable({
+    id: v.string(),
+    date: v.number(),
+    recordedById: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_app_id", { fields: ["id"] })
+    .index("by_date", { fields: ["date"] }),
+
   auditLogs: defineTable({
     id: v.string(),
     userId: v.optional(v.union(v.string(), v.null())),

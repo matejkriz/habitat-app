@@ -37,6 +37,7 @@ function renderCalendar(startMonthKey: string | null = null) {
           ],
           excuses: [],
           closedDays: [],
+          noLunchDays: [{ date: new Date(2026, 7, 4) }],
         }),
       }}
     />,
@@ -86,6 +87,13 @@ describe("AttendanceCalendar day preview", () => {
 
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("marks a day without lunch with the crossed utensils icon", () => {
+    renderCalendar();
+
+    expect(getTomorrowButton().getAttribute("aria-label")).toContain("bez oběda");
+    expect(getTomorrowButton().querySelector('[title="Bez oběda"]')).toBeTruthy();
   });
 
   it("does not show the hover preview for touch pointers", () => {

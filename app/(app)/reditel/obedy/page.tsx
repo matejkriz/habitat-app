@@ -11,6 +11,7 @@ export const metadata = {
 type SearchParams = Promise<{ month?: string | string[] }>;
 
 const statusStyles: Record<LunchStatusValue, string> = {
+  [LunchStatus.NO_LUNCH]: "bg-[#b8b8b3]",
   [LunchStatus.PRESENT]: "bg-[#7fa173]",
   [LunchStatus.EXCUSED]: "bg-[#70a3bf]",
   [LunchStatus.LATE]: "bg-[#e69a4a]",
@@ -18,6 +19,7 @@ const statusStyles: Record<LunchStatusValue, string> = {
 };
 
 const statusLabels: Record<LunchStatusValue, string> = {
+  [LunchStatus.NO_LUNCH]: "Oběd se nepodával",
   [LunchStatus.PRESENT]: "Přišel/a",
   [LunchStatus.EXCUSED]: "Včas omluven/a",
   [LunchStatus.LATE]: "Pozdě omluven/a",

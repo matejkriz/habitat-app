@@ -12,6 +12,7 @@ import {
   type Child,
   type ChildGender,
   type Excuse,
+  type NoLunchDay,
   type ParentChild,
   type User,
 } from "@/lib/types";
@@ -191,7 +192,7 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
   const startOfMonth = new Date(year, monthIndex, 1);
   const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [schoolDays, children, attendance, excuses] = await Promise.all([
+  const [schoolDays, children, attendance, excuses, noLunchDays] = await Promise.all([
     getSchoolDaysInRange(startOfMonth, endOfMonth),
     db.children.list({
       where: { active: true },
@@ -214,6 +215,9 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
       },
     }) as Promise<ReadonlyArray<Attendance>>,
     getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
+    db.noLunchDays.list({
+      where: { date: { gte: startOfMonth, lte: endOfMonth } },
+    }) as Promise<ReadonlyArray<NoLunchDay>>,
   ]);
 
   const excusesByChild = groupExcusesByChild(excuses);
@@ -229,6 +233,7 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
       record,
     ]),
   );
+  const noLunchDateKeys = new Set(noLunchDays.map((day) => getLocalDateKey(day.date)));
   const days = schoolDays.map((date) => ({
     date,
     key: getLocalDateKey(date),
@@ -249,6 +254,7 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
         getLunchStatus(
           attendanceByChildAndDate.get(`${child.id}:${day.key}`),
           getDayCoverage(childExcuses, day.date),
+          noLunchDateKeys.has(day.key),
         ),
       );
 

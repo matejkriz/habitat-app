@@ -9,6 +9,7 @@ import type {
   ChildGender,
   ClosedDay,
   Excuse,
+  NoLunchDay,
   ParentChild,
   Presence,
   User,
@@ -23,6 +24,7 @@ type TableName =
   | "attendance"
   | "excuses"
   | "closedDays"
+  | "noLunchDays"
   | "auditLogs";
 
 type RawUser = {
@@ -84,6 +86,14 @@ type RawClosedDay = {
   readonly id: string;
   readonly date: number;
   readonly description?: string | null;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+};
+
+type RawNoLunchDay = {
+  readonly id: string;
+  readonly date: number;
+  readonly recordedById: string;
   readonly createdAt: number;
   readonly updatedAt: number;
 };
@@ -294,6 +304,14 @@ const fromRawClosedDay = (raw: RawClosedDay): ClosedDay => ({
   id: raw.id,
   date: new Date(raw.date),
   description: raw.description ?? null,
+  createdAt: new Date(raw.createdAt),
+  updatedAt: new Date(raw.updatedAt),
+});
+
+const fromRawNoLunchDay = (raw: RawNoLunchDay): NoLunchDay => ({
+  id: raw.id,
+  date: new Date(raw.date),
+  recordedById: raw.recordedById,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
 });
@@ -1093,6 +1111,43 @@ export const db: any = {
       await deleteById("closedDays", id);
       return fromRawClosedDay(existing);
     },
+  },
+
+  noLunchDays: {
+    list: async (args: ListArgs = {}) => {
+      let rows = (await listTable<RawNoLunchDay>("noLunchDays")).map(fromRawNoLunchDay);
+
+      if (args.where?.date) {
+        rows = rows.filter((row) => matchesDateFilter(row.date.getTime(), args.where?.date));
+      }
+
+      return applyTake(rows, args.take);
+    },
+
+    get: async (args: GetArgs) => {
+      const rows = (await listTable<RawNoLunchDay>("noLunchDays")).map(fromRawNoLunchDay);
+      if (!args.where.date) return null;
+      const date = toTimestamp(args.where.date);
+      return rows.find((row) => row.date.getTime() === date) ?? null;
+    },
+
+    set: async ({
+      date,
+      noLunch,
+      recordedById,
+    }: {
+      date: Date;
+      noLunch: boolean;
+      recordedById: string;
+    }): Promise<boolean> =>
+      await convexMutation(api.db.setNoLunchDay, {
+        secret: getServerSecret(),
+        id: createId(),
+        date: date.getTime(),
+        noLunch,
+        recordedById,
+        now: Date.now(),
+      }),
   },
 
   auditLogs: {

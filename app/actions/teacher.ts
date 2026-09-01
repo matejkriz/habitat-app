@@ -36,6 +36,8 @@ type DailyAttendance = {
   readonly isClosed: boolean;
   readonly attendance: ReadonlyArray<AttendanceRecord>;
   readonly excuses: ReadonlyArray<DailyExcuse>;
+  readonly noLunch: boolean;
+  readonly canManageLunch: boolean;
 };
 
 /**
@@ -71,10 +73,16 @@ export const getAttendanceForDate = async (
 
   const closed = await isClosedDay(date);
   if (closed) {
-    return { isClosed: true, attendance: [], excuses: [] };
+    return {
+      isClosed: true,
+      attendance: [],
+      excuses: [],
+      noLunch: false,
+      canManageLunch: user.role === UserRole.DIRECTOR,
+    };
   }
 
-  const [attendance, excuses] = await Promise.all([
+  const [attendance, excuses, noLunchDay] = await Promise.all([
     db.attendance.list({
       where: { date },
       include: {
@@ -88,6 +96,7 @@ export const getAttendanceForDate = async (
       },
     }) as Promise<ReadonlyArray<Attendance>>,
     getExcusesOverlapping({ from: date, to: date }),
+    db.noLunchDays.get({ where: { date } }),
   ]);
 
   const excusesByChild = groupExcusesByChild(excuses);
@@ -105,7 +114,58 @@ export const getAttendanceForDate = async (
       childId,
       state: getExcuseDayState(excusesByChild.get(childId) ?? [], date)!,
     })),
+    noLunch: noLunchDay !== null,
+    canManageLunch: user.role === UserRole.DIRECTOR,
   };
+};
+
+export const setNoLunchForDate = async (
+  dateStr: string,
+  noLunch: boolean,
+): Promise<{ readonly noLunch: boolean }> => {
+  const user = await getDbUser();
+  if (!user || user.role !== UserRole.DIRECTOR) {
+    throw new Error("Unauthorized");
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(Number.NaN);
+  if (
+    !match ||
+    date.getFullYear() !== Number(match[1]) ||
+    date.getMonth() !== Number(match[2]) - 1 ||
+    date.getDate() !== Number(match[3])
+  ) {
+    throw new Error("Neplatné datum");
+  }
+
+  if (await isClosedDay(date)) {
+    throw new Error("V zavřený den se oběd neeviduje");
+  }
+
+  const savedNoLunch = await db.noLunchDays.set({
+    date,
+    noLunch,
+    recordedById: user.id,
+  });
+
+  await db.auditLogs.create({
+    data: {
+      userId: user.id,
+      action: "UPDATE",
+      entityType: "LunchDay",
+      entityId: dateStr,
+      newValue: { noLunch: savedNoLunch },
+    },
+  });
+
+  revalidatePath("/ucitel/dochazka");
+  revalidatePath("/kalendar");
+  revalidatePath("/reditel/obedy");
+
+  return { noLunch: savedNoLunch };
 };
 
 /**
