@@ -3,11 +3,14 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { ExcuseDayPart } from "@/lib/types";
 
 export type ExcuseEditValues = {
   readonly fromDate: string;
   readonly toDate: string;
+  readonly dayPart: ExcuseDayPart;
   readonly reason: string;
 };
 
@@ -15,6 +18,7 @@ type EditableExcuse = {
   readonly id: string;
   readonly fromDate: Date | string;
   readonly toDate: Date | string;
+  readonly dayPart: ExcuseDayPart;
   readonly reason: string | null;
 };
 
@@ -36,6 +40,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [fromDate, setFromDate] = useState(() => toDateInputValue(excuse.fromDate));
   const [toDate, setToDate] = useState(() => toDateInputValue(excuse.toDate));
+  const [dayPart, setDayPart] = useState<ExcuseDayPart>(excuse.dayPart);
   const [reason, setReason] = useState(excuse.reason ?? "");
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | null>(null);
   const [error, setError] = useState("");
@@ -45,7 +50,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
     setError("");
     setPendingAction("save");
     try {
-      await onSave(excuse.id, { fromDate, toDate, reason });
+      await onSave(excuse.id, { fromDate, toDate, dayPart, reason });
       setIsEditing(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Změny se nepodařilo uložit.");
@@ -113,6 +118,16 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
           required
         />
       </div>
+      <Select
+        label="Dítě bude chybět"
+        value={dayPart}
+        onChange={(event) => setDayPart(event.target.value as ExcuseDayPart)}
+        options={[
+          { value: "FULL_DAY", label: "Celý den" },
+          { value: "MORNING", label: "Jen dopoledne" },
+          { value: "AFTERNOON", label: "Jen odpoledne" },
+        ]}
+      />
       <Textarea
         label="Důvod"
         value={reason}

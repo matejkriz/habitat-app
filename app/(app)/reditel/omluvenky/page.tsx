@@ -28,6 +28,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import type { ExcuseRangeState } from "@/lib/excuse-coverage";
+import type { ExcuseDayPart } from "@/lib/types";
 import { formatDate, formatDateRange } from "@/lib/utils";
 
 interface Excuse {
@@ -35,6 +36,7 @@ interface Excuse {
   fromDate: Date;
   toDate: Date;
   reason: string | null;
+  dayPart: ExcuseDayPart;
   cancelLunch: boolean;
   rangeState: ExcuseRangeState;
   submittedAt: Date;
@@ -73,6 +75,8 @@ export default function ExcuseManagementPage() {
   const [createFromDate, setCreateFromDate] = useState("");
   const [createToDate, setCreateToDate] = useState("");
   const [createCancelLunch, setCreateCancelLunch] = useState(true);
+  const [createDayPart, setCreateDayPart] =
+    useState<ExcuseDayPart>("FULL_DAY");
   const [notice, setNotice] = useState("");
 
   const loadExcuses = useCallback(async (showLoading = true) => {
@@ -143,7 +147,9 @@ export default function ExcuseManagementPage() {
 
     try {
       const formData = new FormData(event.currentTarget);
-      formData.set("cancelLunch", String(createCancelLunch));
+      const effectiveCancelLunch =
+        createDayPart === "AFTERNOON" ? false : createCancelLunch;
+      formData.set("cancelLunch", String(effectiveCancelLunch));
       const result = await createDirectorExcuse(formData);
       if (!result.success) {
         setCreateError(result.error);
@@ -155,8 +161,9 @@ export default function ExcuseManagementPage() {
       setCreateFromDate("");
       setCreateToDate("");
       setCreateCancelLunch(true);
+      setCreateDayPart("FULL_DAY");
       setNotice(
-        createCancelLunch
+        effectiveCancelLunch
           ? "Omluvenka byla uložena a rovnou schválena."
           : "Omluvenka byla uložena. Oběd nebude odhlášen.",
       );
@@ -185,6 +192,7 @@ export default function ExcuseManagementPage() {
               setCreateFromDate("");
               setCreateToDate("");
               setCreateCancelLunch(true);
+              setCreateDayPart("FULL_DAY");
               setNotice("");
               setShowCreateForm(true);
             }}
@@ -272,28 +280,57 @@ export default function ExcuseManagementPage() {
                   required
                 />
               </div>
+              <Select
+                label="Dítě bude chybět"
+                name="dayPart"
+                value={createDayPart}
+                onChange={(event) =>
+                  setCreateDayPart(event.target.value as ExcuseDayPart)
+                }
+                options={[
+                  { value: "FULL_DAY", label: "Celý den" },
+                  { value: "MORNING", label: "Jen dopoledne" },
+                  { value: "AFTERNOON", label: "Jen odpoledne" },
+                ]}
+              />
+              {createDayPart === "MORNING" ? (
+                <p className="text-sm text-charcoal-light">
+                  Dítě přijde až odpoledne. Volba platí pro všechny zadané dny.
+                </p>
+              ) : createDayPart === "AFTERNOON" ? (
+                <div className="rounded-lg border border-sage/20 bg-sage/10 px-4 py-3 text-sm">
+                  <p className="text-charcoal-light">
+                    Dítě bude ve škole dopoledne, odpoledne bude chybět.
+                  </p>
+                  <p className="mt-1 font-semibold text-sage-dark">
+                    Oběd zůstává přihlášený.
+                  </p>
+                </div>
+              ) : null}
               <Textarea
                 label="Důvod (volitelné)"
                 name="reason"
                 placeholder="Např. nemoc, rodinné důvody…"
                 rows={3}
               />
-              <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
-                <Toggle
-                  id="director-cancel-lunch"
-                  role="switch"
-                  checked={createCancelLunch}
-                  onChange={(event) =>
-                    setCreateCancelLunch(event.target.checked)
-                  }
-                  label="Odhlásit oběd"
-                  description={
-                    createCancelLunch
-                      ? "Oběd bude odhlášen."
-                      : "Oběd zůstane přihlášený."
-                  }
-                />
-              </div>
+              {createDayPart !== "AFTERNOON" ? (
+                <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
+                  <Toggle
+                    id="director-cancel-lunch"
+                    role="switch"
+                    checked={createCancelLunch}
+                    onChange={(event) =>
+                      setCreateCancelLunch(event.target.checked)
+                    }
+                    label="Odhlásit oběd"
+                    description={
+                      createCancelLunch
+                        ? "Oběd bude odhlášen."
+                        : "Oběd zůstane přihlášený."
+                    }
+                  />
+                </div>
+              ) : null}
             </CardContent>
             <CardFooter className="justify-end gap-3">
               <Button
@@ -305,6 +342,7 @@ export default function ExcuseManagementPage() {
                   setCreateFromDate("");
                   setCreateToDate("");
                   setCreateCancelLunch(true);
+                  setCreateDayPart("FULL_DAY");
                 }}
                 disabled={isCreating}
               >
@@ -368,6 +406,14 @@ export default function ExcuseManagementPage() {
                       <p className="text-sm text-charcoal-light">
                         <span className="font-medium">Období:</span>{" "}
                         {formatDateRange(excuse.fromDate, excuse.toDate)}
+                      </p>
+                      <p className="text-sm text-charcoal-light">
+                        <span className="font-medium">Část dne:</span>{" "}
+                        {excuse.dayPart === "MORNING"
+                          ? "jen dopoledne"
+                          : excuse.dayPart === "AFTERNOON"
+                            ? "jen odpoledne"
+                            : "celý den"}
                       </p>
                       {excuse.reason && (
                         <p className="text-sm text-charcoal-light">

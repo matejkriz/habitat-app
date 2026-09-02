@@ -10,6 +10,7 @@ import {
   CardFooter,
   Button,
   Input,
+  Select,
   Toggle,
   Textarea,
 } from "@/components/ui";
@@ -19,6 +20,10 @@ import {
   type ParentVisibleChild,
 } from "@/app/actions/parent";
 import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
+import {
+  ExcuseDayPart,
+  type ExcuseDayPart as ExcuseDayPartValue,
+} from "@/lib/types";
 
 type SubmissionSummary = {
   readonly count: number;
@@ -69,6 +74,9 @@ export default function NewExcusePage() {
   const [fromDate, setFromDate] = useState(preselectedDate);
   const [toDate, setToDate] = useState(preselectedDate);
   const [reason, setReason] = useState("");
+  const [dayPart, setDayPart] = useState<ExcuseDayPartValue>(
+    ExcuseDayPart.FULL_DAY,
+  );
   const [cancelLunch, setCancelLunch] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -84,7 +92,10 @@ export default function NewExcusePage() {
   const allSelectedChildrenDoNotTakeLunch =
     selectedChildren.length > 0 &&
     selectedChildren.every((child) => child.doesNotTakeLunch);
-  const shouldCancelLunch = allSelectedChildrenDoNotTakeLunch || cancelLunch;
+  const shouldCancelLunch =
+    dayPart === ExcuseDayPart.AFTERNOON
+      ? false
+      : allSelectedChildrenDoNotTakeLunch || cancelLunch;
 
   useEffect(() => {
     async function loadChildren() {
@@ -135,6 +146,7 @@ export default function NewExcusePage() {
       selectedChildIds.forEach((childId) => formData.append("childIds", childId));
       formData.set("fromDate", fromDate);
       formData.set("toDate", toDate || fromDate);
+      formData.set("dayPart", dayPart);
       formData.set(
         "cancelLunch",
         String(shouldCancelLunch),
@@ -317,6 +329,44 @@ export default function NewExcusePage() {
               required
             />
 
+            <Select
+              label="Dítě bude chybět"
+              value={dayPart}
+              onChange={(event) =>
+                setDayPart(event.target.value as ExcuseDayPartValue)
+              }
+              options={[
+                { value: ExcuseDayPart.FULL_DAY, label: "Celý den" },
+                { value: ExcuseDayPart.MORNING, label: "Jen dopoledne" },
+                { value: ExcuseDayPart.AFTERNOON, label: "Jen odpoledne" },
+              ]}
+            />
+
+            {dayPart === ExcuseDayPart.MORNING ? (
+              <p className="text-sm text-charcoal-light">
+                Dítě bude chybět dopoledne a přijde až odpoledne. Volba platí pro
+                všechny zadané dny.
+              </p>
+            ) : dayPart === ExcuseDayPart.AFTERNOON ? (
+              <div className="rounded-lg border border-sage/20 bg-sage/10 px-4 py-3 text-sm">
+                <p className="text-charcoal-light">
+                  Dítě bude ve škole dopoledne, odpoledne bude chybět.
+                </p>
+                <p className="mt-1 font-semibold text-sage-dark">
+                  {allSelectedChildrenDoNotTakeLunch
+                    ? selectedChildren.length > 1
+                      ? "Vybrané děti neodebírají obědy."
+                      : "Dítě neodebírá obědy."
+                    : "Oběd zůstává přihlášený."}
+                </p>
+                {fromDate !== toDate ? (
+                  <p className="mt-1 text-xs text-charcoal-light">
+                    Volba platí pro všechny zadané dny.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <Textarea
               label="Důvod (volitelné)"
               value={reason}
@@ -325,7 +375,8 @@ export default function NewExcusePage() {
               rows={3}
             />
 
-            {!allSelectedChildrenDoNotTakeLunch ? (
+            {!allSelectedChildrenDoNotTakeLunch &&
+            dayPart !== ExcuseDayPart.AFTERNOON ? (
               <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
                 <Toggle
                   id="cancel-lunch"

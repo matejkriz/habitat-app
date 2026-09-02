@@ -13,6 +13,15 @@ export const Presence = {
 
 export type Presence = (typeof Presence)[keyof typeof Presence];
 
+export const ExcuseDayPart = {
+  FULL_DAY: "FULL_DAY",
+  MORNING: "MORNING",
+  AFTERNOON: "AFTERNOON",
+} as const;
+
+export type ExcuseDayPart =
+  (typeof ExcuseDayPart)[keyof typeof ExcuseDayPart];
+
 export const ExcuseStatus = {
   NONE: "NONE",
   EXCUSED: "EXCUSED",
@@ -82,6 +91,8 @@ export type Excuse = {
   fromDate: Date;
   toDate: Date;
   reason: string | null;
+  /** Which part of every covered school day the child will miss. */
+  dayPart: ExcuseDayPart;
   /** Whether an excused absence should also cancel the child's lunch. */
   cancelLunch: boolean;
   submittedById: string;

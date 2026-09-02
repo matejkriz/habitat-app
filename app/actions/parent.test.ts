@@ -42,6 +42,7 @@ const makeExcuse = (childId: string): Excuse => ({
   fromDate: new Date(2026, 8, 10),
   toDate: new Date(2026, 8, 10),
   reason: "Nemoc",
+  dayPart: "FULL_DAY",
   cancelLunch: true,
   submittedById: "parent-1",
   submittedAt: new Date(2026, 8, 1),
@@ -96,7 +97,7 @@ describe("submitExcuse", () => {
       "Nemoc",
       "parent-1",
       [new Date(2026, 8, 10)],
-      { cancelLunch: true },
+      { dayPart: "FULL_DAY", cancelLunch: true },
     );
     expect(result.excuses.map((excuse) => excuse.childId)).toEqual([
       "child-1",
@@ -185,7 +186,7 @@ describe("submitExcuse", () => {
       "Nemoc",
       "parent-1",
       [new Date(2026, 8, 10)],
-      { cancelLunch: false },
+      { dayPart: "FULL_DAY", cancelLunch: false },
     );
     expect(result.summary).toEqual({
       cancelLunch: false,
@@ -194,6 +195,41 @@ describe("submitExcuse", () => {
       onTimeDayCount: 0,
       automaticallyApprovedDayCount: 1,
     });
+  });
+
+  it("stores an afternoon absence and keeps its lunch", async () => {
+    const formData = makeFormData();
+    formData.delete("childIds");
+    formData.append("childIds", "child-1");
+    formData.set("dayPart", "AFTERNOON");
+    formData.set("cancelLunch", "true");
+    mocks.createExcuse.mockResolvedValue({
+      ...makeExcuse("child-1"),
+      dayPart: "AFTERNOON",
+      cancelLunch: false,
+      lateApprovedAt: new Date(2026, 8, 1),
+    });
+
+    const result = await submitExcuse(formData);
+
+    expect(mocks.createExcuse).toHaveBeenCalledWith(
+      "child-1",
+      new Date(2026, 8, 10),
+      new Date(2026, 8, 10),
+      "Nemoc",
+      "parent-1",
+      [new Date(2026, 8, 10)],
+      { dayPart: "AFTERNOON", cancelLunch: false },
+    );
+    expect(result.summary.cancelLunch).toBe(false);
+  });
+
+  it("rejects an invalid day part before creating anything", async () => {
+    const formData = makeFormData();
+    formData.set("dayPart", "EVENING");
+
+    await expect(submitExcuse(formData)).rejects.toThrow("Neplatná část dne.");
+    expect(mocks.createExcuse).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid lunch choice before creating anything", async () => {

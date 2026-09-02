@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -189,6 +190,29 @@ describe("TeacherAttendancePage", () => {
     expect(toggles[0].checked).toBe(false);
     expect(toggles[1].checked).toBe(true);
     expect(toggles[2].checked).toBe(true);
+  });
+
+  it("keeps an afternoon-only child present by default and lowers the afternoon plan", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
+      { id: "child-2", firstName: "Oskar", lastName: "Okurka", gender: "MALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [
+        { childId: "child-1", state: "ON_TIME", dayPart: "AFTERNOON" },
+      ],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
+    expect(screen.getAllByRole<HTMLInputElement>("checkbox")[0].checked).toBe(true);
+    expect(screen.getByText("Odpoledne nepřijde")).toBeTruthy();
+    const plan = screen.getByRole("region", { name: "Plánovaná účast" });
+    expect(within(plan).getByText("2", { selector: "p" })).toBeTruthy();
+    expect(within(plan).getByText("1", { selector: "p" })).toBeTruthy();
   });
 
   it("stacks the all-present action below the totals on narrow screens", async () => {

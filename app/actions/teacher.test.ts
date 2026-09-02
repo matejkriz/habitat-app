@@ -68,6 +68,59 @@ describe("getAttendanceForDate", () => {
     });
   });
 
+  it("returns the effective partial-day scope", async () => {
+    mocks.excusesList.mockResolvedValue([
+      {
+        id: "excuse-afternoon",
+        childId: "child-1",
+        fromDate: new Date(2026, 7, 19),
+        toDate: new Date(2026, 7, 19),
+        dayPart: "AFTERNOON",
+        submittedAt: new Date(2026, 7, 10, 8),
+        lateApprovedAt: null,
+      },
+    ]);
+
+    await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({
+      excuses: [
+        {
+          childId: "child-1",
+          dayPart: "AFTERNOON",
+          state: "ON_TIME",
+        },
+      ],
+    });
+  });
+
+  it("combines separate partial excuses without hiding a late half-day", async () => {
+    mocks.excusesList.mockResolvedValue([
+      {
+        id: "excuse-morning",
+        childId: "child-1",
+        fromDate: new Date(2026, 7, 19),
+        toDate: new Date(2026, 7, 19),
+        dayPart: "MORNING",
+        submittedAt: new Date(2026, 7, 19, 10),
+        lateApprovedAt: null,
+      },
+      {
+        id: "excuse-afternoon",
+        childId: "child-1",
+        fromDate: new Date(2026, 7, 19),
+        toDate: new Date(2026, 7, 19),
+        dayPart: "AFTERNOON",
+        submittedAt: new Date(2026, 7, 10, 8),
+        lateApprovedAt: null,
+      },
+    ]);
+
+    await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({
+      excuses: [
+        { childId: "child-1", dayPart: "FULL_DAY", state: "LATE" },
+      ],
+    });
+  });
+
   it("treats a day as late only when its own deadline had passed", async () => {
     // Submitted after 9:00 the day before 19. 8., but days in advance for the rest.
     mocks.excusesList.mockResolvedValue([

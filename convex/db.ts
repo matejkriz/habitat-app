@@ -14,12 +14,18 @@ const tableName = v.union(
 );
 
 const documentValue = v.any();
+const excuseDayPart = v.union(
+  v.literal("FULL_DAY"),
+  v.literal("MORNING"),
+  v.literal("AFTERNOON"),
+);
 const excuseValue = v.object({
   id: v.string(),
   childId: v.string(),
   fromDate: v.number(),
   toDate: v.number(),
   reason: v.union(v.string(), v.null()),
+  dayPart: v.optional(excuseDayPart),
   cancelLunch: v.boolean(),
   submittedById: v.string(),
   submittedAt: v.number(),
@@ -141,12 +147,14 @@ export const createExcuse = mutation({
     if (!child) throw new Error("Child not found");
 
     const cancelLunch = child.doesNotTakeLunch ? true : value.cancelLunch;
+    const dayPart = value.dayPart ?? "FULL_DAY";
     const excuse = {
       ...value,
-      cancelLunch,
+      dayPart,
+      cancelLunch: dayPart === "AFTERNOON" ? false : cancelLunch,
       lateApprovedAt:
         value.lateApprovedAt == null &&
-        (child.doesNotTakeLunch || !cancelLunch)
+        (child.doesNotTakeLunch || dayPart === "AFTERNOON" || !cancelLunch)
           ? Date.now()
           : value.lateApprovedAt,
     };

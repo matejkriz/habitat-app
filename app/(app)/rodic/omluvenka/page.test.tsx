@@ -102,7 +102,48 @@ describe("NewExcusePage", () => {
     await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalled());
     const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
     expect(formData.getAll("childIds")).toEqual(["child-2"]);
+    expect(formData.get("dayPart")).toBe("FULL_DAY");
     expect(formData.get("cancelLunch")).toBe("true");
+  });
+
+  it("keeps whole day as the default and reveals the afternoon consequence", async () => {
+    render(<NewExcusePage />);
+
+    await screen.findByRole("checkbox", { name: "Anna" });
+    const dayPart = screen.getByLabelText<HTMLSelectElement>("Dítě bude chybět");
+    expect(dayPart.value).toBe("FULL_DAY");
+    expect(screen.getByRole("switch")).toBeTruthy();
+
+    fireEvent.change(dayPart, { target: { value: "AFTERNOON" } });
+
+    expect(
+      screen.getByText(
+        "Dítě bude ve škole dopoledne, odpoledne bude chybět.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Oběd zůstává přihlášený.")).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  it("submits an afternoon absence while keeping lunch", async () => {
+    render(<NewExcusePage />);
+
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
+      target: { value: "AFTERNOON" },
+    });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-09-10" },
+    });
+    fireEvent.change(screen.getByLabelText("Do"), {
+      target: { value: "2026-09-10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+
+    await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalledOnce());
+    const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
+    expect(formData.get("dayPart")).toBe("AFTERNOON");
+    expect(formData.get("cancelLunch")).toBe("false");
   });
 
   it("can submit the excuse for both children", async () => {

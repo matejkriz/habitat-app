@@ -3,6 +3,8 @@
  * Sends notifications to #omluvenky channel when new excuses are submitted
  */
 
+import type { ExcuseDayPart } from "./types";
+
 export interface ExcuseNotificationData {
   childName: string;
   parentName: string;
@@ -10,6 +12,7 @@ export interface ExcuseNotificationData {
   toDate: Date;
   reason: string | null;
   cancelLunch?: boolean;
+  dayPart?: ExcuseDayPart;
   isOnTime: boolean; // true = "včas", false = "pozdní"
   automaticallyApproved?: boolean;
 }
@@ -36,6 +39,7 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
     toDate,
     reason,
     cancelLunch = true,
+    dayPart = "FULL_DAY",
     isOnTime,
     automaticallyApproved,
   } = data;
@@ -53,6 +57,12 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
   const toDateStr = formatDateCzech(toDate);
   const dateRange =
     fromDateStr === toDateStr ? fromDateStr : `${fromDateStr} – ${toDateStr}`;
+  const dayPartText =
+    dayPart === "MORNING"
+      ? "Jen dopoledne"
+      : dayPart === "AFTERNOON"
+        ? "Jen odpoledne"
+        : "Celý den";
 
   const blocks = [
     {
@@ -80,6 +90,10 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
         },
         {
           type: "mrkdwn",
+          text: `*Část dne:*\n${dayPartText}`,
+        },
+        {
+          type: "mrkdwn",
           text: `*Stav:*\n${statusEmoji} ${statusText}`,
         },
       ],
@@ -100,7 +114,7 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
   }
 
   // Simple text fallback for notifications
-  const text = `Nová omluvenka: ${childName} (${dateRange}) - ${statusText}`;
+  const text = `Nová omluvenka: ${childName} (${dateRange}, ${dayPartText.toLocaleLowerCase("cs-CZ")}) - ${statusText}`;
 
   return { blocks, text };
 }

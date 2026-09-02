@@ -17,6 +17,7 @@ describe("ExcuseEditor", () => {
           id: "excuse-1",
           fromDate: new Date(2024, 0, 2),
           toDate: new Date(2024, 0, 3),
+          dayPart: "FULL_DAY",
           reason: "Nemoc",
         }}
         onSave={onSave}
@@ -27,6 +28,9 @@ describe("ExcuseEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2024-01-04" } });
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-05" } });
+    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
+      target: { value: "AFTERNOON" },
+    });
     fireEvent.change(screen.getByLabelText("Důvod"), { target: { value: "Rodinné důvody" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
 
@@ -34,6 +38,7 @@ describe("ExcuseEditor", () => {
       expect(onSave).toHaveBeenCalledWith("excuse-1", {
         fromDate: "2024-01-04",
         toDate: "2024-01-05",
+        dayPart: "AFTERNOON",
         reason: "Rodinné důvody",
       });
     });
@@ -50,6 +55,7 @@ describe("ExcuseEditor", () => {
           id: "excuse-1",
           fromDate: new Date(2024, 0, 2),
           toDate: new Date(2024, 0, 3),
+          dayPart: "FULL_DAY",
           reason: null,
         }}
         onSave={vi.fn()}

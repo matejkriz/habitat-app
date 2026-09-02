@@ -12,6 +12,7 @@ import {
   type Child,
   type ChildGender,
   type Excuse,
+  type ExcuseDayPart,
   type NoLunchDay,
   type ParentChild,
   type User,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/excuse";
 import {
   getDayCoverage,
+  getDayPartCoverage,
   getExcuseRangeState,
   groupExcusesByChild,
   isExcuseSettled,
@@ -40,7 +42,11 @@ import {
   type ExcuseRangeState,
 } from "@/lib/excuse-coverage";
 import { parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
-import { parseCancelLunchChoice } from "@/lib/excuse-input";
+import {
+  getEffectiveCancelLunch,
+  parseCancelLunchChoice,
+  parseExcuseDayPart,
+} from "@/lib/excuse-input";
 
 // Type for audit log with included user relation
 export type AuditLogWithUser = AuditLog & {
@@ -263,13 +269,23 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
     days: days.map(({ key, day, weekday }) => ({ key, day, weekday })),
     children: childrenWithLunch.map((child) => {
       const childExcuses = excusesByChild.get(child.id) ?? [];
-      const statuses = days.map((day) =>
-        getLunchStatus(
+      const statuses = days.map((day) => {
+        const wholeDayCoverage = getDayCoverage(childExcuses, day.date);
+        const morningCoverage = getDayPartCoverage(
+          childExcuses,
+          day.date,
+          "MORNING",
+        );
+        const usesMorningCancellation =
+          !wholeDayCoverage.covered && morningCoverage.covered;
+
+        return getLunchStatus(
           attendanceByChildAndDate.get(`${child.id}:${day.key}`),
-          getDayCoverage(childExcuses, day.date),
+          usesMorningCancellation ? morningCoverage : wholeDayCoverage,
           noLunchDateKeys.has(day.key),
-        ),
-      );
+          usesMorningCancellation,
+        );
+      });
 
       return {
         id: child.id,
@@ -463,8 +479,13 @@ export async function createDirectorExcuse(
   const toDateValue = formData.get("toDate");
   const reasonValue = formData.get("reason");
   let cancelLunch: boolean;
+  let dayPart: ExcuseDayPart;
   try {
-    cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
+    dayPart = parseExcuseDayPart(formData.get("dayPart"));
+    cancelLunch = getEffectiveCancelLunch(
+      dayPart,
+      parseCancelLunchChoice(formData.get("cancelLunch")),
+    );
   } catch (error) {
     return {
       success: false,
@@ -516,13 +537,14 @@ export async function createDirectorExcuse(
     reason,
     user.id,
     schoolDays,
-    { approvedById: user.id, cancelLunch },
+    { approvedById: user.id, dayPart, cancelLunch },
   );
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
   revalidatePath("/reditel/obedy");
+  revalidatePath("/ucitel/dochazka");
 
   return { success: true };
 }
@@ -580,6 +602,7 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
   revalidatePath("/reditel/obedy");
+  revalidatePath("/ucitel/dochazka");
 
   return updated;
 }
@@ -588,6 +611,7 @@ type ExcuseEditInput = {
   readonly fromDate: string;
   readonly toDate: string;
   readonly reason: string;
+  readonly dayPart?: string;
 };
 
 export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
@@ -599,6 +623,10 @@ export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
       fromDate: parseExcuseDate(input.fromDate),
       toDate: parseExcuseDate(input.toDate),
       reason: input.reason.trim() || null,
+      dayPart:
+        input.dayPart === undefined
+          ? undefined
+          : parseExcuseDayPart(input.dayPart),
     },
     user.id,
   );
@@ -606,6 +634,8 @@ export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/reditel/obedy");
+  revalidatePath("/kalendar");
+  revalidatePath("/ucitel/dochazka");
   return updated;
 }
 
@@ -615,6 +645,8 @@ export async function deleteExcuse(excuseId: string): Promise<void> {
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/reditel/obedy");
+  revalidatePath("/kalendar");
+  revalidatePath("/ucitel/dochazka");
 }
 
 /**

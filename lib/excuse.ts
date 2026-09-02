@@ -3,7 +3,13 @@
  */
 
 import { db } from "./db";
-import { UserRole, type Excuse, type UserRole as UserRoleType } from "./types";
+import {
+  ExcuseDayPart,
+  UserRole,
+  type Excuse,
+  type ExcuseDayPart as ExcuseDayPartValue,
+  type UserRole as UserRoleType,
+} from "./types";
 import { validateExcuseDates } from "./excuse-rules";
 import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
@@ -59,6 +65,7 @@ export async function createExcuse(
   options?: {
     readonly approvedById?: string;
     readonly cancelLunch?: boolean;
+    readonly dayPart?: ExcuseDayPartValue;
   },
 ): Promise<Excuse> {
   // Validate dates
@@ -86,7 +93,9 @@ export async function createExcuse(
     select: { name: true },
   });
   const lateApprovedAt = options?.approvedById ? new Date() : null;
-  const cancelLunch = options?.cancelLunch ?? true;
+  const dayPart = options?.dayPart ?? ExcuseDayPart.FULL_DAY;
+  const cancelLunch =
+    dayPart === ExcuseDayPart.AFTERNOON ? false : (options?.cancelLunch ?? true);
 
   // Director-created, no-lunch, and lunch-preserving excuses are approved in
   // the initial write.
@@ -97,6 +106,7 @@ export async function createExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason,
+      dayPart,
       cancelLunch,
       submittedById,
       lateApprovedAt,
@@ -124,6 +134,7 @@ export async function createExcuse(
         fromDate: normalizedFrom.toISOString(),
         toDate: normalizedTo.toISOString(),
         reason,
+        dayPart: excuse.dayPart,
         cancelLunch: excuse.cancelLunch,
         isOnTime,
         automaticallyApproved,
@@ -152,6 +163,7 @@ export async function createExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason,
+      dayPart: excuse.dayPart,
       cancelLunch: excuse.cancelLunch,
       isOnTime,
       automaticallyApproved,
@@ -231,6 +243,7 @@ export async function updateExcuse(
     fromDate?: Date;
     toDate?: Date;
     reason?: string | null;
+    dayPart?: ExcuseDayPartValue;
   },
   userId: string
 ): Promise<Excuse> {
@@ -249,6 +262,18 @@ export async function updateExcuse(
   if (!validation.valid) {
     throw new Error(validation.error);
   }
+  const newDayPart = updates.dayPart ?? current.dayPart;
+  const newCancelLunch =
+    newDayPart === ExcuseDayPart.AFTERNOON ? false : current.cancelLunch;
+  const newlyAutomaticallyApproved =
+    current.lateApprovedAt === null && !newCancelLunch;
+  const newLateApprovedAt = newlyAutomaticallyApproved
+    ? new Date()
+    : current.lateApprovedAt;
+  const automaticApprovalPatch =
+    newlyAutomaticallyApproved
+      ? { lateApprovedAt: newLateApprovedAt, lateApprovedById: null }
+      : {};
 
   // Growing the range would carry the original submission time onto days whose
   // deadline has since passed, which is how a stale excuse could be edited into
@@ -274,11 +299,17 @@ export async function updateExcuse(
         fromDate: current.fromDate.toISOString(),
         toDate: current.toDate.toISOString(),
         reason: current.reason,
+        dayPart: current.dayPart,
+        cancelLunch: current.cancelLunch,
+        lateApprovedAt: current.lateApprovedAt?.toISOString() ?? null,
       },
       newValue: {
         fromDate: newFromDate.toISOString(),
         toDate: newToDate.toISOString(),
         reason: updates.reason !== undefined ? updates.reason : current.reason,
+        dayPart: newDayPart,
+        cancelLunch: newCancelLunch,
+        lateApprovedAt: newLateApprovedAt?.toISOString() ?? null,
       },
     },
   });
@@ -296,6 +327,9 @@ export async function updateExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason: updates.reason !== undefined ? updates.reason : current.reason,
+      dayPart: newDayPart,
+      cancelLunch: newCancelLunch,
+      ...automaticApprovalPatch,
     },
   });
 }
@@ -324,6 +358,8 @@ export async function deleteExcuse(excuseId: string, userId: string): Promise<vo
         fromDate: excuse.fromDate.toISOString(),
         toDate: excuse.toDate.toISOString(),
         reason: excuse.reason,
+        dayPart: excuse.dayPart,
+        cancelLunch: excuse.cancelLunch,
         lateApprovedAt: excuse.lateApprovedAt?.toISOString() ?? null,
       },
     },

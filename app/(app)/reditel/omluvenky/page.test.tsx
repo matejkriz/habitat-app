@@ -26,6 +26,7 @@ const lateExcuse = {
   toDate: new Date(2026, 7, 20),
   reason: "Nemoc",
   cancelLunch: true,
+  dayPart: "FULL_DAY" as const,
   rangeState: "LATE" as const,
   submittedAt: new Date(2026, 7, 18, 10),
   child: {
@@ -91,9 +92,36 @@ describe("ExcuseManagementPage", () => {
       fromDate: "2026-08-19",
       toDate: "2026-08-20",
       reason: "Nemoc",
+      dayPart: "FULL_DAY",
       cancelLunch: "true",
     });
     await waitFor(() => expect(mocks.getExcuses).toHaveBeenCalledTimes(2));
+  });
+
+  it("lets the director choose an afternoon absence and keeps lunch", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    mocks.createDirectorExcuse.mockResolvedValue({ success: true });
+    render(<ExcuseManagementPage />);
+
+    await screen.findByText("Žádné omluvenky");
+    fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
+    fireEvent.change(screen.getByLabelText("Dítě"), {
+      target: { value: "child-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-08-19" },
+    });
+    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
+      target: { value: "AFTERNOON" },
+    });
+
+    expect(screen.queryByRole("switch")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Uložit omluvenku" }));
+
+    await waitFor(() => expect(mocks.createDirectorExcuse).toHaveBeenCalledOnce());
+    const formData = mocks.createDirectorExcuse.mock.calls[0][0] as FormData;
+    expect(formData.get("dayPart")).toBe("AFTERNOON");
+    expect(formData.get("cancelLunch")).toBe("false");
   });
 
   it("passes the choice to keep lunch to the server action", async () => {

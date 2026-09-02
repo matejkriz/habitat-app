@@ -42,6 +42,7 @@ const currentExcuse: Excuse = {
   fromDate: new Date("2024-01-01T00:00:00"),
   toDate: new Date("2024-01-03T00:00:00"),
   reason: "Nemoc",
+  dayPart: "FULL_DAY",
   cancelLunch: true,
   submittedById: "parent-1",
   submittedAt: new Date("2023-12-30T08:00:00"),
@@ -93,7 +94,27 @@ describe("updateExcuse", () => {
         fromDate: new Date(2024, 0, 2),
         toDate: new Date(2024, 0, 3),
         reason: currentExcuse.reason,
+        dayPart: "FULL_DAY",
+        cancelLunch: true,
       },
+    });
+  });
+
+  it("keeps lunch and settles a late excuse changed to afternoon-only", async () => {
+    await updateExcuse(
+      currentExcuse.id,
+      { dayPart: "AFTERNOON" },
+      "parent-1",
+    );
+
+    expect(mocks.updateExcuse).toHaveBeenCalledWith({
+      where: { id: currentExcuse.id },
+      data: expect.objectContaining({
+        dayPart: "AFTERNOON",
+        cancelLunch: false,
+        lateApprovedAt: expect.any(Date),
+        lateApprovedById: null,
+      }),
     });
   });
 
