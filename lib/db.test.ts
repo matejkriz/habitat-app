@@ -62,3 +62,36 @@ describe("legacy excuse rollout", () => {
     expect(excuse.lateApprovedAt).toBeNull();
   });
 });
+
+describe("legacy child rollout", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("CONVEX_URL", "https://example.convex.cloud");
+    vi.stubEnv("PUSH_INTERNAL_SECRET", "test-server-secret");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps lunches enabled when the new field is absent", async () => {
+    mocks.query
+      .mockResolvedValueOnce([
+        {
+          id: "child-1",
+          firstName: "Anna",
+          lastName: "Malá",
+          gender: "FEMALE",
+          active: true,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const [child] = await db.children.list();
+
+    expect(child.doesNotTakeLunch).toBe(false);
+  });
+});

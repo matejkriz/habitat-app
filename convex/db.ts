@@ -14,6 +14,19 @@ const tableName = v.union(
 );
 
 const documentValue = v.any();
+const excuseValue = v.object({
+  id: v.string(),
+  childId: v.string(),
+  fromDate: v.number(),
+  toDate: v.number(),
+  reason: v.union(v.string(), v.null()),
+  submittedById: v.string(),
+  submittedAt: v.number(),
+  lateApprovedAt: v.union(v.number(), v.null()),
+  lateApprovedById: v.union(v.string(), v.null()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+});
 
 export const list = query({
   args: { secret: v.string(), table: tableName },
@@ -110,6 +123,31 @@ export const insert = mutation({
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
     return await db.insert(args.table, args.value);
+  },
+});
+
+export const createExcuse = mutation({
+  args: { secret: v.string(), value: excuseValue },
+  returns: excuseValue,
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const value = args.value;
+
+    const child = await db
+      .query("children")
+      .withIndex("by_app_id", (query) => query.eq("id", value.childId))
+      .unique();
+    if (!child) throw new Error("Child not found");
+
+    const excuse = {
+      ...value,
+      lateApprovedAt:
+        value.lateApprovedAt == null && child.doesNotTakeLunch
+          ? Date.now()
+          : value.lateApprovedAt,
+    };
+    await db.insert("excuses", excuse);
+    return excuse;
   },
 });
 

@@ -39,6 +39,7 @@ export type ParentVisibleChild = {
   readonly id: string;
   readonly firstName: string;
   readonly gender: ChildGender | null;
+  readonly doesNotTakeLunch: boolean;
 };
 
 type ChildTodayStatus = {
@@ -89,6 +90,7 @@ export const getParentChildren = async (): Promise<
     id: child.id,
     firstName: child.firstName,
     gender: child.gender,
+    doesNotTakeLunch: child.doesNotTakeLunch,
   }));
 };
 
@@ -328,8 +330,15 @@ export const submitExcuse = async (formData: FormData) => {
       createExcuse(childId, fromDate, toDate, reason, user.id, schoolDays),
     ),
   );
+  const automaticallyApprovedDayCount = excuses.reduce(
+    (count, excuse) =>
+      count + (excuse.lateApprovedAt === null ? 0 : schoolDays.length),
+    0,
+  );
   const lateDayCount = excuses.reduce(
-    (count, excuse) => count + getLateDays(excuse, schoolDays).length,
+    (count, excuse) =>
+      count +
+      (excuse.lateApprovedAt === null ? getLateDays(excuse, schoolDays).length : 0),
     0,
   );
   const schoolDayCount = schoolDays.length * excuses.length;
@@ -349,7 +358,9 @@ export const submitExcuse = async (formData: FormData) => {
     summary: {
       schoolDayCount,
       lateDayCount,
-      onTimeDayCount: schoolDayCount - lateDayCount,
+      onTimeDayCount:
+        schoolDayCount - lateDayCount - automaticallyApprovedDayCount,
+      automaticallyApprovedDayCount,
     },
   };
 };

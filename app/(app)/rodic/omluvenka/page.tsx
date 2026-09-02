@@ -24,7 +24,18 @@ type SubmissionSummary = {
   readonly schoolDayCount: number;
   readonly lateDayCount: number;
   readonly onTimeDayCount: number;
+  readonly automaticallyApprovedDayCount: number;
 };
+
+function automaticApprovalMessage(dayCount: number): string {
+  if (dayCount === 1) {
+    return "1 den omluvenky byl automaticky schválen, protože dítě neodebírá obědy.";
+  }
+  if (dayCount < 5) {
+    return `${dayCount} dny omluvenek byly automaticky schváleny, protože děti neodebírají obědy.`;
+  }
+  return `${dayCount} dnů omluvenek bylo automaticky schváleno, protože děti neodebírají obědy.`;
+}
 
 function mixedLunchMessage(summary: SubmissionSummary): string {
   const canceled =
@@ -61,6 +72,15 @@ export default function NewExcusePage() {
   const [success, setSuccess] = useState<SubmissionSummary | null>(null);
   const [willAutoApprove, setWillAutoApprove] = useState<boolean | null>(null);
   const [deadline, setDeadline] = useState("");
+  const selectedChildren = children.filter((child) =>
+    selectedChildIds.includes(child.id),
+  );
+  const someSelectedChildrenDoNotTakeLunch = selectedChildren.some(
+    (child) => child.doesNotTakeLunch,
+  );
+  const allSelectedChildrenDoNotTakeLunch =
+    selectedChildren.length > 0 &&
+    selectedChildren.every((child) => child.doesNotTakeLunch);
 
   useEffect(() => {
     async function loadChildren() {
@@ -169,6 +189,36 @@ export default function NewExcusePage() {
                 </div>
                 {success.schoolDayCount === 0 ? (
                   <p>V zadaném období nejsou žádné školní dny.</p>
+                ) : success.automaticallyApprovedDayCount ===
+                  success.schoolDayCount ? (
+                  <p>
+                    {automaticApprovalMessage(
+                      success.automaticallyApprovedDayCount,
+                    )}
+                  </p>
+                ) : success.automaticallyApprovedDayCount > 0 ? (
+                  <div className="space-y-1">
+                    <p>
+                      {automaticApprovalMessage(
+                        success.automaticallyApprovedDayCount,
+                      )}
+                    </p>
+                    {success.lateDayCount === 0 ? (
+                      <p>
+                        {success.onTimeDayCount === 1
+                          ? "Za ostatní den bude oběd odhlášen."
+                          : `Za ostatních ${success.onTimeDayCount} dnů budou obědy odhlášeny.`}
+                      </p>
+                    ) : success.onTimeDayCount === 0 ? (
+                      <p>
+                        {success.lateDayCount === 1
+                          ? "Za ostatní pozdně omluvený den zůstane oběd započítaný do schválení ředitelkou."
+                          : `Za ostatních ${success.lateDayCount} pozdně omluvených dnů zůstanou obědy započítané do schválení ředitelkou.`}
+                      </p>
+                    ) : (
+                      <p>{mixedLunchMessage(success)}</p>
+                    )}
+                  </div>
                 ) : success.lateDayCount === 0 ? (
                   <p>
                     {success.count > 1
@@ -216,6 +266,11 @@ export default function NewExcusePage() {
                         <span className="font-medium text-charcoal">
                           {child.firstName}
                         </span>
+                        {child.doesNotTakeLunch && (
+                          <span className="text-xs font-medium text-charcoal-light">
+                            bez obědů
+                          </span>
+                        )}
                       </label>
                     );
                   })}
@@ -259,15 +314,17 @@ export default function NewExcusePage() {
             {/* Auto-approval info */}
             {fromDate && (
               <div className={`p-4 rounded-lg ${
-                willAutoApprove
+                willAutoApprove || allSelectedChildrenDoNotTakeLunch
                   ? "bg-sage/10 border border-sage/20"
                   : "bg-gold/10 border border-gold/20"
               }`}>
                 <div className="flex items-start gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    willAutoApprove ? "bg-sage/20" : "bg-gold/20"
+                    willAutoApprove || allSelectedChildrenDoNotTakeLunch
+                      ? "bg-sage/20"
+                      : "bg-gold/20"
                   }`}>
-                    {willAutoApprove ? (
+                    {willAutoApprove || allSelectedChildrenDoNotTakeLunch ? (
                       <svg className="w-4 h-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
@@ -278,7 +335,28 @@ export default function NewExcusePage() {
                     )}
                   </div>
                   <div>
-                    {willAutoApprove ? (
+                    {allSelectedChildrenDoNotTakeLunch ? (
+                      <>
+                        <p className="font-semibold text-sage-dark">
+                          Omluvenka bude automaticky schválena
+                        </p>
+                        <p className="text-sm text-charcoal-light mt-1">
+                          {selectedChildren.length > 1
+                            ? "Vybrané děti neodebírají obědy."
+                            : "Dítě neodebírá obědy."}
+                        </p>
+                      </>
+                    ) : !willAutoApprove && someSelectedChildrenDoNotTakeLunch ? (
+                      <>
+                        <p className="font-semibold text-gold-dark">
+                          Část omluvenek se schválí automaticky
+                        </p>
+                        <p className="text-sm text-charcoal-light mt-1">
+                          Děti bez obědů se schválí automaticky. U ostatních už
+                          termín pro odhlášení oběda uplynul ({deadline}).
+                        </p>
+                      </>
+                    ) : willAutoApprove ? (
                       <>
                         <p className="font-semibold text-sage-dark">
                           Omluvenka bude odeslána včas
@@ -316,6 +394,10 @@ export default function NewExcusePage() {
                 <li className="flex items-start gap-2">
                   <span className="text-gold">•</span>
                   Pozdě odeslané omluvenky jsou zaznamenány, ale Bětka je musí dodatečně schválit
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-gold">•</span>
+                  Dětem bez obědů se omluvenky schvalují automaticky
                 </li>
               </ul>
             </div>

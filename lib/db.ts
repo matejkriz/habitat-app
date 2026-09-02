@@ -43,6 +43,7 @@ type RawChild = {
   readonly firstName: string;
   readonly lastName: string;
   readonly gender?: ChildGender;
+  readonly doesNotTakeLunch?: boolean;
   readonly active: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -126,6 +127,7 @@ type McpExcuseResult = {
     readonly childId: string;
     readonly fromDate: number;
     readonly toDate: number;
+    readonly lateApprovedAt: number | null;
   }>;
 };
 
@@ -250,6 +252,7 @@ const fromRawChild = (raw: RawChild): Child => ({
   firstName: raw.firstName,
   lastName: raw.lastName,
   gender: raw.gender ?? null,
+  doesNotTakeLunch: raw.doesNotTakeLunch ?? false,
   active: raw.active,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
@@ -607,6 +610,7 @@ export const db: any = {
         firstName: String(args.data.firstName ?? ""),
         lastName: String(args.data.lastName ?? ""),
         gender: args.data.gender as ChildGender,
+        doesNotTakeLunch: Boolean(args.data.doesNotTakeLunch),
         active: args.data.active === undefined ? true : Boolean(args.data.active),
         createdAt: now,
         updatedAt: now,
@@ -1000,7 +1004,7 @@ export const db: any = {
     create: async (args: CreateRecordArgs) => {
       const data = args.data;
       const now = Date.now();
-      const created: RawExcuse = {
+      const created = {
         id: createId(),
         childId: String(data.childId),
         fromDate: toTimestamp(data.fromDate),
@@ -1015,8 +1019,11 @@ export const db: any = {
         createdAt: now,
         updatedAt: now,
       };
-      await insert("excuses", created as unknown as Record<string, unknown>);
-      return fromRawExcuse(created);
+      const stored = await convexMutation(api.db.createExcuse, {
+        secret: getServerSecret(),
+        value: created,
+      });
+      return fromRawExcuse(stored as unknown as RawExcuse);
     },
 
     update: async (args: UpdateRecordArgs) => {

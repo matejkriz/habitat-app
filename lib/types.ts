@@ -53,6 +53,7 @@ export type Child = {
   firstName: string;
   lastName: string;
   gender: ChildGender | null;
+  doesNotTakeLunch: boolean;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -83,7 +84,7 @@ export type Excuse = {
   reason: string | null;
   submittedById: string;
   submittedAt: Date;
-  /** Set when the director forgives a late submission. Null means no decision. */
+  /** Set when a late submission is approved, including automatic approval. */
   lateApprovedAt: Date | null;
   lateApprovedById: string | null;
   createdAt: Date;

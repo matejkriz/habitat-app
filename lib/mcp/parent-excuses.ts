@@ -94,15 +94,27 @@ const getTiming = async (input: {
   if (input.excuses.length === 0) {
     return {
       schoolDays: [] as Date[],
-      summary: { schoolDayCount: 0, lateDayCount: 0, onTimeDayCount: 0 },
+      summary: {
+        schoolDayCount: 0,
+        lateDayCount: 0,
+        onTimeDayCount: 0,
+        automaticallyApprovedDayCount: 0,
+      },
     };
   }
   const schoolDays = await getSchoolDaysInRange(
     input.excuses[0].fromDate,
     input.excuses[0].toDate,
   );
+  const automaticallyApprovedDayCount = input.excuses.reduce(
+    (count, excuse) =>
+      count + (excuse.lateApprovedAt === null ? 0 : schoolDays.length),
+    0,
+  );
   const lateDayCount = input.excuses.reduce(
-    (count, excuse) => count + getLateDays(excuse, schoolDays).length,
+    (count, excuse) =>
+      count +
+      (excuse.lateApprovedAt === null ? getLateDays(excuse, schoolDays).length : 0),
     0,
   );
   const schoolDayCount = schoolDays.length * input.excuses.length;
@@ -111,7 +123,9 @@ const getTiming = async (input: {
     summary: {
       schoolDayCount,
       lateDayCount,
-      onTimeDayCount: schoolDayCount - lateDayCount,
+      onTimeDayCount:
+        schoolDayCount - lateDayCount - automaticallyApprovedDayCount,
+      automaticallyApprovedDayCount,
     },
   };
 };
@@ -183,12 +197,14 @@ export const createMcpExcuse = async (
       childId: string;
       fromDate: number;
       toDate: number;
+      lateApprovedAt: number | null;
     }) => ({
       ...excuse,
       fromDate: new Date(excuse.fromDate),
       toDate: new Date(excuse.toDate),
       submittedAt: new Date(result.submittedAt),
-      lateApprovedAt: null,
+      lateApprovedAt:
+        excuse.lateApprovedAt === null ? null : new Date(excuse.lateApprovedAt),
     }));
     const { schoolDays, summary } = await getTiming({ excuses });
 
@@ -211,6 +227,7 @@ export const createMcpExcuse = async (
               toDate: excuse.toDate,
               reason: confirmation.reason,
               isOnTime: getLateDays(excuse, schoolDays).length === 0,
+              automaticallyApproved: excuse.lateApprovedAt !== null,
             }).catch((error) => {
               console.error("Failed to send MCP Slack notification", error);
             });

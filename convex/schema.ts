@@ -33,6 +33,8 @@ export default defineSchema({
     lastName: v.string(),
     // Optional during rollout so existing children can be completed in the director UI.
     gender: v.optional(childGender),
+    // Optional during rollout; existing children continue to receive lunches.
+    doesNotTakeLunch: v.optional(v.boolean()),
     active: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),

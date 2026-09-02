@@ -104,6 +104,7 @@ describe("submitExcuse", () => {
       schoolDayCount: 2,
       lateDayCount: 0,
       onTimeDayCount: 2,
+      automaticallyApprovedDayCount: 0,
     });
   });
 
@@ -130,6 +131,32 @@ describe("submitExcuse", () => {
       schoolDayCount: 2,
       lateDayCount: 1,
       onTimeDayCount: 1,
+      automaticallyApprovedDayCount: 0,
+    });
+  });
+
+  it("does not leave late days pending for a child without lunches", async () => {
+    const formData = makeFormData();
+    formData.delete("childIds");
+    formData.append("childIds", "child-1");
+    formData.set("fromDate", "2026-08-19");
+    formData.set("toDate", "2026-08-19");
+    mocks.getSchoolDaysInRange.mockResolvedValue([new Date(2026, 7, 19)]);
+    mocks.createExcuse.mockResolvedValue({
+      ...makeExcuse("child-1"),
+      fromDate: new Date(2026, 7, 19),
+      toDate: new Date(2026, 7, 19),
+      submittedAt: new Date(2026, 7, 19, 12),
+      lateApprovedAt: new Date(2026, 7, 19, 12),
+    });
+
+    const result = await submitExcuse(formData);
+
+    expect(result.summary).toEqual({
+      schoolDayCount: 1,
+      lateDayCount: 0,
+      onTimeDayCount: 0,
+      automaticallyApprovedDayCount: 1,
     });
   });
 
@@ -169,6 +196,7 @@ describe("getParentChildren", () => {
           firstName: "Anna",
           lastName: "Novakova",
           gender: ChildGender.FEMALE,
+          doesNotTakeLunch: true,
           active: true,
           createdAt: new Date("2026-01-01"),
           updatedAt: new Date("2026-01-02"),
@@ -181,6 +209,7 @@ describe("getParentChildren", () => {
         id: "child-1",
         firstName: "Anna",
         gender: ChildGender.FEMALE,
+        doesNotTakeLunch: true,
       },
     ]);
   });

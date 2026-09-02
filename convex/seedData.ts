@@ -83,6 +83,7 @@ export const developmentSeed = {
       firstName: "Žofie",
       lastName: "Žížalka",
       gender: "FEMALE",
+      doesNotTakeLunch: false,
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -92,6 +93,7 @@ export const developmentSeed = {
       firstName: "Oskar",
       lastName: "Okurka",
       gender: "MALE",
+      doesNotTakeLunch: false,
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -101,6 +103,7 @@ export const developmentSeed = {
       firstName: "Božena",
       lastName: "Bublina",
       gender: "FEMALE",
+      doesNotTakeLunch: false,
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -110,6 +113,7 @@ export const developmentSeed = {
       firstName: "Max",
       lastName: "Mlsoun",
       gender: "MALE",
+      doesNotTakeLunch: false,
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -119,6 +123,7 @@ export const developmentSeed = {
       firstName: "Tobiáš",
       lastName: "Tornádo",
       gender: "MALE",
+      doesNotTakeLunch: false,
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -169,6 +174,7 @@ export const developmentSeed = {
     firstName: string;
     lastName: string;
     gender: "MALE" | "FEMALE";
+    doesNotTakeLunch: boolean;
     active: boolean;
     createdAt: number;
     updatedAt: number;

@@ -45,7 +45,11 @@ describe("createExcuse push notification", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    mocks.getChild.mockResolvedValue({ firstName: "Eliška", lastName: "Malá" });
+    mocks.getChild.mockResolvedValue({
+      firstName: "Eliška",
+      lastName: "Malá",
+      doesNotTakeLunch: false,
+    });
     mocks.getUser.mockResolvedValue({ name: "Petr Malý" });
     mocks.createAuditLog.mockResolvedValue(undefined);
     mocks.enqueueExcuse.mockResolvedValue(undefined);
@@ -81,5 +85,44 @@ describe("createExcuse push notification", () => {
         lateApprovedAt: expect.any(Date),
       }),
     });
+  });
+
+  it("automatically approves an excuse for a child without lunches", async () => {
+    mocks.createExcuseRecord.mockResolvedValue({
+      id: "excuse-1",
+      childId: "child-1",
+      fromDate: new Date(2026, 7, 24),
+      toDate: new Date(2026, 7, 25),
+      reason: "Nemoc",
+      submittedById: "parent-1",
+      submittedAt: new Date(),
+      lateApprovedAt: new Date(),
+      lateApprovedById: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    mocks.getChild.mockResolvedValue({
+      firstName: "Eliška",
+      lastName: "Malá",
+      doesNotTakeLunch: true,
+    });
+
+    await createExcuse(
+      "child-1",
+      new Date(2026, 7, 24),
+      new Date(2026, 7, 25),
+      "Nemoc",
+      "parent-1",
+    );
+
+    expect(mocks.createExcuseRecord).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        lateApprovedById: null,
+        lateApprovedAt: null,
+      }),
+    });
+    expect(mocks.sendSlack).toHaveBeenCalledWith(
+      expect.objectContaining({ automaticallyApproved: true }),
+    );
   });
 });
