@@ -64,6 +64,7 @@ type ExcuseWithChildAndSubmitter = Excuse & {
     readonly id: string;
     readonly firstName: string;
     readonly lastName: string;
+    readonly doesNotTakeLunch: boolean;
   };
   readonly submittedBy: {
     readonly id: string;
@@ -104,6 +105,11 @@ export type LunchOverview = {
     readonly lastName: string;
     readonly statuses: ReadonlyArray<LunchStatus | null>;
     readonly payableLunches: number;
+  }>;
+  readonly childrenWithoutLunch: ReadonlyArray<{
+    readonly id: string;
+    readonly firstName: string;
+    readonly lastName: string;
   }>;
 };
 
@@ -227,6 +233,12 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
       parentIds: child.parents.map(({ parent }) => parent.id),
     })),
   );
+  const childrenWithLunch = sortedChildren.filter(
+    (child) => !child.doesNotTakeLunch,
+  );
+  const childrenWithoutLunch = sortedChildren.filter(
+    (child) => child.doesNotTakeLunch,
+  );
   const attendanceByChildAndDate = new Map(
     attendance.map((record) => [
       `${record.childId}:${getLocalDateKey(record.date)}`,
@@ -248,7 +260,7 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
       year: "numeric",
     }).format(startOfMonth),
     days: days.map(({ key, day, weekday }) => ({ key, day, weekday })),
-    children: sortedChildren.map((child) => {
+    children: childrenWithLunch.map((child) => {
       const childExcuses = excusesByChild.get(child.id) ?? [];
       const statuses = days.map((day) =>
         getLunchStatus(
@@ -266,6 +278,11 @@ export async function getLunchOverview(month: string): Promise<LunchOverview> {
         payableLunches: statuses.filter(isPayableLunch).length,
       };
     }),
+    childrenWithoutLunch: childrenWithoutLunch.map((child) => ({
+      id: child.id,
+      firstName: child.firstName,
+      lastName: child.lastName,
+    })),
   };
 }
 
@@ -380,6 +397,7 @@ export async function getExcuses(options?: {
           id: true,
           firstName: true,
           lastName: true,
+          doesNotTakeLunch: true,
         },
       },
       submittedBy: {
@@ -512,6 +530,13 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
 
   if (!excuse) {
     throw new Error("Excuse not found");
+  }
+
+  if (!approveLate) {
+    const child = await db.children.get({ where: { id: excuse.childId } });
+    if (child?.doesNotTakeLunch) {
+      throw new Error("Omluvenky dítěte bez obědů se schvalují automaticky");
+    }
   }
 
   const lateApprovedAt = approveLate ? new Date() : null;
@@ -793,6 +818,7 @@ export type ChildWithParents = {
   firstName: string;
   lastName: string;
   gender: ChildGender | null;
+  doesNotTakeLunch: boolean;
   active: boolean;
   createdAt: Date;
   parents: Array<{
@@ -830,6 +856,7 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
     firstName: child.firstName,
     lastName: child.lastName,
     gender: child.gender,
+    doesNotTakeLunch: child.doesNotTakeLunch,
     active: child.active,
     createdAt: child.createdAt,
     parents: child.parents.map((pc) => ({
@@ -881,6 +908,7 @@ export async function createChild(
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       gender,
+      doesNotTakeLunch: false,
       active: true,
     },
   });
@@ -892,7 +920,12 @@ export async function createChild(
       action: AuditAction.CREATE,
       entityType: "Child",
       entityId: child.id,
-      newValue: { firstName: child.firstName, lastName: child.lastName, gender: child.gender },
+      newValue: {
+        firstName: child.firstName,
+        lastName: child.lastName,
+        gender: child.gender,
+        doesNotTakeLunch: child.doesNotTakeLunch,
+      },
     },
   });
 
@@ -909,7 +942,12 @@ export async function createChild(
  */
 export async function updateChild(
   childId: string,
-  data: { firstName?: string; lastName?: string; gender?: ChildGender }
+  data: {
+    firstName?: string;
+    lastName?: string;
+    gender?: ChildGender;
+    doesNotTakeLunch?: boolean;
+  },
 ) {
   const user = await requireDirector();
 
@@ -921,7 +959,12 @@ export async function updateChild(
     throw new Error("Dítě nebylo nalezeno");
   }
 
-  const updateData: { firstName?: string; lastName?: string; gender?: ChildGender } = {};
+  const updateData: {
+    firstName?: string;
+    lastName?: string;
+    gender?: ChildGender;
+    doesNotTakeLunch?: boolean;
+  } = {};
   if (data.firstName !== undefined) {
     if (!data.firstName.trim()) {
       throw new Error("Jméno je povinné");
@@ -940,6 +983,12 @@ export async function updateChild(
     }
     updateData.gender = data.gender;
   }
+  if (data.doesNotTakeLunch !== undefined) {
+    if (typeof data.doesNotTakeLunch !== "boolean") {
+      throw new Error("Neplatné nastavení obědů");
+    }
+    updateData.doesNotTakeLunch = data.doesNotTakeLunch;
+  }
 
   // Create audit log
   await db.auditLogs.create({
@@ -948,7 +997,12 @@ export async function updateChild(
       action: AuditAction.UPDATE,
       entityType: "Child",
       entityId: childId,
-      previousValue: { firstName: child.firstName, lastName: child.lastName, gender: child.gender },
+      previousValue: {
+        firstName: child.firstName,
+        lastName: child.lastName,
+        gender: child.gender,
+        doesNotTakeLunch: child.doesNotTakeLunch,
+      },
       newValue: updateData,
     },
   });
@@ -958,7 +1012,29 @@ export async function updateChild(
     data: updateData,
   });
 
+  if (data.doesNotTakeLunch === true) {
+    const existingExcuses = (await db.excuses.list({
+      where: { childId },
+    })) as ReadonlyArray<Excuse>;
+    const approvedAt = new Date();
+    await Promise.all(
+      existingExcuses
+        .filter((excuse) => excuse.lateApprovedAt === null)
+        .map((excuse) =>
+          db.excuses.update({
+            where: { id: excuse.id },
+            data: {
+              lateApprovedAt: approvedAt,
+              lateApprovedById: user.id,
+            },
+          }),
+        ),
+    );
+  }
+
   revalidatePath("/reditel/deti");
+  revalidatePath("/reditel");
+  revalidatePath("/reditel/omluvenky");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");

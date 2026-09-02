@@ -24,11 +24,13 @@ const children = [
     id: "child-1",
     firstName: "Anna",
     gender: "FEMALE",
+    doesNotTakeLunch: false,
   },
   {
     id: "child-2",
     firstName: "Jan",
     gender: "MALE",
+    doesNotTakeLunch: false,
   },
 ];
 
@@ -51,6 +53,7 @@ describe("NewExcusePage", () => {
         schoolDayCount: 1,
         lateDayCount: 0,
         onTimeDayCount: 1,
+        automaticallyApprovedDayCount: 0,
       },
     });
   });
@@ -122,6 +125,7 @@ describe("NewExcusePage", () => {
         schoolDayCount: 2,
         lateDayCount: 1,
         onTimeDayCount: 1,
+        automaticallyApprovedDayCount: 0,
       },
     });
     render(<NewExcusePage />);
@@ -135,5 +139,36 @@ describe("NewExcusePage", () => {
       await screen.findByText(/1 oběd bude odhlášen.*1 pozdně omluvený den/i),
     ).toBeTruthy();
     expect(screen.queryByText(/oběd nebude automaticky odhlášen/i)).toBeNull();
+  });
+
+  it("confirms automatic approval for a child without lunches", async () => {
+    mocks.getParentChildren.mockResolvedValueOnce([
+      { ...children[0], doesNotTakeLunch: true },
+    ]);
+    mocks.submitExcuse.mockResolvedValueOnce({
+      success: true,
+      excuses: [{ id: "excuse-1", childId: "child-1" }],
+      summary: {
+        schoolDayCount: 1,
+        lateDayCount: 0,
+        onTimeDayCount: 0,
+        automaticallyApprovedDayCount: 1,
+      },
+    });
+    render(<NewExcusePage />);
+
+    await screen.findByText("Nová omluvenka");
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-08-19" },
+    });
+    fireEvent.change(screen.getByLabelText("Do"), {
+      target: { value: "2026-08-19" },
+    });
+    expect(await screen.findByText("Dítě neodebírá obědy.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+
+    expect(
+      await screen.findByText(/1 den omluvenky byl automaticky schválen/),
+    ).toBeTruthy();
   });
 });

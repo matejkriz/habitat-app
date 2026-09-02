@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getDbUser: vi.fn(),
   childrenList: vi.fn(),
   childrenGet: vi.fn(),
+  childrenUpdate: vi.fn(),
   attendanceList: vi.fn(),
   noLunchDaysList: vi.fn(),
   excusesList: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock("@/lib/db", () => ({
     children: {
       list: mocks.childrenList,
       get: mocks.childrenGet,
+      update: mocks.childrenUpdate,
       count: vi.fn(),
     },
     attendance: { list: mocks.attendanceList },
@@ -52,6 +54,7 @@ import {
   getExcuseChildren,
   getExcuses,
   getLunchOverview,
+  updateChild,
   updateExcuse,
 } from "./director";
 
@@ -62,6 +65,7 @@ const tobias = {
   id: "tobias",
   firstName: "Tobiáš",
   lastName: "Tornádo",
+  doesNotTakeLunch: false,
   parents: [],
 };
 
@@ -139,6 +143,27 @@ describe("getLunchOverview", () => {
     expect(overview.children[0].statuses).toEqual(["no-lunch", "unexcused"]);
     expect(overview.children[0].payableLunches).toBe(1);
   });
+
+  it("keeps children without lunches out of the table and lists their names", async () => {
+    mocks.childrenList.mockResolvedValue([
+      tobias,
+      {
+        id: "anna",
+        firstName: "Anna",
+        lastName: "Malá",
+        doesNotTakeLunch: true,
+        parents: [],
+      },
+    ]);
+    mocks.excusesList.mockResolvedValue([]);
+
+    const overview = await getLunchOverview("2026-08");
+
+    expect(overview.children.map((child) => child.id)).toEqual(["tobias"]);
+    expect(overview.childrenWithoutLunch).toEqual([
+      { id: "anna", firstName: "Anna", lastName: "Malá" },
+    ]);
+  });
 });
 
 describe("updateExcuse", () => {
@@ -146,6 +171,7 @@ describe("updateExcuse", () => {
     vi.clearAllMocks();
     mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
     mocks.excusesGet.mockResolvedValue(spanningLate);
+    mocks.childrenGet.mockResolvedValue({ ...tobias, active: true });
     mocks.excusesUpdate.mockImplementation((args: { data: unknown }) =>
       Promise.resolve({ ...spanningLate, ...(args.data as object) }),
     );
@@ -166,6 +192,55 @@ describe("updateExcuse", () => {
     expect(mocks.excusesUpdate).toHaveBeenCalledWith({
       where: { id: "excuse-old" },
       data: { lateApprovedAt: null, lateApprovedById: null },
+    });
+  });
+
+  it("does not revoke automatic approval for a child without lunches", async () => {
+    mocks.childrenGet.mockResolvedValue({
+      ...tobias,
+      active: true,
+      doesNotTakeLunch: true,
+    });
+
+    await expect(updateExcuse("excuse-old", false)).rejects.toThrow(
+      "Omluvenky dítěte bez obědů se schvalují automaticky",
+    );
+    expect(mocks.excusesUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateChild", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
+    mocks.childrenGet.mockResolvedValue({
+      ...tobias,
+      gender: "MALE",
+      active: true,
+    });
+    mocks.childrenUpdate.mockImplementation(({ data }: { data: unknown }) =>
+      Promise.resolve({ ...tobias, ...(data as object) }),
+    );
+    mocks.excusesUpdate.mockResolvedValue(undefined);
+    mocks.auditLogsCreate.mockResolvedValue(undefined);
+  });
+
+  it("approves existing excuses when lunches are disabled", async () => {
+    mocks.excusesList.mockResolvedValue([spanningLate, approvedSingleDay]);
+
+    await updateChild("tobias", { doesNotTakeLunch: true });
+
+    expect(mocks.childrenUpdate).toHaveBeenCalledWith({
+      where: { id: "tobias" },
+      data: { doesNotTakeLunch: true },
+    });
+    expect(mocks.excusesUpdate).toHaveBeenCalledTimes(1);
+    expect(mocks.excusesUpdate).toHaveBeenCalledWith({
+      where: { id: "excuse-old" },
+      data: {
+        lateApprovedAt: expect.any(Date),
+        lateApprovedById: "director-1",
+      },
     });
   });
 });

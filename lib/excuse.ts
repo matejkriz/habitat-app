@@ -73,10 +73,21 @@ export async function createExcuse(
   const normalizedTo = new Date(toDate);
   normalizedTo.setHours(0, 0, 0, 0);
 
+  const childPromise = db.children.get({
+    where: { id: childId },
+    select: {
+      firstName: true,
+      lastName: true,
+    },
+  });
+  const parentPromise = db.users.get({
+    where: { id: submittedById },
+    select: { name: true },
+  });
   const lateApprovedAt = options?.approvedById ? new Date() : null;
 
-  // Director-created excuses are approved in the initial write. The caller is
-  // responsible for authorizing the approving user before reaching this layer.
+  // Director-created and no-lunch excuses are approved in the initial write.
+  // The caller authorizes an explicit approving user before reaching this layer.
   const excuse = await db.excuses.create({
     data: {
       childId,
@@ -88,6 +99,8 @@ export async function createExcuse(
       lateApprovedById: options?.approvedById ?? null,
     },
   });
+  const automaticallyApproved =
+    !options?.approvedById && excuse.lateApprovedAt !== null;
 
   // Attendance is untouched: whether these days count as excused is derived
   // from this record whenever it is read.
@@ -108,8 +121,9 @@ export async function createExcuse(
         toDate: normalizedTo.toISOString(),
         reason,
         isOnTime,
-        lateApprovedAt: lateApprovedAt?.toISOString() ?? null,
-        lateApprovedById: options?.approvedById ?? null,
+        automaticallyApproved,
+        lateApprovedAt: excuse.lateApprovedAt?.toISOString() ?? null,
+        lateApprovedById: excuse.lateApprovedById,
       },
     },
   });
@@ -123,17 +137,7 @@ export async function createExcuse(
   }
 
   // Send Slack notification (non-blocking)
-  // Fetch child and parent details for the notification
-  const [child, parent] = await Promise.all([
-    db.children.get({
-      where: { id: childId },
-      select: { firstName: true, lastName: true },
-    }),
-    db.users.get({
-      where: { id: submittedById },
-      select: { name: true },
-    }),
-  ]);
+  const [child, parent] = await Promise.all([childPromise, parentPromise]);
 
   if (child && parent) {
     // Fire and forget - don't block the response
@@ -144,6 +148,7 @@ export async function createExcuse(
       toDate: normalizedTo,
       reason,
       isOnTime,
+      automaticallyApproved,
     }).catch((error) => {
       console.error("Failed to send Slack notification:", error);
     });

@@ -40,6 +40,7 @@ interface Excuse {
     id: string;
     firstName: string;
     lastName: string;
+    doesNotTakeLunch: boolean;
   };
   submittedBy: {
     id: string;
@@ -361,7 +362,8 @@ export default function ExcuseManagementPage() {
                             Schválit
                           </Button>
                         )}
-                        {excuse.rangeState === "LATE_APPROVED" && (
+                        {excuse.rangeState === "LATE_APPROVED" &&
+                          !excuse.child.doesNotTakeLunch && (
                           <Button
                             variant="outline"
                             size="sm"

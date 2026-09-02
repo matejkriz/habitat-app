@@ -20,6 +20,7 @@ import {
   Input,
   Select,
   Badge,
+  Toggle,
 } from "@/components/ui";
 import type { ChildGender } from "@/lib/types";
 
@@ -46,6 +47,7 @@ export default function ChildrenManagementPage() {
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
   const [editGender, setEditGender] = useState<ChildGender | "">("");
+  const [editDoesNotTakeLunch, setEditDoesNotTakeLunch] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Assign parent modal
@@ -115,6 +117,7 @@ export default function ChildrenManagementPage() {
     setEditFirstName(child.firstName);
     setEditLastName(child.lastName);
     setEditGender(child.gender ?? "");
+    setEditDoesNotTakeLunch(child.doesNotTakeLunch);
   };
 
   const handleCancelEdit = () => {
@@ -122,6 +125,7 @@ export default function ChildrenManagementPage() {
     setEditFirstName("");
     setEditLastName("");
     setEditGender("");
+    setEditDoesNotTakeLunch(false);
   };
 
   const handleSaveEdit = async () => {
@@ -133,12 +137,19 @@ export default function ChildrenManagementPage() {
         firstName: editFirstName,
         lastName: editLastName,
         gender: editGender,
+        doesNotTakeLunch: editDoesNotTakeLunch,
       });
       setChildren((prev) =>
         prev
           .map((c) =>
             c.id === editingChildId
-              ? { ...c, firstName: editFirstName, lastName: editLastName, gender: editGender }
+              ? {
+                  ...c,
+                  firstName: editFirstName,
+                  lastName: editLastName,
+                  gender: editGender,
+                  doesNotTakeLunch: editDoesNotTakeLunch,
+                }
               : c
           )
           .sort((a, b) => {
@@ -365,9 +376,11 @@ export default function ChildrenManagementPage() {
                   editFirstName={editFirstName}
                   editLastName={editLastName}
                   editGender={editGender}
+                  editDoesNotTakeLunch={editDoesNotTakeLunch}
                   setEditFirstName={setEditFirstName}
                   setEditLastName={setEditLastName}
                   setEditGender={setEditGender}
+                  setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
                   isSavingEdit={isSavingEdit}
                   togglingId={togglingId}
                   removingParent={removingParent}
@@ -402,9 +415,11 @@ export default function ChildrenManagementPage() {
                   editFirstName={editFirstName}
                   editLastName={editLastName}
                   editGender={editGender}
+                  editDoesNotTakeLunch={editDoesNotTakeLunch}
                   setEditFirstName={setEditFirstName}
                   setEditLastName={setEditLastName}
                   setEditGender={setEditGender}
+                  setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
                   isSavingEdit={isSavingEdit}
                   togglingId={togglingId}
                   removingParent={removingParent}
@@ -496,9 +511,11 @@ interface ChildRowProps {
   editFirstName: string;
   editLastName: string;
   editGender: ChildGender | "";
+  editDoesNotTakeLunch: boolean;
   setEditFirstName: (value: string) => void;
   setEditLastName: (value: string) => void;
   setEditGender: (value: ChildGender | "") => void;
+  setEditDoesNotTakeLunch: (value: boolean) => void;
   isSavingEdit: boolean;
   togglingId: string | null;
   removingParent: { parentId: string; childId: string } | null;
@@ -517,9 +534,11 @@ function ChildRow({
   editFirstName,
   editLastName,
   editGender,
+  editDoesNotTakeLunch,
   setEditFirstName,
   setEditLastName,
   setEditGender,
+  setEditDoesNotTakeLunch,
   isSavingEdit,
   togglingId,
   removingParent,
@@ -542,44 +561,58 @@ function ChildRow({
       {/* Child info and actions */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         {isEditing ? (
-          <div className="flex-1 flex flex-col sm:flex-row gap-2">
-            <Input
-              value={editFirstName}
-              onChange={(e) => setEditFirstName(e.target.value)}
-              className="sm:w-40"
-              placeholder="Jméno"
-            />
-            <Input
-              value={editLastName}
-              onChange={(e) => setEditLastName(e.target.value)}
-              className="sm:w-40"
-              placeholder="Příjmení"
-            />
-            <Select
-              value={editGender}
-              onChange={(e) => setEditGender(e.target.value as ChildGender | "")}
-              options={[
-                { value: "", label: "-- Pohlaví --" },
-                { value: "FEMALE", label: "Dívka" },
-                { value: "MALE", label: "Chlapec" },
-              ]}
-              className="sm:w-36"
-              aria-label="Pohlaví"
-              required
-            />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={onSaveEdit} isLoading={isSavingEdit} disabled={!editGender}>
-                Uložit
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onCancelEdit}
-                disabled={isSavingEdit}
-              >
-                Zrušit
-              </Button>
+          <div className="flex-1 space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={editFirstName}
+                onChange={(e) => setEditFirstName(e.target.value)}
+                className="sm:w-40"
+                placeholder="Jméno"
+              />
+              <Input
+                value={editLastName}
+                onChange={(e) => setEditLastName(e.target.value)}
+                className="sm:w-40"
+                placeholder="Příjmení"
+              />
+              <Select
+                value={editGender}
+                onChange={(e) => setEditGender(e.target.value as ChildGender | "")}
+                options={[
+                  { value: "", label: "-- Pohlaví --" },
+                  { value: "FEMALE", label: "Dívka" },
+                  { value: "MALE", label: "Chlapec" },
+                ]}
+                className="sm:w-36"
+                aria-label="Pohlaví"
+                required
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={onSaveEdit}
+                  isLoading={isSavingEdit}
+                  disabled={!editGender}
+                >
+                  Uložit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onCancelEdit}
+                  disabled={isSavingEdit}
+                >
+                  Zrušit
+                </Button>
+              </div>
             </div>
+            <Toggle
+              label="Neodebírá obědy"
+              description="Omluvenky se schválí automaticky a dítě nebude v přehledu Obědy."
+              checked={editDoesNotTakeLunch}
+              onChange={(event) => setEditDoesNotTakeLunch(event.target.checked)}
+              disabled={isSavingEdit}
+            />
           </div>
         ) : (
           <div className="flex-1">
@@ -590,6 +623,11 @@ function ChildRow({
               {child.gender === null && (
                 <Badge variant="excused" className="text-xs">
                   Doplňte pohlaví
+                </Badge>
+              )}
+              {child.doesNotTakeLunch && (
+                <Badge variant="info" className="text-xs">
+                  Bez obědů
                 </Badge>
               )}
               {!child.active && (
@@ -603,7 +641,12 @@ function ChildRow({
 
         {!isEditing && (
           <div className="flex gap-2 flex-wrap">
-            <Button size="sm" variant="outline" onClick={onStartEdit}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onStartEdit}
+              aria-label={`Upravit ${child.firstName} ${child.lastName}`}
+            >
               <svg
                 className="w-4 h-4"
                 fill="none"

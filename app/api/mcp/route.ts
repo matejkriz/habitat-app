@@ -140,6 +140,7 @@ const handler = createMcpHandler(
             schoolDayCount: z.number().int().nonnegative(),
             lateDayCount: z.number().int().nonnegative(),
             onTimeDayCount: z.number().int().nonnegative(),
+            automaticallyApprovedDayCount: z.number().int().nonnegative(),
           }),
         }),
         annotations: {

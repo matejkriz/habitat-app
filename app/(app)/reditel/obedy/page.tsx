@@ -114,7 +114,9 @@ export default async function LunchesPage({
 
         {overview.children.length === 0 ? (
           <div className="px-6 py-20 text-center text-charcoal-light">
-            Nejsou evidované žádné aktivní děti.
+            {overview.childrenWithoutLunch.length > 0
+              ? "Všechny aktivní děti jsou vedené bez obědů."
+              : "Nejsou evidované žádné aktivní děti."}
           </div>
         ) : overview.days.length === 0 ? (
           <div className="px-6 py-20 text-center text-charcoal-light">
@@ -202,6 +204,15 @@ export default async function LunchesPage({
             </table>
           </div>
         )}
+
+        <div className="border-t border-cream-dark bg-[#fdfaf6] px-5 py-3 text-sm text-charcoal-light">
+          <span className="font-semibold text-charcoal">Děti bez obědů:</span>{" "}
+          {overview.childrenWithoutLunch.length > 0
+            ? overview.childrenWithoutLunch
+                .map((child) => `${child.firstName} ${child.lastName}`)
+                .join(", ")
+            : "žádné"}
+        </div>
       </Card>
     </div>
   );

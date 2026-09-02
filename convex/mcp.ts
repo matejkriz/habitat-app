@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import type { DataModel, Doc } from "./_generated/dataModel";
 import { requireServerSecret } from "./serverSecret";
 import {
   buildMcpRecordId,
@@ -85,6 +85,7 @@ export const createParentExcuses = mutation({
         childId: v.string(),
         fromDate: v.number(),
         toDate: v.number(),
+        lateApprovedAt: v.union(v.number(), v.null()),
       }),
     ),
   }),
@@ -107,6 +108,17 @@ export const createParentExcuses = mutation({
         existing.childIds.length === childIds.length &&
         existing.childIds.every((childId, index) => childId === childIds[index]);
       if (!sameRequest) throw new Error("MCP idempotency conflict");
+      const storedExcuses = await Promise.all(
+        existing.excuseIds.map((id) =>
+          ctx.db
+            .query("excuses")
+            .withIndex("by_app_id", (q) => q.eq("id", id))
+            .unique(),
+        ),
+      );
+      if (storedExcuses.some((excuse) => !excuse)) {
+        throw new Error("MCP idempotency record is incomplete");
+      }
       return {
         replayed: true,
         submittedAt: existing.createdAt,
@@ -115,6 +127,7 @@ export const createParentExcuses = mutation({
           childId: existing.childIds[index],
           fromDate: existing.fromDate,
           toDate: existing.toDate,
+          lateApprovedAt: storedExcuses[index]?.lateApprovedAt ?? null,
         })),
       };
     }
@@ -129,6 +142,7 @@ export const createParentExcuses = mutation({
       throw new Error("MCP write rate limit exceeded");
     }
 
+    const childrenById = new Map<string, Doc<"children">>();
     for (const childId of childIds) {
       const [link, child] = await Promise.all([
         ctx.db
@@ -143,12 +157,16 @@ export const createParentExcuses = mutation({
           .unique(),
       ]);
       if (!link || !child?.active) throw new Error("MCP child access denied");
+      childrenById.set(childId, child);
     }
 
     const submittedAt = Date.now();
     const excuseIds: string[] = [];
     for (const [index, childId] of childIds.entries()) {
       const excuseId = buildMcpRecordId("excuse", args.requestId, index);
+      const automaticallyApproved =
+        childrenById.get(childId)?.doesNotTakeLunch ?? false;
+      const lateApprovedAt = automaticallyApproved ? submittedAt : null;
       excuseIds.push(excuseId);
       await ctx.db.insert("excuses", {
         id: excuseId,
@@ -158,7 +176,7 @@ export const createParentExcuses = mutation({
         reason: args.reason,
         submittedById: parent.id,
         submittedAt,
-        lateApprovedAt: null,
+        lateApprovedAt,
         lateApprovedById: null,
         createdAt: submittedAt,
         updatedAt: submittedAt,
@@ -175,6 +193,7 @@ export const createParentExcuses = mutation({
           fromDate: new Date(args.fromDate).toISOString(),
           toDate: new Date(args.toDate).toISOString(),
           reason: args.reason,
+          automaticallyApproved,
         },
         createdAt: submittedAt,
       });
@@ -205,6 +224,10 @@ export const createParentExcuses = mutation({
         childId: childIds[index],
         fromDate: args.fromDate,
         toDate: args.toDate,
+        lateApprovedAt:
+          childrenById.get(childIds[index])?.doesNotTakeLunch
+            ? submittedAt
+            : null,
       })),
     };
   },

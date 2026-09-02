@@ -10,6 +10,7 @@ export interface ExcuseNotificationData {
   toDate: Date;
   reason: string | null;
   isOnTime: boolean; // true = "včas", false = "pozdní"
+  automaticallyApproved?: boolean;
 }
 
 /**
@@ -27,10 +28,22 @@ function formatDateCzech(date: Date): string {
  * Build Slack message blocks for excuse notification
  */
 function buildExcuseMessage(data: ExcuseNotificationData) {
-  const { childName, parentName, fromDate, toDate, reason, isOnTime } = data;
+  const {
+    childName,
+    parentName,
+    fromDate,
+    toDate,
+    reason,
+    isOnTime,
+    automaticallyApproved,
+  } = data;
 
-  const statusEmoji = isOnTime ? "✅" : "⚠️";
-  const statusText = isOnTime ? "včas" : "pozdní";
+  const statusEmoji = isOnTime || automaticallyApproved ? "✅" : "⚠️";
+  const statusText = automaticallyApproved
+    ? "automaticky schválená (bez obědů)"
+    : isOnTime
+      ? "včas"
+      : "pozdní";
 
   const fromDateStr = formatDateCzech(fromDate);
   const toDateStr = formatDateCzech(toDate);

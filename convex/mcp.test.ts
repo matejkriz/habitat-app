@@ -18,7 +18,10 @@ describe("MCP parent excuse mutation", () => {
   beforeEach(() => vi.stubEnv("PUSH_INTERNAL_SECRET", "test-server-secret"));
   afterEach(() => vi.unstubAllEnvs());
 
-  const seed = async (linkedChildIds: ReadonlyArray<string>) => {
+  const seed = async (
+    linkedChildIds: ReadonlyArray<string>,
+    childrenWithoutLunch: ReadonlyArray<string> = [],
+  ) => {
     const t = convexTest(schema, modules);
     await t.run(async ({ db }) => {
       const now = Date.now();
@@ -35,6 +38,7 @@ describe("MCP parent excuse mutation", () => {
           firstName: childId === "child-1" ? "Anna" : "Berta",
           lastName: "Testovací",
           gender: "FEMALE",
+          doesNotTakeLunch: childrenWithoutLunch.includes(childId),
           active: true,
           createdAt: now,
           updatedAt: now,
@@ -79,6 +83,19 @@ describe("MCP parent excuse mutation", () => {
       expect(await db.query("excuses").collect()).toHaveLength(0);
       expect(await db.query("auditLogs").collect()).toHaveLength(0);
       expect(await db.query("mcpExcuseRequests").collect()).toHaveLength(0);
+    });
+  });
+
+  it("automatically approves excuses for children without lunches", async () => {
+    const t = await seed(["child-1"], ["child-1"]);
+
+    const result = await t.mutation(api.mcp.createParentExcuses, request);
+
+    expect(result.excuses[0].lateApprovedAt).toBe(result.submittedAt);
+    await t.run(async ({ db }) => {
+      const [excuse] = await db.query("excuses").collect();
+      expect(excuse.lateApprovedAt).toBe(result.submittedAt);
+      expect(excuse.lateApprovedById).toBeNull();
     });
   });
 
