@@ -389,15 +389,7 @@ export default function NewExcusePage() {
               <ul className="text-sm text-charcoal-light space-y-1">
                 <li className="flex items-start gap-2">
                   <span className="text-gold">•</span>
-                  Pro automatické schválení odešlete omluvenku nejpozději do 9:00 den před absencí
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gold">•</span>
-                  Pozdě odeslané omluvenky jsou zaznamenány, ale Bětka je musí dodatečně schválit
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gold">•</span>
-                  Dětem bez obědů se omluvenky schvalují automaticky
+                  Pro automatické odhlášení oběda odešlete omluvenku nejpozději do 9:00 den před absencí
                 </li>
               </ul>
             </div>
