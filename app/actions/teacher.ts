@@ -30,6 +30,7 @@ type AttendanceRecord = {
 type DailyExcuse = {
   readonly childId: string;
   readonly state: ExcuseDayState;
+  readonly lunchCancelled: boolean;
 };
 
 type DailyAttendance = {
@@ -110,10 +111,15 @@ export const getAttendanceForDate = async (
       presence: a.presence,
       excuseStatus: getExcuseStatusForDay(a.presence, coverageFor(a.childId)),
     })),
-    excuses: [...excusesByChild.keys()].map((childId) => ({
-      childId,
-      state: getExcuseDayState(excusesByChild.get(childId) ?? [], date)!,
-    })),
+    excuses: [...excusesByChild.keys()].map((childId) => {
+      const childExcuses = excusesByChild.get(childId) ?? [];
+      const coverage = getDayCoverage(childExcuses, date);
+      return {
+        childId,
+        state: getExcuseDayState(childExcuses, date)!,
+        lunchCancelled: coverage.lunchCancelled,
+      };
+    }),
     noLunch: noLunchDay !== null,
     canManageLunch: user.role === UserRole.DIRECTOR,
   };

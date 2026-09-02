@@ -58,6 +58,7 @@ export async function createExcuse(
   schoolDays?: ReadonlyArray<Date>,
   options?: {
     readonly approvedById?: string;
+    readonly cancelLunch?: boolean;
   },
 ): Promise<Excuse> {
   // Validate dates
@@ -85,8 +86,10 @@ export async function createExcuse(
     select: { name: true },
   });
   const lateApprovedAt = options?.approvedById ? new Date() : null;
+  const cancelLunch = options?.cancelLunch ?? true;
 
-  // Director-created and no-lunch excuses are approved in the initial write.
+  // Director-created, no-lunch, and lunch-preserving excuses are approved in
+  // the initial write.
   // The caller authorizes an explicit approving user before reaching this layer.
   const excuse = await db.excuses.create({
     data: {
@@ -94,6 +97,7 @@ export async function createExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason,
+      cancelLunch,
       submittedById,
       lateApprovedAt,
       lateApprovedById: options?.approvedById ?? null,
@@ -120,6 +124,7 @@ export async function createExcuse(
         fromDate: normalizedFrom.toISOString(),
         toDate: normalizedTo.toISOString(),
         reason,
+        cancelLunch: excuse.cancelLunch,
         isOnTime,
         automaticallyApproved,
         lateApprovedAt: excuse.lateApprovedAt?.toISOString() ?? null,
@@ -147,6 +152,7 @@ export async function createExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason,
+      cancelLunch: excuse.cancelLunch,
       isOnTime,
       automaticallyApproved,
     }).catch((error) => {

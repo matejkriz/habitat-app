@@ -9,6 +9,7 @@ export interface ExcuseNotificationData {
   fromDate: Date;
   toDate: Date;
   reason: string | null;
+  cancelLunch?: boolean;
   isOnTime: boolean; // true = "včas", false = "pozdní"
   automaticallyApproved?: boolean;
 }
@@ -34,13 +35,16 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
     fromDate,
     toDate,
     reason,
+    cancelLunch = true,
     isOnTime,
     automaticallyApproved,
   } = data;
 
   const statusEmoji = isOnTime || automaticallyApproved ? "✅" : "⚠️";
   const statusText = automaticallyApproved
-    ? "automaticky schválená (bez obědů)"
+    ? cancelLunch
+      ? "automaticky schválená (bez obědů)"
+      : "bez nutnosti schválení (oběd ponechán)"
     : isOnTime
       ? "včas"
       : "pozdní";

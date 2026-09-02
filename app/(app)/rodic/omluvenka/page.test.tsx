@@ -50,6 +50,7 @@ describe("NewExcusePage", () => {
         },
       ],
       summary: {
+        cancelLunch: true,
         schoolDayCount: 1,
         lateDayCount: 0,
         onTimeDayCount: 1,
@@ -101,6 +102,7 @@ describe("NewExcusePage", () => {
     await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalled());
     const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
     expect(formData.getAll("childIds")).toEqual(["child-2"]);
+    expect(formData.get("cancelLunch")).toBe("true");
   });
 
   it("can submit the excuse for both children", async () => {
@@ -122,6 +124,7 @@ describe("NewExcusePage", () => {
       success: true,
       excuses: [{ id: "excuse-1", childId: "child-1" }],
       summary: {
+        cancelLunch: true,
         schoolDayCount: 2,
         lateDayCount: 1,
         onTimeDayCount: 1,
@@ -149,6 +152,7 @@ describe("NewExcusePage", () => {
       success: true,
       excuses: [{ id: "excuse-1", childId: "child-1" }],
       summary: {
+        cancelLunch: true,
         schoolDayCount: 1,
         lateDayCount: 0,
         onTimeDayCount: 0,
@@ -169,6 +173,47 @@ describe("NewExcusePage", () => {
 
     expect(
       await screen.findByText(/1 den omluvenky byl automaticky schválen/),
+    ).toBeTruthy();
+  });
+
+  it("lets the parent keep lunch without sending the excuse for review", async () => {
+    mocks.submitExcuse.mockResolvedValueOnce({
+      success: true,
+      excuses: [{ id: "excuse-1", childId: "child-1" }],
+      summary: {
+        cancelLunch: false,
+        schoolDayCount: 1,
+        lateDayCount: 0,
+        onTimeDayCount: 0,
+        automaticallyApprovedDayCount: 1,
+      },
+    });
+    render(<NewExcusePage />);
+
+    await screen.findByRole("checkbox", { name: "Anna" });
+    const lunchToggle = screen.getByRole("switch");
+    expect((lunchToggle as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(lunchToggle);
+    expect(
+      screen.getByText(
+        "Oběd zůstane přihlášený a omluvenku není potřeba schvalovat.",
+      ),
+    ).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-09-10" },
+    });
+    fireEvent.change(screen.getByLabelText("Do"), {
+      target: { value: "2026-09-10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+
+    await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalledOnce());
+    const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
+    expect(formData.get("cancelLunch")).toBe("false");
+    expect(
+      await screen.findByText(
+        "Omluvenku není potřeba schvalovat. Oběd nebude odhlášen.",
+      ),
     ).toBeTruthy();
   });
 });

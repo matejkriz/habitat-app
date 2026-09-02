@@ -74,6 +74,7 @@ type RawExcuse = {
   readonly fromDate: number;
   readonly toDate: number;
   readonly reason?: string | null;
+  readonly cancelLunch?: boolean;
   readonly submittedById: string;
   readonly submittedAt: number;
   readonly autoApproved?: boolean;
@@ -294,6 +295,7 @@ const fromRawExcuse = (raw: RawExcuse): Excuse => {
     fromDate: new Date(raw.fromDate),
     toDate: new Date(raw.toDate),
     reason: raw.reason ?? null,
+    cancelLunch: raw.cancelLunch ?? true,
     submittedById: raw.submittedById,
     submittedAt: new Date(raw.submittedAt),
     lateApprovedAt,
@@ -1010,6 +1012,7 @@ export const db: any = {
         fromDate: toTimestamp(data.fromDate),
         toDate: toTimestamp(data.toDate),
         reason: data.reason == null ? null : String(data.reason),
+        cancelLunch: data.cancelLunch !== false,
         submittedById: String(data.submittedById),
         submittedAt: data.submittedAt ? toTimestamp(data.submittedAt) : now,
         lateApprovedAt:

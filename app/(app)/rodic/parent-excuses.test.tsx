@@ -14,6 +14,7 @@ const excuse = {
   fromDate: new Date(2024, 0, 2),
   toDate: new Date(2024, 0, 3),
   reason: "Nemoc",
+  cancelLunch: true,
   submittedAt: new Date(2024, 0, 1),
 };
 
@@ -46,6 +47,12 @@ describe("ParentExcuses", () => {
 
     expect(screen.queryByText("Včas")).toBeNull();
     expect(screen.queryByText("Pozdě")).toBeNull();
+  });
+
+  it("shows when the lunch remains ordered", () => {
+    render(<ParentExcuses excuses={[{ ...excuse, cancelLunch: false }]} />);
+
+    expect(screen.getByText("Oběd zůstává přihlášený")).toBeTruthy();
   });
 
   it("saves changes through the parent action", async () => {

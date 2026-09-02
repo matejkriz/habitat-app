@@ -40,6 +40,7 @@ import {
   type ExcuseRangeState,
 } from "@/lib/excuse-coverage";
 import { parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
+import { parseCancelLunchChoice } from "@/lib/excuse-input";
 
 // Type for audit log with included user relation
 export type AuditLogWithUser = AuditLog & {
@@ -461,6 +462,15 @@ export async function createDirectorExcuse(
   const fromDateValue = formData.get("fromDate");
   const toDateValue = formData.get("toDate");
   const reasonValue = formData.get("reason");
+  let cancelLunch: boolean;
+  try {
+    cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Neplatná volba oběda.",
+    };
+  }
 
   if (
     typeof childId !== "string" ||
@@ -506,7 +516,7 @@ export async function createDirectorExcuse(
     reason,
     user.id,
     schoolDays,
-    { approvedById: user.id },
+    { approvedById: user.id, cancelLunch },
   );
 
   revalidatePath("/reditel/omluvenky");
@@ -533,6 +543,9 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
   }
 
   if (!approveLate) {
+    if (!excuse.cancelLunch) {
+      throw new Error("Omluvenku bez odhlášení oběda není potřeba schvalovat");
+    }
     const child = await db.children.get({ where: { id: excuse.childId } });
     if (child?.doesNotTakeLunch) {
       throw new Error("Omluvenky dítěte bez obědů se schvalují automaticky");

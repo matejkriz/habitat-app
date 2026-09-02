@@ -30,6 +30,8 @@ export type CoveringExcuse = {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason?: string | null;
+  /** Missing on legacy records means that lunch cancellation was requested. */
+  readonly cancelLunch?: boolean;
   readonly submittedAt: Date;
   readonly lateApprovedAt: Date | null;
 };
@@ -39,6 +41,8 @@ export type DayCoverage = {
   readonly covered: boolean;
   /** The absence counts as excused: on time for this day, or approved by the director. */
   readonly excused: boolean;
+  /** At least one effective covering excuse also cancels lunch for this day. */
+  readonly lunchCancelled: boolean;
   /** The excuse that best explains the day, for showing its reason. */
   readonly excuse: CoveringExcuse | null;
 };
@@ -46,6 +50,7 @@ export type DayCoverage = {
 export const NO_COVERAGE: DayCoverage = {
   covered: false,
   excused: false,
+  lunchCancelled: false,
   excuse: null,
 };
 
@@ -96,11 +101,15 @@ export function getDayCoverage(
   if (covering.length === 0) return NO_COVERAGE;
 
   const excusing = covering.filter((excuse) => excusesDay(excuse, day));
+  const lunchCancelling = excusing.filter(
+    (excuse) => excuse.cancelLunch !== false,
+  );
   const relevant = excusing.length > 0 ? excusing : covering;
 
   return {
     covered: true,
     excused: excusing.length > 0,
+    lunchCancelled: lunchCancelling.length > 0,
     excuse: [...relevant].sort(bySubmission)[0],
   };
 }

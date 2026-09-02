@@ -24,6 +24,7 @@ import {
   Badge,
   Input,
   Select,
+  Toggle,
   Textarea,
 } from "@/components/ui";
 import type { ExcuseRangeState } from "@/lib/excuse-coverage";
@@ -34,6 +35,7 @@ interface Excuse {
   fromDate: Date;
   toDate: Date;
   reason: string | null;
+  cancelLunch: boolean;
   rangeState: ExcuseRangeState;
   submittedAt: Date;
   child: {
@@ -70,6 +72,7 @@ export default function ExcuseManagementPage() {
   const [createError, setCreateError] = useState("");
   const [createFromDate, setCreateFromDate] = useState("");
   const [createToDate, setCreateToDate] = useState("");
+  const [createCancelLunch, setCreateCancelLunch] = useState(true);
   const [notice, setNotice] = useState("");
 
   const loadExcuses = useCallback(async (showLoading = true) => {
@@ -139,7 +142,9 @@ export default function ExcuseManagementPage() {
     setIsCreating(true);
 
     try {
-      const result = await createDirectorExcuse(new FormData(event.currentTarget));
+      const formData = new FormData(event.currentTarget);
+      formData.set("cancelLunch", String(createCancelLunch));
+      const result = await createDirectorExcuse(formData);
       if (!result.success) {
         setCreateError(result.error);
         return;
@@ -149,7 +154,12 @@ export default function ExcuseManagementPage() {
       setShowCreateForm(false);
       setCreateFromDate("");
       setCreateToDate("");
-      setNotice("Omluvenka byla uložena a rovnou schválena.");
+      setCreateCancelLunch(true);
+      setNotice(
+        createCancelLunch
+          ? "Omluvenka byla uložena a rovnou schválena."
+          : "Omluvenka byla uložena. Oběd nebude odhlášen.",
+      );
     } catch (error) {
       setCreateError(
         error instanceof Error ? error.message : "Omluvenku se nepodařilo uložit.",
@@ -174,6 +184,7 @@ export default function ExcuseManagementPage() {
               setCreateError("");
               setCreateFromDate("");
               setCreateToDate("");
+              setCreateCancelLunch(true);
               setNotice("");
               setShowCreateForm(true);
             }}
@@ -267,6 +278,22 @@ export default function ExcuseManagementPage() {
                 placeholder="Např. nemoc, rodinné důvody…"
                 rows={3}
               />
+              <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
+                <Toggle
+                  id="director-cancel-lunch"
+                  role="switch"
+                  checked={createCancelLunch}
+                  onChange={(event) =>
+                    setCreateCancelLunch(event.target.checked)
+                  }
+                  label="Odhlásit oběd"
+                  description={
+                    createCancelLunch
+                      ? "Oběd bude odhlášen."
+                      : "Oběd zůstane přihlášený."
+                  }
+                />
+              </div>
             </CardContent>
             <CardFooter className="justify-end gap-3">
               <Button
@@ -277,6 +304,7 @@ export default function ExcuseManagementPage() {
                   setCreateError("");
                   setCreateFromDate("");
                   setCreateToDate("");
+                  setCreateCancelLunch(true);
                 }}
                 disabled={isCreating}
               >
@@ -331,7 +359,10 @@ export default function ExcuseManagementPage() {
                           {excuse.child.firstName} {excuse.child.lastName}
                         </h3>
                         <Badge variant={rangeStateBadge[excuse.rangeState].variant}>
-                          {rangeStateBadge[excuse.rangeState].label}
+                          {!excuse.cancelLunch &&
+                          excuse.rangeState === "LATE_APPROVED"
+                            ? "Bez schválení"
+                            : rangeStateBadge[excuse.rangeState].label}
                         </Badge>
                       </div>
                       <p className="text-sm text-charcoal-light">
@@ -344,6 +375,14 @@ export default function ExcuseManagementPage() {
                           {excuse.reason}
                         </p>
                       )}
+                      <p className="text-sm text-charcoal-light">
+                        <span className="font-medium">Požadavek na oběd:</span>{" "}
+                        {excuse.child.doesNotTakeLunch
+                          ? "dítě obědy neodebírá"
+                          : excuse.cancelLunch
+                            ? "odhlásit"
+                            : "ponechat přihlášený"}
+                      </p>
                       <p className="text-xs text-charcoal-light">
                         Odesláno: {formatDate(excuse.submittedAt)} •{" "}
                         {excuse.submittedBy.name || excuse.submittedBy.email}
@@ -363,7 +402,8 @@ export default function ExcuseManagementPage() {
                           </Button>
                         )}
                         {excuse.rangeState === "LATE_APPROVED" &&
-                          !excuse.child.doesNotTakeLunch && (
+                          !excuse.child.doesNotTakeLunch &&
+                          excuse.cancelLunch && (
                           <Button
                             variant="outline"
                             size="sm"

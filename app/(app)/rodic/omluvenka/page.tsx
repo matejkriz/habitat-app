@@ -10,6 +10,7 @@ import {
   CardFooter,
   Button,
   Input,
+  Toggle,
   Textarea,
 } from "@/components/ui";
 import {
@@ -21,6 +22,7 @@ import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
 
 type SubmissionSummary = {
   readonly count: number;
+  readonly cancelLunch: boolean;
   readonly schoolDayCount: number;
   readonly lateDayCount: number;
   readonly onTimeDayCount: number;
@@ -67,6 +69,7 @@ export default function NewExcusePage() {
   const [fromDate, setFromDate] = useState(preselectedDate);
   const [toDate, setToDate] = useState(preselectedDate);
   const [reason, setReason] = useState("");
+  const [cancelLunch, setCancelLunch] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<SubmissionSummary | null>(null);
@@ -81,6 +84,7 @@ export default function NewExcusePage() {
   const allSelectedChildrenDoNotTakeLunch =
     selectedChildren.length > 0 &&
     selectedChildren.every((child) => child.doesNotTakeLunch);
+  const shouldCancelLunch = allSelectedChildrenDoNotTakeLunch || cancelLunch;
 
   useEffect(() => {
     async function loadChildren() {
@@ -131,6 +135,10 @@ export default function NewExcusePage() {
       selectedChildIds.forEach((childId) => formData.append("childIds", childId));
       formData.set("fromDate", fromDate);
       formData.set("toDate", toDate || fromDate);
+      formData.set(
+        "cancelLunch",
+        String(shouldCancelLunch),
+      );
       if (reason) formData.set("reason", reason);
 
       const result = await submitExcuse(formData);
@@ -189,6 +197,12 @@ export default function NewExcusePage() {
                 </div>
                 {success.schoolDayCount === 0 ? (
                   <p>V zadaném období nejsou žádné školní dny.</p>
+                ) : !success.cancelLunch ? (
+                  <p>
+                    {success.count > 1
+                      ? "Omluvenky není potřeba schvalovat. Obědy nebudou odhlášeny."
+                      : "Omluvenku není potřeba schvalovat. Oběd nebude odhlášen."}
+                  </p>
                 ) : success.automaticallyApprovedDayCount ===
                   success.schoolDayCount ? (
                   <p>
@@ -311,20 +325,37 @@ export default function NewExcusePage() {
               rows={3}
             />
 
+            {!allSelectedChildrenDoNotTakeLunch ? (
+              <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
+                <Toggle
+                  id="cancel-lunch"
+                  role="switch"
+                  checked={cancelLunch}
+                  onChange={(event) => setCancelLunch(event.target.checked)}
+                  label="Odhlásit oběd"
+                  description={
+                    cancelLunch
+                      ? "Oběd se odhlásí podle běžných pravidel."
+                      : "Oběd zůstane přihlášený a omluvenku není potřeba schvalovat."
+                  }
+                />
+              </div>
+            ) : null}
+
             {/* Auto-approval info */}
             {fromDate && (
               <div className={`p-4 rounded-lg ${
-                willAutoApprove || allSelectedChildrenDoNotTakeLunch
+                !shouldCancelLunch || willAutoApprove || allSelectedChildrenDoNotTakeLunch
                   ? "bg-sage/10 border border-sage/20"
                   : "bg-gold/10 border border-gold/20"
               }`}>
                 <div className="flex items-start gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    willAutoApprove || allSelectedChildrenDoNotTakeLunch
+                    !shouldCancelLunch || willAutoApprove || allSelectedChildrenDoNotTakeLunch
                       ? "bg-sage/20"
                       : "bg-gold/20"
                   }`}>
-                    {willAutoApprove || allSelectedChildrenDoNotTakeLunch ? (
+                    {!shouldCancelLunch || willAutoApprove || allSelectedChildrenDoNotTakeLunch ? (
                       <svg className="w-4 h-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
@@ -335,7 +366,16 @@ export default function NewExcusePage() {
                     )}
                   </div>
                   <div>
-                    {allSelectedChildrenDoNotTakeLunch ? (
+                    {!shouldCancelLunch ? (
+                      <>
+                        <p className="font-semibold text-sage-dark">
+                          Oběd nebude odhlášen
+                        </p>
+                        <p className="text-sm text-charcoal-light mt-1">
+                          Omluvenku není potřeba schvalovat. Oběd zůstane přihlášený.
+                        </p>
+                      </>
+                    ) : allSelectedChildrenDoNotTakeLunch ? (
                       <>
                         <p className="font-semibold text-sage-dark">
                           Omluvenka bude automaticky schválena

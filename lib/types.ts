@@ -82,9 +82,11 @@ export type Excuse = {
   fromDate: Date;
   toDate: Date;
   reason: string | null;
+  /** Whether an excused absence should also cancel the child's lunch. */
+  cancelLunch: boolean;
   submittedById: string;
   submittedAt: Date;
-  /** Set when a late submission is approved, including automatic approval. */
+  /** Set when a late submission is approved or needs no review. */
   lateApprovedAt: Date | null;
   lateApprovedById: string | null;
   createdAt: Date;

@@ -25,9 +25,15 @@ const lateExcuse = {
   fromDate: new Date(2026, 7, 19),
   toDate: new Date(2026, 7, 20),
   reason: "Nemoc",
+  cancelLunch: true,
   rangeState: "LATE" as const,
   submittedAt: new Date(2026, 7, 18, 10),
-  child: { id: "child-1", firstName: "Tobiáš", lastName: "Tornádo" },
+  child: {
+    id: "child-1",
+    firstName: "Tobiáš",
+    lastName: "Tornádo",
+    doesNotTakeLunch: false,
+  },
   submittedBy: { id: "parent-1", name: "Rodič", email: null },
 };
 
@@ -85,8 +91,50 @@ describe("ExcuseManagementPage", () => {
       fromDate: "2026-08-19",
       toDate: "2026-08-20",
       reason: "Nemoc",
+      cancelLunch: "true",
     });
     await waitFor(() => expect(mocks.getExcuses).toHaveBeenCalledTimes(2));
+  });
+
+  it("passes the choice to keep lunch to the server action", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    mocks.createDirectorExcuse.mockResolvedValue({ success: true });
+    render(<ExcuseManagementPage />);
+
+    await screen.findByText("Žádné omluvenky");
+    fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
+    fireEvent.change(screen.getByLabelText("Dítě"), {
+      target: { value: "child-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-08-19" },
+    });
+    fireEvent.click(screen.getByRole("switch"));
+    fireEvent.click(screen.getByRole("button", { name: "Uložit omluvenku" }));
+
+    await waitFor(() => expect(mocks.createDirectorExcuse).toHaveBeenCalledOnce());
+    const formData = mocks.createDirectorExcuse.mock.calls[0][0] as FormData;
+    expect(formData.get("cancelLunch")).toBe("false");
+    expect(
+      await screen.findByText("Omluvenka byla uložena. Oběd nebude odhlášen."),
+    ).toBeTruthy();
+  });
+
+  it("does not describe a lunch-preserving excuse as director-approved", async () => {
+    mocks.getExcuses.mockResolvedValue([
+      {
+        ...lateExcuse,
+        cancelLunch: false,
+        rangeState: "LATE_APPROVED",
+      },
+    ]);
+    render(<ExcuseManagementPage />);
+
+    expect(await screen.findByText("Bez schválení")).toBeTruthy();
+    expect(screen.getByText(/ponechat přihlášený/)).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Zrušit schválení" }),
+    ).toBeNull();
   });
 
   it("copies the start date into an empty or earlier end date", async () => {

@@ -22,6 +22,7 @@ import {
   getExcusesOverlapping,
   updateExcuse as updateExcuseRecord,
 } from "@/lib/excuse";
+import { parseCancelLunchChoice } from "@/lib/excuse-input";
 import {
   getDayCoverage,
   getExcuseStatusForDay,
@@ -65,6 +66,7 @@ type ChildExcuseItem = {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason: string | null;
+  readonly cancelLunch: boolean;
   readonly submittedAt: Date;
 };
 
@@ -242,6 +244,7 @@ export const getChildExcuses = async (
     fromDate: e.fromDate,
     toDate: e.toDate,
     reason: e.reason,
+    cancelLunch: e.cancelLunch,
     submittedAt: e.submittedAt,
   }));
 };
@@ -303,6 +306,7 @@ export const submitExcuse = async (formData: FormData) => {
   const fromDateStr = formData.get("fromDate");
   const toDateStr = formData.get("toDate");
   const reasonValue = formData.get("reason");
+  const cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
 
   if (
     typeof fromDateStr !== "string" ||
@@ -327,7 +331,9 @@ export const submitExcuse = async (formData: FormData) => {
 
   const excuses = await Promise.all(
     childIds.map((childId) =>
-      createExcuse(childId, fromDate, toDate, reason, user.id, schoolDays),
+      createExcuse(childId, fromDate, toDate, reason, user.id, schoolDays, {
+        cancelLunch,
+      }),
     ),
   );
   const automaticallyApprovedDayCount = excuses.reduce(
@@ -356,6 +362,7 @@ export const submitExcuse = async (formData: FormData) => {
       toDate: excuse.toDate,
     })),
     summary: {
+      cancelLunch,
       schoolDayCount,
       lateDayCount,
       onTimeDayCount:

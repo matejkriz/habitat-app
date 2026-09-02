@@ -5,6 +5,7 @@ export const LunchStatus = {
   NO_LUNCH: "no-lunch",
   PRESENT: "present",
   EXCUSED: "excused",
+  KEPT: "kept",
   LATE: "late",
   UNEXCUSED: "unexcused",
 } as const;
@@ -34,9 +35,11 @@ export function getLunchStatus(
     return LunchStatus.PRESENT;
   }
 
-  if (coverage.excused) {
+  if (coverage.lunchCancelled) {
     return LunchStatus.EXCUSED;
   }
+
+  if (coverage.excused) return LunchStatus.KEPT;
 
   return coverage.covered ? LunchStatus.LATE : LunchStatus.UNEXCUSED;
 }
@@ -44,6 +47,7 @@ export function getLunchStatus(
 export function isPayableLunch(status: LunchStatus | null): boolean {
   return (
     status === LunchStatus.PRESENT ||
+    status === LunchStatus.KEPT ||
     status === LunchStatus.LATE ||
     status === LunchStatus.UNEXCUSED
   );

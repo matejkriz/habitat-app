@@ -143,6 +143,28 @@ describe("TeacherAttendancePage", () => {
     expect(screen.queryByText("Omluveno včas")).toBeNull();
   });
 
+  it("shows that a late excuse needed no approval when lunch was kept", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [
+        {
+          childId: "child-1",
+          state: "LATE_APPROVED",
+          lunchCancelled: false,
+        },
+      ],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    expect(await screen.findByText("Pozdě – oběd ponechán")).toBeTruthy();
+    expect(screen.queryByText("Pozdě – schváleno")).toBeNull();
+  });
+
   it("prefills excused children as absent unless attendance was already saved", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },

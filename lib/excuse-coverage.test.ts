@@ -183,6 +183,29 @@ describe("lunch consequences", () => {
     );
   });
 
+  it("excuses the absence but keeps the lunch payable when cancellation was declined", () => {
+    const lunchKept = excuse({
+      id: "excuse-lunch-kept",
+      fromDate: AUG(19),
+      toDate: AUG(19),
+      cancelLunch: false,
+      submittedAt: AUG(19, 14),
+      lateApprovedAt: AUG(19, 14),
+    });
+    const coverage = getDayCoverage([lunchKept], AUG(19));
+
+    expect(coverage).toMatchObject({
+      covered: true,
+      excused: true,
+      lunchCancelled: false,
+    });
+    expect(getLunchStatus(absent, coverage)).toBe(LunchStatus.KEPT);
+    expect(isPayableLunch(getLunchStatus(absent, coverage))).toBe(true);
+    expect(getExcuseStatusForDay(Presence.ABSENT, coverage)).toBe(
+      ExcuseStatus.EXCUSED,
+    );
+  });
+
   it("still charges for a day that is only covered by a late excuse", () => {
     const coverage = getDayCoverage([stillLate, approved], AUG(19));
 

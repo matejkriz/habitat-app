@@ -33,6 +33,7 @@ describe("database excuse creation", () => {
         fromDate: now,
         toDate: now,
         reason: null,
+        cancelLunch: false,
         submittedById: "parent-1",
         submittedAt: now,
         lateApprovedAt: null,
@@ -43,10 +44,50 @@ describe("database excuse creation", () => {
     });
 
     expect(excuse.lateApprovedAt).toEqual(expect.any(Number));
+    expect(excuse.cancelLunch).toBe(true);
     await t.run(async ({ db }) => {
       const [stored] = await db.query("excuses").collect();
       expect(stored.lateApprovedAt).toBe(excuse.lateApprovedAt);
       expect(stored.lateApprovedById).toBeNull();
     });
+  });
+
+  it("atomically approves an excuse that keeps the lunch", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await t.run(async ({ db }) => {
+      await db.insert("children", {
+        id: "child-1",
+        firstName: "Anna",
+        lastName: "Malá",
+        gender: "FEMALE",
+        doesNotTakeLunch: false,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+
+    const excuse = await t.mutation(api.db.createExcuse, {
+      secret: "test-server-secret",
+      value: {
+        id: "excuse-1",
+        childId: "child-1",
+        fromDate: now,
+        toDate: now,
+        reason: null,
+        cancelLunch: false,
+        submittedById: "parent-1",
+        submittedAt: now,
+        lateApprovedAt: null,
+        lateApprovedById: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+
+    expect(excuse.cancelLunch).toBe(false);
+    expect(excuse.lateApprovedAt).toEqual(expect.any(Number));
+    expect(excuse.lateApprovedById).toBeNull();
   });
 });
