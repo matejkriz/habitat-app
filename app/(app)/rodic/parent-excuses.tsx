@@ -16,6 +16,7 @@ type ParentExcuse = {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason: string | null;
+  readonly cancelLunch: boolean;
   readonly submittedAt: Date;
 };
 
@@ -59,6 +60,11 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
               <p className="text-sm text-charcoal-light">
                 {excuse.reason || "Bez uvedeného důvodu"}
               </p>
+              {!excuse.cancelLunch ? (
+                <p className="text-xs font-medium text-charcoal-light">
+                  Oběd zůstává přihlášený
+                </p>
+              ) : null}
             </div>
             <ExcuseEditor excuse={excuse} onSave={handleSave} onDelete={handleDelete} />
           </div>

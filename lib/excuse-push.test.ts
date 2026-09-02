@@ -38,6 +38,7 @@ describe("createExcuse push notification", () => {
       fromDate: new Date(2026, 7, 24),
       toDate: new Date(2026, 7, 25),
       reason: "Nemoc",
+      cancelLunch: true,
       submittedById: "parent-1",
       submittedAt: new Date(),
       lateApprovedAt: null,
@@ -94,6 +95,7 @@ describe("createExcuse push notification", () => {
       fromDate: new Date(2026, 7, 24),
       toDate: new Date(2026, 7, 25),
       reason: "Nemoc",
+      cancelLunch: true,
       submittedById: "parent-1",
       submittedAt: new Date(),
       lateApprovedAt: new Date(),
@@ -123,6 +125,43 @@ describe("createExcuse push notification", () => {
     });
     expect(mocks.sendSlack).toHaveBeenCalledWith(
       expect.objectContaining({ automaticallyApproved: true }),
+    );
+  });
+
+  it("marks an excuse that keeps lunch as automatically approved", async () => {
+    mocks.createExcuseRecord.mockResolvedValue({
+      id: "excuse-1",
+      childId: "child-1",
+      fromDate: new Date(2026, 7, 24),
+      toDate: new Date(2026, 7, 25),
+      reason: "Nemoc",
+      cancelLunch: false,
+      submittedById: "parent-1",
+      submittedAt: new Date(),
+      lateApprovedAt: new Date(),
+      lateApprovedById: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await createExcuse(
+      "child-1",
+      new Date(2026, 7, 24),
+      new Date(2026, 7, 25),
+      "Nemoc",
+      "parent-1",
+      undefined,
+      { cancelLunch: false },
+    );
+
+    expect(mocks.createExcuseRecord).toHaveBeenCalledWith({
+      data: expect.objectContaining({ cancelLunch: false }),
+    });
+    expect(mocks.sendSlack).toHaveBeenCalledWith(
+      expect.objectContaining({
+        automaticallyApproved: true,
+        cancelLunch: false,
+      }),
     );
   });
 });

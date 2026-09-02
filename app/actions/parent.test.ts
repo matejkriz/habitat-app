@@ -42,6 +42,7 @@ const makeExcuse = (childId: string): Excuse => ({
   fromDate: new Date(2026, 8, 10),
   toDate: new Date(2026, 8, 10),
   reason: "Nemoc",
+  cancelLunch: true,
   submittedById: "parent-1",
   submittedAt: new Date(2026, 8, 1),
   lateApprovedAt: null,
@@ -95,12 +96,14 @@ describe("submitExcuse", () => {
       "Nemoc",
       "parent-1",
       [new Date(2026, 8, 10)],
+      { cancelLunch: true },
     );
     expect(result.excuses.map((excuse) => excuse.childId)).toEqual([
       "child-1",
       "child-2",
     ]);
     expect(result.summary).toEqual({
+      cancelLunch: true,
       schoolDayCount: 2,
       lateDayCount: 0,
       onTimeDayCount: 2,
@@ -128,6 +131,7 @@ describe("submitExcuse", () => {
     const result = await submitExcuse(formData);
 
     expect(result.summary).toEqual({
+      cancelLunch: true,
       schoolDayCount: 2,
       lateDayCount: 1,
       onTimeDayCount: 1,
@@ -153,11 +157,53 @@ describe("submitExcuse", () => {
     const result = await submitExcuse(formData);
 
     expect(result.summary).toEqual({
+      cancelLunch: true,
       schoolDayCount: 1,
       lateDayCount: 0,
       onTimeDayCount: 0,
       automaticallyApprovedDayCount: 1,
     });
+  });
+
+  it("keeps lunch and requires no review when the parent declines cancellation", async () => {
+    const formData = makeFormData();
+    formData.delete("childIds");
+    formData.append("childIds", "child-1");
+    formData.set("cancelLunch", "false");
+    mocks.createExcuse.mockResolvedValue({
+      ...makeExcuse("child-1"),
+      cancelLunch: false,
+      lateApprovedAt: new Date(2026, 8, 1),
+    });
+
+    const result = await submitExcuse(formData);
+
+    expect(mocks.createExcuse).toHaveBeenCalledWith(
+      "child-1",
+      new Date(2026, 8, 10),
+      new Date(2026, 8, 10),
+      "Nemoc",
+      "parent-1",
+      [new Date(2026, 8, 10)],
+      { cancelLunch: false },
+    );
+    expect(result.summary).toEqual({
+      cancelLunch: false,
+      schoolDayCount: 1,
+      lateDayCount: 0,
+      onTimeDayCount: 0,
+      automaticallyApprovedDayCount: 1,
+    });
+  });
+
+  it("rejects an invalid lunch choice before creating anything", async () => {
+    const formData = makeFormData();
+    formData.set("cancelLunch", "on");
+
+    await expect(submitExcuse(formData)).rejects.toThrow(
+      "Neplatná volba pro odhlášení oběda.",
+    );
+    expect(mocks.createExcuse).not.toHaveBeenCalled();
   });
 
   it("creates nothing when the parent lacks access to one selected child", async () => {

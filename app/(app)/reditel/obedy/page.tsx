@@ -14,6 +14,7 @@ const statusStyles: Record<LunchStatusValue, string> = {
   [LunchStatus.NO_LUNCH]: "bg-[#b8b8b3]",
   [LunchStatus.PRESENT]: "bg-[#7fa173]",
   [LunchStatus.EXCUSED]: "bg-[#70a3bf]",
+  [LunchStatus.KEPT]: "bg-[#9b87b8]",
   [LunchStatus.LATE]: "bg-[#e69a4a]",
   [LunchStatus.UNEXCUSED]: "bg-[#d9655c]",
 };
@@ -22,6 +23,7 @@ const statusLabels: Record<LunchStatusValue, string> = {
   [LunchStatus.NO_LUNCH]: "Oběd se nepodával",
   [LunchStatus.PRESENT]: "Přišel/a",
   [LunchStatus.EXCUSED]: "Včas omluven/a",
+  [LunchStatus.KEPT]: "Omluven/a, oběd neodhlášen",
   [LunchStatus.LATE]: "Pozdě omluven/a",
   [LunchStatus.UNEXCUSED]: "Neomluven/a",
 };

@@ -76,6 +76,7 @@ const spanningLate = {
   fromDate: AUG(19),
   toDate: AUG(26),
   reason: "Dovolená",
+  cancelLunch: true,
   submittedById: "parent-1",
   submittedAt: AUG(19, 14),
   lateApprovedAt: null,
@@ -89,6 +90,7 @@ const approvedSingleDay = {
   fromDate: AUG(20),
   toDate: AUG(20),
   reason: "Nemoc",
+  cancelLunch: true,
   submittedById: "parent-1",
   submittedAt: AUG(20, 8),
   lateApprovedAt: AUG(20, 12),
@@ -131,6 +133,23 @@ describe("getLunchOverview", () => {
     const overview = await getLunchOverview("2026-08");
 
     expect(overview.children[0].statuses).toEqual(["late", "late"]);
+    expect(overview.children[0].payableLunches).toBe(2);
+  });
+
+  it("keeps an explicitly retained lunch payable without leaving the absence pending", async () => {
+    mocks.excusesList.mockResolvedValue([
+      {
+        ...approvedSingleDay,
+        fromDate: AUG(19),
+        toDate: AUG(19),
+        cancelLunch: false,
+        lateApprovedById: null,
+      },
+    ]);
+
+    const overview = await getLunchOverview("2026-08");
+
+    expect(overview.children[0].statuses).toEqual(["kept", "unexcused"]);
     expect(overview.children[0].payableLunches).toBe(2);
   });
 
@@ -205,6 +224,20 @@ describe("updateExcuse", () => {
     await expect(updateExcuse("excuse-old", false)).rejects.toThrow(
       "Omluvenky dítěte bez obědů se schvalují automaticky",
     );
+    expect(mocks.excusesUpdate).not.toHaveBeenCalled();
+  });
+
+  it("does not revoke approval when the lunch was intentionally kept", async () => {
+    mocks.excusesGet.mockResolvedValue({
+      ...spanningLate,
+      cancelLunch: false,
+      lateApprovedAt: AUG(19, 14),
+    });
+
+    await expect(updateExcuse("excuse-old", false)).rejects.toThrow(
+      "Omluvenku bez odhlášení oběda není potřeba schvalovat",
+    );
+    expect(mocks.childrenGet).not.toHaveBeenCalled();
     expect(mocks.excusesUpdate).not.toHaveBeenCalled();
   });
 });
@@ -335,10 +368,41 @@ describe("createDirectorExcuse", () => {
         childId: "tobias",
         submittedById: "director-1",
         reason: "Nemoc",
+        cancelLunch: true,
         lateApprovedById: "director-1",
         lateApprovedAt: expect.any(Date),
       }),
     });
+  });
+
+  it("stores the director's choice to keep lunch", async () => {
+    const formData = new FormData();
+    formData.set("childId", "tobias");
+    formData.set("fromDate", "2026-08-19");
+    formData.set("toDate", "2026-08-19");
+    formData.set("cancelLunch", "false");
+
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: true,
+    });
+    expect(mocks.excusesCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ cancelLunch: false }),
+    });
+  });
+
+  it("rejects an invalid lunch choice safely", async () => {
+    const formData = new FormData();
+    formData.set("childId", "tobias");
+    formData.set("fromDate", "2026-08-19");
+    formData.set("toDate", "2026-08-19");
+    formData.set("cancelLunch", "on");
+
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: false,
+      error: "Neplatná volba pro odhlášení oběda.",
+    });
+    expect(mocks.childrenGet).not.toHaveBeenCalled();
+    expect(mocks.excusesCreate).not.toHaveBeenCalled();
   });
 
   it("creates nothing for a missing or inactive child", async () => {

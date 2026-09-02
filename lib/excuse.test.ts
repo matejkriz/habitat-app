@@ -42,6 +42,7 @@ const currentExcuse: Excuse = {
   fromDate: new Date("2024-01-01T00:00:00"),
   toDate: new Date("2024-01-03T00:00:00"),
   reason: "Nemoc",
+  cancelLunch: true,
   submittedById: "parent-1",
   submittedAt: new Date("2023-12-30T08:00:00"),
   lateApprovedAt: null,

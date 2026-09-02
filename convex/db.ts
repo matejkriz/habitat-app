@@ -20,6 +20,7 @@ const excuseValue = v.object({
   fromDate: v.number(),
   toDate: v.number(),
   reason: v.union(v.string(), v.null()),
+  cancelLunch: v.boolean(),
   submittedById: v.string(),
   submittedAt: v.number(),
   lateApprovedAt: v.union(v.number(), v.null()),
@@ -139,10 +140,13 @@ export const createExcuse = mutation({
       .unique();
     if (!child) throw new Error("Child not found");
 
+    const cancelLunch = child.doesNotTakeLunch ? true : value.cancelLunch;
     const excuse = {
       ...value,
+      cancelLunch,
       lateApprovedAt:
-        value.lateApprovedAt == null && child.doesNotTakeLunch
+        value.lateApprovedAt == null &&
+        (child.doesNotTakeLunch || !cancelLunch)
           ? Date.now()
           : value.lateApprovedAt,
     };

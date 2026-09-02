@@ -106,6 +106,30 @@ describe("getAttendanceForDate", () => {
     });
   });
 
+  it("reports when a late excused absence keeps the lunch", async () => {
+    mocks.excusesList.mockResolvedValue([
+      {
+        id: "excuse-lunch-kept",
+        childId: "child-1",
+        fromDate: new Date(2026, 7, 19),
+        toDate: new Date(2026, 7, 19),
+        cancelLunch: false,
+        submittedAt: new Date(2026, 7, 19, 14),
+        lateApprovedAt: new Date(2026, 7, 19, 14),
+      },
+    ]);
+
+    await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({
+      excuses: [
+        {
+          childId: "child-1",
+          state: "LATE_APPROVED",
+          lunchCancelled: false,
+        },
+      ],
+    });
+  });
+
   it("returns whether the director can manage a day without lunch", async () => {
     mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
     mocks.excusesList.mockResolvedValue([]);

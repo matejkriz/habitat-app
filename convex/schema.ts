@@ -78,6 +78,8 @@ export default defineSchema({
     fromDate: v.number(),
     toDate: v.number(),
     reason: v.optional(v.union(v.string(), v.null())),
+    // Optional during rollout; legacy excuses keep cancelling lunches.
+    cancelLunch: v.optional(v.boolean()),
     submittedById: v.string(),
     submittedAt: v.number(),
     // Retained until legacy documents have been migrated. For old records,

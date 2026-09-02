@@ -9,9 +9,13 @@ import {
   sortChildrenWithSiblings,
 } from "./lunches";
 
-const coverage = (excused: boolean): DayCoverage => ({
+const coverage = (
+  excused: boolean,
+  lunchCancelled = excused,
+): DayCoverage => ({
   covered: true,
   excused,
+  lunchCancelled,
   excuse: null,
 });
 
@@ -34,6 +38,16 @@ describe("lunch overview", () => {
   it("leaves a day without attendance unmarked and unpaid", () => {
     expect(getLunchStatus(undefined, NO_COVERAGE)).toBeNull();
     expect(isPayableLunch(null)).toBe(false);
+  });
+
+  it("charges for an excused absence when the parent keeps the lunch", () => {
+    const status = getLunchStatus(
+      { presence: Presence.ABSENT },
+      coverage(true, false),
+    );
+
+    expect(status).toBe(LunchStatus.KEPT);
+    expect(isPayableLunch(status)).toBe(true);
   });
 
   it("marks a day without lunch gray and never charges it", () => {

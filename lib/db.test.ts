@@ -49,6 +49,18 @@ describe("legacy excuse rollout", () => {
     const [excuse] = await db.excuses.list();
 
     expect(excuse.lateApprovedAt).toEqual(new Date(legacyExcuse.updatedAt));
+    expect(excuse.cancelLunch).toBe(true);
+  });
+
+  it("preserves an explicit choice to keep lunch", async () => {
+    mocks.query
+      .mockResolvedValueOnce([{ ...legacyExcuse, cancelLunch: false }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const [excuse] = await db.excuses.list();
+
+    expect(excuse.cancelLunch).toBe(false);
   });
 
   it("honors an explicit revoked approval instead of falling back", async () => {
