@@ -90,6 +90,37 @@ describe("database excuse creation", () => {
     expect(excuse.lateApprovedAt).toEqual(expect.any(Number));
     expect(excuse.lateApprovedById).toBeNull();
   });
+
+  it("accepts legacy partial-day excuses after the feature rollback", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+
+    const storedDayPart = await t.run(async ({ db }) => {
+      const excuseId = await db.insert(
+        "excuses",
+        {
+          id: "legacy-partial-day-excuse",
+          childId: "seed-child-tobias",
+          fromDate: now,
+          toDate: now,
+          reason: null,
+          dayPart: "MORNING",
+          cancelLunch: true,
+          submittedById: "seed-user-parent-vera",
+          submittedAt: now,
+          lateApprovedAt: null,
+          lateApprovedById: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      );
+      const stored = await db.get(excuseId);
+
+      return stored?.dayPart;
+    });
+
+    expect(storedDayPart).toBe("MORNING");
+  });
 });
 
 describe("indexed startup queries", () => {
