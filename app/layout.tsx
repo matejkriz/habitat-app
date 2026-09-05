@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito, Geist_Mono } from "next/font/google";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
+import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -51,6 +52,7 @@ export default function RootLayout({
         className={`${nunito.variable} ${geistMono.variable} antialiased min-h-screen bg-cream`}
       >
         <AuthKitProvider>
+          <ServiceWorkerRegistration />
           {children}
         </AuthKitProvider>
       </body>

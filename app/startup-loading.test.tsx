@@ -41,4 +41,10 @@ describe("application startup loading state", () => {
 
     expect(layout).toContain('style={{ backgroundColor: "#FDF8F3" }}');
   });
+
+  it("registers the offline worker from the root layout", () => {
+    const layout = readFileSync("app/layout.tsx", "utf8");
+
+    expect(layout).toContain("<ServiceWorkerRegistration />");
+  });
 });

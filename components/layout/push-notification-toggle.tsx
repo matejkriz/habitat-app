@@ -6,8 +6,7 @@ import {
   unregisterDirectorPushSubscription,
 } from "@/app/actions/push-notifications";
 import { Toggle } from "@/components/ui";
-
-const SERVICE_WORKER_READY_TIMEOUT_MS = 10_000;
+import { getActiveHabitatServiceWorker } from "@/lib/service-worker";
 
 function urlBase64ToUint8Array(value: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
@@ -29,32 +28,6 @@ function isPushSupported(): boolean {
   );
 }
 
-async function getPushServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
-  const existing = await navigator.serviceWorker.getRegistration("/");
-  if (existing?.active) return existing;
-
-  const registered = await navigator.serviceWorker.register("/sw.js", {
-    scope: "/",
-    updateViaCache: "none",
-  });
-  if (registered.active) return registered;
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      navigator.serviceWorker.ready,
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error("Notifikace se nepodařilo připravit")),
-          SERVICE_WORKER_READY_TIMEOUT_MS
-        );
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-}
-
 export function PushNotificationToggle() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isBusy, setIsBusy] = useState(true);
@@ -72,7 +45,7 @@ export function PushNotificationToggle() {
       };
     }
 
-    void getPushServiceWorkerRegistration()
+    void getActiveHabitatServiceWorker()
       .then((registration) => registration.pushManager.getSubscription())
       .then(async (subscription) => {
         if (!active) return;
@@ -114,7 +87,7 @@ export function PushNotificationToggle() {
       return;
     }
 
-    const registration = await getPushServiceWorkerRegistration();
+    const registration = await getActiveHabitatServiceWorker();
     const existing = await registration.pushManager.getSubscription();
     const subscription =
       existing ??
@@ -139,7 +112,7 @@ export function PushNotificationToggle() {
   };
 
   const disable = async () => {
-    const registration = await getPushServiceWorkerRegistration();
+    const registration = await getActiveHabitatServiceWorker();
     const subscription = await registration.pushManager.getSubscription();
     if (subscription) {
       await unregisterDirectorPushSubscription(subscription.endpoint);
