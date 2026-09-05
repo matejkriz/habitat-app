@@ -203,6 +203,7 @@ const roleLabels: Record<UserRole, string> = {
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const navItems = roleNavItems[user.role];
+  const visiblePathname = pathname === "/" ? navItems[0].href : pathname;
   const { signOut } = useAuth();
   const [navigationState, setNavigationState] = useState<NavigationState>({
     pathname,
@@ -212,7 +213,7 @@ export function AppShell({ children, user }: AppShellProps) {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const pendingHref =
     navigationState.pathname === pathname ? navigationState.pendingHref : null;
-  const selectedHref = pendingHref ?? pathname;
+  const selectedHref = pendingHref ?? visiblePathname;
 
   if (navigationState.pathname !== pathname) {
     setNavigationState({ pathname, pendingHref: null });
@@ -275,7 +276,7 @@ export function AppShell({ children, user }: AppShellProps) {
                   key={item.href}
                   href={item.href}
                   prefetch
-                  aria-current={pathname === item.href ? "page" : undefined}
+                  aria-current={visiblePathname === item.href ? "page" : undefined}
                   aria-busy={pendingHref === item.href || undefined}
                   onNavigate={() => startNavigation(item.href)}
                   className={cn(
@@ -375,7 +376,7 @@ export function AppShell({ children, user }: AppShellProps) {
               key={item.href}
               href={item.href}
               prefetch
-              aria-current={pathname === item.href ? "page" : undefined}
+              aria-current={visiblePathname === item.href ? "page" : undefined}
               aria-busy={pendingHref === item.href || undefined}
               onNavigate={() => startNavigation(item.href)}
               className={cn(

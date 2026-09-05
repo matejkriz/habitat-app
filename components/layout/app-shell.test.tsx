@@ -3,9 +3,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AppShell } from "./app-shell";
 
 const signOut = vi.fn();
+const navigation = vi.hoisted(() => ({ pathname: "/reditel" }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/reditel",
+  usePathname: () => navigation.pathname,
 }));
 
 vi.mock("@/lib/workos-client", () => ({
@@ -60,6 +61,7 @@ const director = {
 afterEach(() => {
   cleanup();
   signOut.mockClear();
+  navigation.pathname = "/reditel";
 });
 
 describe("AppShell", () => {
@@ -180,5 +182,20 @@ describe("AppShell", () => {
     fireEvent.click(overviewLink);
 
     expect(overviewLink.getAttribute("aria-busy")).toBeNull();
+  });
+
+  it("marks the role's primary destination active while the URL is root", () => {
+    navigation.pathname = "/";
+    render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    const overviewLink = screen.getAllByRole("link", { name: "Přehled" }).at(-1);
+    if (!overviewLink) throw new Error("Chybí odkaz na přehled");
+
+    expect(overviewLink.getAttribute("aria-current")).toBe("page");
+    expect(overviewLink.className).toContain("text-gold");
   });
 });
