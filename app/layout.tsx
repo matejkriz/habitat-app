@@ -45,8 +45,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="cs">
+    <html lang="cs" style={{ backgroundColor: "#FDF8F3" }}>
       <body
+        style={{ backgroundColor: "#FDF8F3" }}
         className={`${nunito.variable} ${geistMono.variable} antialiased min-h-screen bg-cream`}
       >
         <AuthKitProvider>
