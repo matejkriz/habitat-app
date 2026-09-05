@@ -92,10 +92,10 @@ export default function NewExcusePage() {
   const allSelectedChildrenDoNotTakeLunch =
     selectedChildren.length > 0 &&
     selectedChildren.every((child) => child.doesNotTakeLunch);
-  const shouldCancelLunch =
-    dayPart === ExcuseDayPart.AFTERNOON
-      ? false
-      : allSelectedChildrenDoNotTakeLunch || cancelLunch;
+  const hasMultipleDays = Boolean(
+    fromDate && toDate && fromDate !== toDate,
+  );
+  const shouldCancelLunch = allSelectedChildrenDoNotTakeLunch || cancelLunch;
 
   useEffect(() => {
     async function loadChildren() {
@@ -146,11 +146,11 @@ export default function NewExcusePage() {
       selectedChildIds.forEach((childId) => formData.append("childIds", childId));
       formData.set("fromDate", fromDate);
       formData.set("toDate", toDate || fromDate);
-      formData.set("dayPart", dayPart);
       formData.set(
-        "cancelLunch",
-        String(shouldCancelLunch),
+        "dayPart",
+        hasMultipleDays ? ExcuseDayPart.FULL_DAY : dayPart,
       );
+      formData.set("cancelLunch", String(shouldCancelLunch));
       if (reason) formData.set("reason", reason);
 
       const result = await submitExcuse(formData);
@@ -312,9 +312,19 @@ export default function NewExcusePage() {
               type="date"
               value={fromDate}
               onChange={(e) => {
-                setFromDate(e.target.value);
-                if (!toDate || e.target.value > toDate) {
-                  setToDate(e.target.value);
+                const nextFromDate = e.target.value;
+                const nextToDate =
+                  !toDate || nextFromDate > toDate ? nextFromDate : toDate;
+                setFromDate(nextFromDate);
+                if (nextToDate !== toDate) {
+                  setToDate(nextToDate);
+                }
+                if (
+                  nextFromDate &&
+                  nextToDate &&
+                  nextFromDate !== nextToDate
+                ) {
+                  setDayPart(ExcuseDayPart.FULL_DAY);
                 }
               }}
               required
@@ -324,48 +334,56 @@ export default function NewExcusePage() {
               label="Do"
               type="date"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => {
+                const nextToDate = e.target.value;
+                setToDate(nextToDate);
+                if (fromDate && nextToDate && fromDate !== nextToDate) {
+                  setDayPart(ExcuseDayPart.FULL_DAY);
+                }
+              }}
               min={fromDate}
               required
             />
 
-            <Select
-              label="Dítě bude chybět"
-              value={dayPart}
-              onChange={(event) =>
-                setDayPart(event.target.value as ExcuseDayPartValue)
-              }
-              options={[
-                { value: ExcuseDayPart.FULL_DAY, label: "Celý den" },
-                { value: ExcuseDayPart.MORNING, label: "Jen dopoledne" },
-                { value: ExcuseDayPart.AFTERNOON, label: "Jen odpoledne" },
-              ]}
-            />
-
-            {dayPart === ExcuseDayPart.MORNING ? (
-              <p className="text-sm text-charcoal-light">
-                Dítě bude chybět dopoledne a přijde až odpoledne. Volba platí pro
-                všechny zadané dny.
-              </p>
-            ) : dayPart === ExcuseDayPart.AFTERNOON ? (
-              <div className="rounded-lg border border-sage/20 bg-sage/10 px-4 py-3 text-sm">
-                <p className="text-charcoal-light">
-                  Dítě bude ve škole dopoledne, odpoledne bude chybět.
-                </p>
-                <p className="mt-1 font-semibold text-sage-dark">
-                  {allSelectedChildrenDoNotTakeLunch
-                    ? selectedChildren.length > 1
-                      ? "Vybrané děti neodebírají obědy."
-                      : "Dítě neodebírá obědy."
-                    : "Oběd zůstává přihlášený."}
-                </p>
-                {fromDate !== toDate ? (
-                  <p className="mt-1 text-xs text-charcoal-light">
-                    Volba platí pro všechny zadané dny.
-                  </p>
-                ) : null}
-              </div>
+            {!hasMultipleDays ? (
+              <Select
+                label="Dítě bude chybět"
+                value={dayPart}
+                onChange={(event) =>
+                  setDayPart(event.target.value as ExcuseDayPartValue)
+                }
+                options={[
+                  { value: ExcuseDayPart.FULL_DAY, label: "Celý den" },
+                  { value: ExcuseDayPart.MORNING, label: "Jen dopoledne" },
+                  { value: ExcuseDayPart.AFTERNOON, label: "Jen odpoledne" },
+                ]}
+              />
             ) : null}
+
+            {!hasMultipleDays && dayPart === ExcuseDayPart.MORNING ? (
+              <p className="text-sm text-charcoal-light">
+                Dítě bude chybět dopoledne a přijde až odpoledne.
+              </p>
+            ) : !hasMultipleDays && dayPart === ExcuseDayPart.AFTERNOON ? (
+              <p className="text-sm text-charcoal-light">
+                Dítě bude ve škole dopoledne, odpoledne bude chybět.
+              </p>
+            ) : null}
+
+            <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
+              <Toggle
+                id="cancel-lunch"
+                role="switch"
+                checked={cancelLunch}
+                onChange={(event) => setCancelLunch(event.target.checked)}
+                label="Odhlásit oběd"
+                description={
+                  cancelLunch
+                    ? "Oběd se odhlásí podle běžných pravidel."
+                    : "Oběd zůstane přihlášený a omluvenku není potřeba schvalovat."
+                }
+              />
+            </div>
 
             <Textarea
               label="Důvod (volitelné)"
@@ -374,24 +392,6 @@ export default function NewExcusePage() {
               placeholder="Např. nemoc, rodinné důvody..."
               rows={3}
             />
-
-            {!allSelectedChildrenDoNotTakeLunch &&
-            dayPart !== ExcuseDayPart.AFTERNOON ? (
-              <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
-                <Toggle
-                  id="cancel-lunch"
-                  role="switch"
-                  checked={cancelLunch}
-                  onChange={(event) => setCancelLunch(event.target.checked)}
-                  label="Odhlásit oběd"
-                  description={
-                    cancelLunch
-                      ? "Oběd se odhlásí podle běžných pravidel."
-                      : "Oběd zůstane přihlášený a omluvenku není potřeba schvalovat."
-                  }
-                />
-              </div>
-            ) : null}
 
             {/* Auto-approval info */}
             {fromDate && (

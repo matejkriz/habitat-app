@@ -197,7 +197,7 @@ describe("submitExcuse", () => {
     });
   });
 
-  it("stores an afternoon absence and keeps its lunch", async () => {
+  it("stores an afternoon absence with the requested lunch cancellation", async () => {
     const formData = makeFormData();
     formData.delete("childIds");
     formData.append("childIds", "child-1");
@@ -206,8 +206,7 @@ describe("submitExcuse", () => {
     mocks.createExcuse.mockResolvedValue({
       ...makeExcuse("child-1"),
       dayPart: "AFTERNOON",
-      cancelLunch: false,
-      lateApprovedAt: new Date(2026, 8, 1),
+      cancelLunch: true,
     });
 
     const result = await submitExcuse(formData);
@@ -219,9 +218,34 @@ describe("submitExcuse", () => {
       "Nemoc",
       "parent-1",
       [new Date(2026, 8, 10)],
-      { dayPart: "AFTERNOON", cancelLunch: false },
+      { dayPart: "AFTERNOON", cancelLunch: true },
     );
-    expect(result.summary.cancelLunch).toBe(false);
+    expect(result.summary.cancelLunch).toBe(true);
+  });
+
+  it("forces whole day when a submitted range spans multiple dates", async () => {
+    const formData = makeFormData();
+    formData.delete("childIds");
+    formData.append("childIds", "child-1");
+    formData.set("fromDate", "2026-09-10");
+    formData.set("toDate", "2026-09-11");
+    formData.set("dayPart", "AFTERNOON");
+    mocks.getSchoolDaysInRange.mockResolvedValue([
+      new Date(2026, 8, 10),
+      new Date(2026, 8, 11),
+    ]);
+
+    await submitExcuse(formData);
+
+    expect(mocks.createExcuse).toHaveBeenCalledWith(
+      "child-1",
+      new Date(2026, 8, 10),
+      new Date(2026, 8, 11),
+      "Nemoc",
+      "parent-1",
+      [new Date(2026, 8, 10), new Date(2026, 8, 11)],
+      { dayPart: "FULL_DAY", cancelLunch: true },
+    );
   });
 
   it("rejects an invalid day part before creating anything", async () => {

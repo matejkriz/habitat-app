@@ -44,13 +44,21 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
   const [reason, setReason] = useState(excuse.reason ?? "");
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | null>(null);
   const [error, setError] = useState("");
+  const hasMultipleDays = Boolean(
+    fromDate && toDate && fromDate !== toDate,
+  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setPendingAction("save");
     try {
-      await onSave(excuse.id, { fromDate, toDate, dayPart, reason });
+      await onSave(excuse.id, {
+        fromDate,
+        toDate,
+        dayPart: hasMultipleDays ? "FULL_DAY" : dayPart,
+        reason,
+      });
       setIsEditing(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Změny se nepodařilo uložit.");
@@ -106,7 +114,13 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
           type="date"
           value={fromDate}
           max={toDate}
-          onChange={(event) => setFromDate(event.target.value)}
+          onChange={(event) => {
+            const nextFromDate = event.target.value;
+            setFromDate(nextFromDate);
+            if (nextFromDate && toDate && nextFromDate !== toDate) {
+              setDayPart("FULL_DAY");
+            }
+          }}
           required
         />
         <Input
@@ -114,20 +128,28 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
           type="date"
           value={toDate}
           min={fromDate}
-          onChange={(event) => setToDate(event.target.value)}
+          onChange={(event) => {
+            const nextToDate = event.target.value;
+            setToDate(nextToDate);
+            if (fromDate && nextToDate && fromDate !== nextToDate) {
+              setDayPart("FULL_DAY");
+            }
+          }}
           required
         />
       </div>
-      <Select
-        label="Dítě bude chybět"
-        value={dayPart}
-        onChange={(event) => setDayPart(event.target.value as ExcuseDayPart)}
-        options={[
-          { value: "FULL_DAY", label: "Celý den" },
-          { value: "MORNING", label: "Jen dopoledne" },
-          { value: "AFTERNOON", label: "Jen odpoledne" },
-        ]}
-      />
+      {!hasMultipleDays ? (
+        <Select
+          label="Dítě bude chybět"
+          value={dayPart}
+          onChange={(event) => setDayPart(event.target.value as ExcuseDayPart)}
+          options={[
+            { value: "FULL_DAY", label: "Celý den" },
+            { value: "MORNING", label: "Jen dopoledne" },
+            { value: "AFTERNOON", label: "Jen odpoledne" },
+          ]}
+        />
+      ) : null}
       <Textarea
         label="Důvod"
         value={reason}

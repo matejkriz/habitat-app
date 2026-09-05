@@ -410,7 +410,7 @@ describe("createDirectorExcuse", () => {
     });
   });
 
-  it("stores an afternoon absence and keeps lunch", async () => {
+  it("stores an afternoon absence with the requested lunch cancellation", async () => {
     const formData = new FormData();
     formData.set("childId", "tobias");
     formData.set("fromDate", "2026-08-19");
@@ -424,8 +424,23 @@ describe("createDirectorExcuse", () => {
     expect(mocks.excusesCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         dayPart: "AFTERNOON",
-        cancelLunch: false,
+        cancelLunch: true,
       }),
+    });
+  });
+
+  it("forces whole day when a submitted range spans multiple dates", async () => {
+    const formData = new FormData();
+    formData.set("childId", "tobias");
+    formData.set("fromDate", "2026-08-19");
+    formData.set("toDate", "2026-08-20");
+    formData.set("dayPart", "MORNING");
+
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: true,
+    });
+    expect(mocks.excusesCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ dayPart: "FULL_DAY" }),
     });
   });
 

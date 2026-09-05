@@ -100,7 +100,12 @@ describe("updateExcuse", () => {
     });
   });
 
-  it("keeps lunch and settles a late excuse changed to afternoon-only", async () => {
+  it("preserves lunch cancellation when a single-day excuse changes to afternoon-only", async () => {
+    mocks.getExcuse.mockResolvedValue({
+      ...currentExcuse,
+      fromDate: new Date(2024, 0, 2),
+      toDate: new Date(2024, 0, 2),
+    });
     await updateExcuse(
       currentExcuse.id,
       { dayPart: "AFTERNOON" },
@@ -111,9 +116,26 @@ describe("updateExcuse", () => {
       where: { id: currentExcuse.id },
       data: expect.objectContaining({
         dayPart: "AFTERNOON",
-        cancelLunch: false,
-        lateApprovedAt: expect.any(Date),
-        lateApprovedById: null,
+        cancelLunch: true,
+      }),
+    });
+    expect(mocks.updateExcuse.mock.calls[0][0].data).not.toHaveProperty(
+      "lateApprovedAt",
+    );
+  });
+
+  it("forces whole day when an edited excuse still spans multiple dates", async () => {
+    await updateExcuse(
+      currentExcuse.id,
+      { dayPart: "AFTERNOON" },
+      "parent-1",
+    );
+
+    expect(mocks.updateExcuse).toHaveBeenCalledWith({
+      where: { id: currentExcuse.id },
+      data: expect.objectContaining({
+        dayPart: "FULL_DAY",
+        cancelLunch: true,
       }),
     });
   });

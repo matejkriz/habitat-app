@@ -16,7 +16,7 @@ describe("ExcuseEditor", () => {
         excuse={{
           id: "excuse-1",
           fromDate: new Date(2024, 0, 2),
-          toDate: new Date(2024, 0, 3),
+          toDate: new Date(2024, 0, 2),
           dayPart: "FULL_DAY",
           reason: "Nemoc",
         }}
@@ -27,7 +27,7 @@ describe("ExcuseEditor", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2024-01-04" } });
-    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-05" } });
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-04" } });
     fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
       target: { value: "AFTERNOON" },
     });
@@ -37,11 +37,31 @@ describe("ExcuseEditor", () => {
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith("excuse-1", {
         fromDate: "2024-01-04",
-        toDate: "2024-01-05",
+        toDate: "2024-01-04",
         dayPart: "AFTERNOON",
         reason: "Rodinné důvody",
       });
     });
+  });
+
+  it("hides the day-part choice for a multi-day excuse", () => {
+    render(
+      <ExcuseEditor
+        excuse={{
+          id: "excuse-1",
+          fromDate: new Date(2024, 0, 2),
+          toDate: new Date(2024, 0, 3),
+          dayPart: "FULL_DAY",
+          reason: null,
+        }}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
+
+    expect(screen.queryByLabelText("Dítě bude chybět")).toBeNull();
   });
 
   it("asks for confirmation before deleting", async () => {

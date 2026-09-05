@@ -22,9 +22,15 @@ export function parseExcuseDayPart(
   throw new Error("Neplatná část dne.");
 }
 
-export function getEffectiveCancelLunch(
+export function getExcuseDayPartForRange(
   dayPart: ExcuseDayPartValue,
-  requested: boolean,
-): boolean {
-  return dayPart === ExcuseDayPart.AFTERNOON ? false : requested;
+  fromDate: Date,
+  toDate: Date,
+): ExcuseDayPartValue {
+  const isSingleDay =
+    fromDate.getFullYear() === toDate.getFullYear() &&
+    fromDate.getMonth() === toDate.getMonth() &&
+    fromDate.getDate() === toDate.getDate();
+
+  return isSingleDay ? dayPart : ExcuseDayPart.FULL_DAY;
 }

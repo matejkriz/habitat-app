@@ -11,6 +11,7 @@ import {
   type UserRole as UserRoleType,
 } from "./types";
 import { validateExcuseDates } from "./excuse-rules";
+import { getExcuseDayPartForRange } from "./excuse-input";
 import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
@@ -93,9 +94,12 @@ export async function createExcuse(
     select: { name: true },
   });
   const lateApprovedAt = options?.approvedById ? new Date() : null;
-  const dayPart = options?.dayPart ?? ExcuseDayPart.FULL_DAY;
-  const cancelLunch =
-    dayPart === ExcuseDayPart.AFTERNOON ? false : (options?.cancelLunch ?? true);
+  const dayPart = getExcuseDayPartForRange(
+    options?.dayPart ?? ExcuseDayPart.FULL_DAY,
+    normalizedFrom,
+    normalizedTo,
+  );
+  const cancelLunch = options?.cancelLunch ?? true;
 
   // Director-created, no-lunch, and lunch-preserving excuses are approved in
   // the initial write.
@@ -262,18 +266,12 @@ export async function updateExcuse(
   if (!validation.valid) {
     throw new Error(validation.error);
   }
-  const newDayPart = updates.dayPart ?? current.dayPart;
-  const newCancelLunch =
-    newDayPart === ExcuseDayPart.AFTERNOON ? false : current.cancelLunch;
-  const newlyAutomaticallyApproved =
-    current.lateApprovedAt === null && !newCancelLunch;
-  const newLateApprovedAt = newlyAutomaticallyApproved
-    ? new Date()
-    : current.lateApprovedAt;
-  const automaticApprovalPatch =
-    newlyAutomaticallyApproved
-      ? { lateApprovedAt: newLateApprovedAt, lateApprovedById: null }
-      : {};
+  const newDayPart = getExcuseDayPartForRange(
+    updates.dayPart ?? current.dayPart,
+    newFromDate,
+    newToDate,
+  );
+  const newCancelLunch = current.cancelLunch;
 
   // Growing the range would carry the original submission time onto days whose
   // deadline has since passed, which is how a stale excuse could be edited into
@@ -309,7 +307,7 @@ export async function updateExcuse(
         reason: updates.reason !== undefined ? updates.reason : current.reason,
         dayPart: newDayPart,
         cancelLunch: newCancelLunch,
-        lateApprovedAt: newLateApprovedAt?.toISOString() ?? null,
+        lateApprovedAt: current.lateApprovedAt?.toISOString() ?? null,
       },
     },
   });
@@ -329,7 +327,6 @@ export async function updateExcuse(
       reason: updates.reason !== undefined ? updates.reason : current.reason,
       dayPart: newDayPart,
       cancelLunch: newCancelLunch,
-      ...automaticApprovalPatch,
     },
   });
 }

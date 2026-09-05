@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  getEffectiveCancelLunch,
+  getExcuseDayPartForRange,
   parseCancelLunchChoice,
   parseExcuseDayPart,
 } from "./excuse-input";
@@ -41,13 +41,21 @@ describe("parseExcuseDayPart", () => {
   });
 });
 
-describe("getEffectiveCancelLunch", () => {
-  it("always keeps lunch for an afternoon-only absence", () => {
-    expect(getEffectiveCancelLunch(ExcuseDayPart.AFTERNOON, true)).toBe(false);
+describe("getExcuseDayPartForRange", () => {
+  it("preserves a partial-day choice for a single date", () => {
+    const date = new Date(2026, 8, 10);
+    expect(
+      getExcuseDayPartForRange(ExcuseDayPart.AFTERNOON, date, date),
+    ).toBe(ExcuseDayPart.AFTERNOON);
   });
 
-  it("preserves the parent's choice for whole-day and morning absences", () => {
-    expect(getEffectiveCancelLunch(ExcuseDayPart.FULL_DAY, true)).toBe(true);
-    expect(getEffectiveCancelLunch(ExcuseDayPart.MORNING, false)).toBe(false);
+  it("forces whole day for a range spanning multiple dates", () => {
+    expect(
+      getExcuseDayPartForRange(
+        ExcuseDayPart.MORNING,
+        new Date(2026, 8, 10),
+        new Date(2026, 8, 11),
+      ),
+    ).toBe(ExcuseDayPart.FULL_DAY);
   });
 });

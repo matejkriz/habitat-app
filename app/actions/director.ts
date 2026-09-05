@@ -43,7 +43,7 @@ import {
 } from "@/lib/excuse-coverage";
 import { parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
 import {
-  getEffectiveCancelLunch,
+  getExcuseDayPartForRange,
   parseCancelLunchChoice,
   parseExcuseDayPart,
 } from "@/lib/excuse-input";
@@ -479,13 +479,10 @@ export async function createDirectorExcuse(
   const toDateValue = formData.get("toDate");
   const reasonValue = formData.get("reason");
   let cancelLunch: boolean;
-  let dayPart: ExcuseDayPart;
+  let requestedDayPart: ExcuseDayPart;
   try {
-    dayPart = parseExcuseDayPart(formData.get("dayPart"));
-    cancelLunch = getEffectiveCancelLunch(
-      dayPart,
-      parseCancelLunchChoice(formData.get("cancelLunch")),
-    );
+    requestedDayPart = parseExcuseDayPart(formData.get("dayPart"));
+    cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
   } catch (error) {
     return {
       success: false,
@@ -526,6 +523,11 @@ export async function createDirectorExcuse(
       error: validation.error ?? "Zadejte platné období.",
     };
   }
+  const dayPart = getExcuseDayPartForRange(
+    requestedDayPart,
+    fromDate,
+    toDate,
+  );
 
   const reason =
     typeof reasonValue === "string" ? reasonValue.trim() || null : null;

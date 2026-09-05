@@ -24,7 +24,7 @@ import {
   updateExcuse as updateExcuseRecord,
 } from "@/lib/excuse";
 import {
-  getEffectiveCancelLunch,
+  getExcuseDayPartForRange,
   parseCancelLunchChoice,
   parseExcuseDayPart,
 } from "@/lib/excuse-input";
@@ -313,11 +313,8 @@ export const submitExcuse = async (formData: FormData) => {
   const fromDateStr = formData.get("fromDate");
   const toDateStr = formData.get("toDate");
   const reasonValue = formData.get("reason");
-  const dayPart = parseExcuseDayPart(formData.get("dayPart"));
-  const cancelLunch = getEffectiveCancelLunch(
-    dayPart,
-    parseCancelLunchChoice(formData.get("cancelLunch")),
-  );
+  const requestedDayPart = parseExcuseDayPart(formData.get("dayPart"));
+  const cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
 
   if (
     typeof fromDateStr !== "string" ||
@@ -337,6 +334,11 @@ export const submitExcuse = async (formData: FormData) => {
 
   const fromDate = parseExcuseDate(fromDateStr);
   const toDate = parseExcuseDate(toDateStr);
+  const dayPart = getExcuseDayPartForRange(
+    requestedDayPart,
+    fromDate,
+    toDate,
+  );
   const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
 
