@@ -424,19 +424,21 @@ const applyUserSelect = (user: User, select?: Record<string, unknown>) => {
 export const db: any = {
   users: {
     get: async (args: GetArgs) => {
-      const users = (await listTable<RawUser>("users")).map(fromRawUser);
       const where = args.where;
+      const lookup = where.id
+        ? { id: String(where.id) }
+        : where.workosId
+          ? { workosId: String(where.workosId) }
+          : where.email
+            ? { email: String(where.email) }
+            : {};
+      const raw = await convexQuery(api.db.findUser, {
+        secret: getServerSecret(),
+        ...lookup,
+      });
 
-      const user =
-        (where.id ? users.find((u) => u.id === where.id) : undefined) ??
-        (where.workosId
-          ? users.find((u) => u.workosId === where.workosId)
-          : undefined) ??
-        (where.email ? users.find((u) => u.email === where.email) : undefined) ??
-        null;
-
-      if (!user) return null;
-      return applyUserSelect(user, args.select) as User;
+      if (!raw) return null;
+      return applyUserSelect(fromRawUser(raw as RawUser), args.select) as User;
     },
 
     list: async (args: ListArgs = {}) => {
@@ -530,16 +532,14 @@ export const db: any = {
 
   children: {
     list: async (args: ListArgs = {}) => {
-      const children = (await listTable<RawChild>("children")).map(fromRawChild);
-      const relations = (await listTable<RawParentChild>("parentChildren")).map(
-        fromRawParentChild,
-      );
-      const users = (await listTable<RawUser>("users")).map(fromRawUser);
+      const active = args.where?.active;
+      const rawChildren = await convexQuery(api.db.listChildren, {
+        secret: getServerSecret(),
+        ...(active === undefined ? {} : { active: Boolean(active) }),
+      });
+      const children = (rawChildren as ReadonlyArray<RawChild>).map(fromRawChild);
 
       let filtered = children;
-      if (args.where?.active !== undefined) {
-        filtered = filtered.filter((c) => c.active === Boolean(args.where?.active));
-      }
 
       if (args.orderBy) {
         const orderRules = Array.isArray(args.orderBy)
@@ -568,10 +568,17 @@ export const db: any = {
         });
       }
 
+      if (!args.include?.parents) {
+        return applyTake(filtered, args.take);
+      }
+
+      const [relations, users] = await Promise.all([
+        listTable<RawParentChild>("parentChildren").then((rows) =>
+          rows.map(fromRawParentChild),
+        ),
+        listTable<RawUser>("users").then((rows) => rows.map(fromRawUser)),
+      ]);
       const withIncludes = filtered.map((child) => {
-        if (!args.include?.parents) {
-          return child;
-        }
         const childRelations = relations.filter((r) => r.childId === child.id);
         const include = (args.include?.parents ?? {}) as Record<string, unknown>;
         const includeConfig = (include as { include?: unknown }).include;
@@ -636,25 +643,42 @@ export const db: any = {
     },
 
     count: async (args: { where?: Record<string, unknown> } = {}) => {
-      const children = (await listTable<RawChild>("children")).map(fromRawChild);
-      if (args.where?.active === undefined) return children.length;
-      return children.filter((c) => c.active === Boolean(args.where?.active)).length;
+      const active = args.where?.active;
+      const children = await convexQuery(api.db.listChildren, {
+        secret: getServerSecret(),
+        ...(active === undefined ? {} : { active: Boolean(active) }),
+      });
+      return children.length;
     },
   },
 
   parentLinks: {
     list: async (args: ListArgs = {}) => {
+      if (args.where?.parentId) {
+        const rows = await convexQuery(api.db.listParentChildren, {
+          secret: getServerSecret(),
+          parentId: String(args.where.parentId),
+        });
+        return (rows as ReadonlyArray<RawParentChild & { child: RawChild | null }>).map(
+          (row) => {
+            const relation = fromRawParentChild(row);
+            if (!args.include?.child) return relation;
+            return {
+              ...relation,
+              child: row.child ? fromRawChild(row.child) : null,
+            };
+          },
+        );
+      }
+
       const relations = (await listTable<RawParentChild>("parentChildren")).map(
         fromRawParentChild,
       );
-      const children = (await listTable<RawChild>("children")).map(fromRawChild);
+      const children = args.include?.child
+        ? (await listTable<RawChild>("children")).map(fromRawChild)
+        : [];
 
-      let filtered = relations;
-      if (args.where?.parentId) {
-        filtered = filtered.filter((r) => r.parentId === args.where?.parentId);
-      }
-
-      return filtered.map((relation) => {
+      return relations.map((relation) => {
         if (!args.include?.child) return relation;
         const child = children.find((c) => c.id === relation.childId) ?? null;
         return {
@@ -665,19 +689,18 @@ export const db: any = {
     },
 
     get: async (args: GetArgs) => {
-      const relations = (await listTable<RawParentChild>("parentChildren")).map(
-        fromRawParentChild,
-      );
       const composite = args.where.parentId_childId as
         | { parentId: string; childId: string }
         | undefined;
       if (!composite) return null;
 
-      const relation =
-        relations.find(
-          (r) => r.parentId === composite.parentId && r.childId === composite.childId,
-        ) ?? null;
-      if (!relation) return null;
+      const rawRelation = await convexQuery(api.db.getParentChild, {
+        secret: getServerSecret(),
+        parentId: composite.parentId,
+        childId: composite.childId,
+      });
+      if (!rawRelation) return null;
+      const relation = fromRawParentChild(rawRelation as RawParentChild);
 
       if (!args.include) return relation;
 

@@ -38,6 +38,107 @@ export const list = query({
   },
 });
 
+export const findUser = query({
+  args: {
+    secret: v.string(),
+    id: v.optional(v.string()),
+    workosId: v.optional(v.string()),
+    email: v.optional(v.string()),
+  },
+  returns: v.union(v.null(), v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+
+    if (args.id) {
+      return await db
+        .query("users")
+        .withIndex("by_app_id", (query) => query.eq("id", args.id!))
+        .first();
+    }
+    if (args.workosId) {
+      return await db
+        .query("users")
+        .withIndex("by_workos_id", (query) =>
+          query.eq("workosId", args.workosId!),
+        )
+        .first();
+    }
+    if (args.email) {
+      return await db
+        .query("users")
+        .withIndex("by_email", (query) => query.eq("email", args.email!))
+        .first();
+    }
+
+    return null;
+  },
+});
+
+export const listChildren = query({
+  args: {
+    secret: v.string(),
+    active: v.optional(v.boolean()),
+  },
+  returns: v.array(v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (args.active !== undefined) {
+      return await db
+        .query("children")
+        .withIndex("by_active", (query) => query.eq("active", args.active!))
+        .collect();
+    }
+    return await db.query("children").collect();
+  },
+});
+
+export const listParentChildren = query({
+  args: {
+    secret: v.string(),
+    parentId: v.string(),
+  },
+  returns: v.array(v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const relations = await db
+      .query("parentChildren")
+      .withIndex("by_parent_id", (query) =>
+        query.eq("parentId", args.parentId),
+      )
+      .collect();
+
+    return await Promise.all(
+      relations.map(async (relation) => ({
+        ...relation,
+        child: await db
+          .query("children")
+          .withIndex("by_app_id", (query) =>
+            query.eq("id", relation.childId),
+          )
+          .first(),
+      })),
+    );
+  },
+});
+
+export const getParentChild = query({
+  args: {
+    secret: v.string(),
+    parentId: v.string(),
+    childId: v.string(),
+  },
+  returns: v.union(v.null(), v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    return await db
+      .query("parentChildren")
+      .withIndex("by_parent_child", (query) =>
+        query.eq("parentId", args.parentId).eq("childId", args.childId),
+      )
+      .first();
+  },
+});
+
 export const listExcusesOverlapping = query({
   args: {
     secret: v.string(),
