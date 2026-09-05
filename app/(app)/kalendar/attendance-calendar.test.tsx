@@ -44,38 +44,6 @@ function renderCalendar(startMonthKey: string | null = null) {
   );
 }
 
-function renderPartialDayCalendar() {
-  render(
-    <AttendanceCalendar
-      startMonthKey={null}
-      initialMonth={{
-        monthKey: "2026-08",
-        totalChildren: children.length,
-        days: buildAttendanceCalendar({
-          month: new Date(2026, 7, 1),
-          today: new Date(2026, 7, 3),
-          children,
-          attendance: [],
-          excuses: [
-            {
-              id: "excuse-afternoon",
-              childId: "bo",
-              fromDate: new Date(2026, 7, 4),
-              toDate: new Date(2026, 7, 4),
-              dayPart: "AFTERNOON",
-              reason: "Lékař",
-              submittedAt: new Date(2026, 7, 1, 8),
-              lateApprovedAt: null,
-            },
-          ],
-          closedDays: [],
-          noLunchDays: [],
-        }),
-      }}
-    />,
-  );
-}
-
 function getTodayButton(): HTMLElement {
   return screen.getAllByRole("button", { name: /pondělí 3\. srpna 2026, 2 očekáváno/i })[0];
 }
@@ -87,21 +55,6 @@ function getTomorrowButton(): HTMLElement {
 afterEach(() => cleanup());
 
 describe("AttendanceCalendar day preview", () => {
-  it("shows separate morning and afternoon planning counts", () => {
-    renderPartialDayCalendar();
-
-    const day = screen.getAllByRole("button", {
-      name: /úterý 4\. srpna 2026.*dopoledne 2.*odpoledne 1/i,
-    })[0];
-    fireEvent.click(day);
-
-    const dialog = screen.getByRole("dialog");
-    expect(dialog.textContent).toContain("Dopoledne");
-    expect(dialog.textContent).toContain("Odpoledne");
-    expect(dialog.textContent).toContain("Jen odpoledne nepřijde");
-    expect(dialog.textContent).toContain("Bo Svoboda");
-  });
-
   it("shows a lightweight preview on mouse hover and hides it on leave", () => {
     renderCalendar();
     const day = getTodayButton();

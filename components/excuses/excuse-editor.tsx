@@ -3,14 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ExcuseDayPart } from "@/lib/types";
 
 export type ExcuseEditValues = {
   readonly fromDate: string;
   readonly toDate: string;
-  readonly dayPart: ExcuseDayPart;
   readonly reason: string;
 };
 
@@ -18,7 +15,6 @@ type EditableExcuse = {
   readonly id: string;
   readonly fromDate: Date | string;
   readonly toDate: Date | string;
-  readonly dayPart: ExcuseDayPart;
   readonly reason: string | null;
 };
 
@@ -40,25 +36,16 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [fromDate, setFromDate] = useState(() => toDateInputValue(excuse.fromDate));
   const [toDate, setToDate] = useState(() => toDateInputValue(excuse.toDate));
-  const [dayPart, setDayPart] = useState<ExcuseDayPart>(excuse.dayPart);
   const [reason, setReason] = useState(excuse.reason ?? "");
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | null>(null);
   const [error, setError] = useState("");
-  const hasMultipleDays = Boolean(
-    fromDate && toDate && fromDate !== toDate,
-  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setPendingAction("save");
     try {
-      await onSave(excuse.id, {
-        fromDate,
-        toDate,
-        dayPart: hasMultipleDays ? "FULL_DAY" : dayPart,
-        reason,
-      });
+      await onSave(excuse.id, { fromDate, toDate, reason });
       setIsEditing(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Změny se nepodařilo uložit.");
@@ -114,13 +101,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
           type="date"
           value={fromDate}
           max={toDate}
-          onChange={(event) => {
-            const nextFromDate = event.target.value;
-            setFromDate(nextFromDate);
-            if (nextFromDate && toDate && nextFromDate !== toDate) {
-              setDayPart("FULL_DAY");
-            }
-          }}
+          onChange={(event) => setFromDate(event.target.value)}
           required
         />
         <Input
@@ -128,28 +109,10 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
           type="date"
           value={toDate}
           min={fromDate}
-          onChange={(event) => {
-            const nextToDate = event.target.value;
-            setToDate(nextToDate);
-            if (fromDate && nextToDate && fromDate !== nextToDate) {
-              setDayPart("FULL_DAY");
-            }
-          }}
+          onChange={(event) => setToDate(event.target.value)}
           required
         />
       </div>
-      {!hasMultipleDays ? (
-        <Select
-          label="Dítě bude chybět"
-          value={dayPart}
-          onChange={(event) => setDayPart(event.target.value as ExcuseDayPart)}
-          options={[
-            { value: "FULL_DAY", label: "Celý den" },
-            { value: "MORNING", label: "Jen dopoledne" },
-            { value: "AFTERNOON", label: "Jen odpoledne" },
-          ]}
-        />
-      ) : null}
       <Textarea
         label="Důvod"
         value={reason}

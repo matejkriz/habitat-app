@@ -4,11 +4,6 @@ import { v } from "convex/values";
 const role = v.union(v.literal("PARENT"), v.literal("TEACHER"), v.literal("DIRECTOR"));
 const presence = v.union(v.literal("PRESENT"), v.literal("ABSENT"));
 const childGender = v.union(v.literal("MALE"), v.literal("FEMALE"));
-const excuseDayPart = v.union(
-  v.literal("FULL_DAY"),
-  v.literal("MORNING"),
-  v.literal("AFTERNOON"),
-);
 const excuseStatus = v.union(
   v.literal("NONE"),
   v.literal("EXCUSED"),
@@ -83,8 +78,6 @@ export default defineSchema({
     fromDate: v.number(),
     toDate: v.number(),
     reason: v.optional(v.union(v.string(), v.null())),
-    // Optional during rollout; legacy excuses cover the whole day.
-    dayPart: v.optional(excuseDayPart),
     // Optional during rollout; legacy excuses keep cancelling lunches.
     cancelLunch: v.optional(v.boolean()),
     submittedById: v.string(),

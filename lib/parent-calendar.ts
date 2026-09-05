@@ -1,14 +1,9 @@
-import {
-  getDayCoverage,
-  getDayPartCoverage,
-  type CoveringExcuse,
-} from "./excuse-coverage";
-import type { ExcuseDayPart, Presence } from "./types";
+import { getDayCoverage, type CoveringExcuse } from "./excuse-coverage";
+import type { Presence } from "./types";
 import { isDefaultClosedDay, toLocalDateKey as toKey } from "./school-calendar";
 
 export type ParentCalendarStatus =
   | "EXPECTED"
-  | "PARTIAL"
   | "PRESENT"
   | "EXCUSED"
   | "PENDING"
@@ -21,7 +16,6 @@ export interface ParentCalendarDay {
   readonly dayNumber: number;
   readonly status: ParentCalendarStatus;
   readonly isToday: boolean;
-  readonly absencePart?: Exclude<ExcuseDayPart, "FULL_DAY">;
 }
 
 interface CalendarAttendance {
@@ -70,20 +64,10 @@ export function buildParentCalendarMonth({
     const dateKey = toLocalDateKey(date);
     const attendanceItem = attendanceByDate.get(dateKey);
     const coverage = getDayCoverage(excuses, date);
-    const morning = getDayPartCoverage(excuses, date, "MORNING");
-    const afternoon = getDayPartCoverage(excuses, date, "AFTERNOON");
-    const absencePart =
-      morning.covered !== afternoon.covered
-        ? morning.covered
-          ? "MORNING"
-          : "AFTERNOON"
-        : undefined;
 
     let status: ParentCalendarStatus;
     if (isDefaultClosedDay(date) || closedDateKeys.has(dateKey)) {
       status = "CLOSED";
-    } else if (absencePart) {
-      status = "PARTIAL";
     } else if (attendanceItem?.presence === "PRESENT") {
       status = "PRESENT";
     } else if (coverage.excused) {
@@ -103,7 +87,6 @@ export function buildParentCalendarMonth({
       dayNumber: index + 1,
       status,
       isToday: dateKey === todayKey,
-      ...(absencePart ? { absencePart } : {}),
     };
   });
 }

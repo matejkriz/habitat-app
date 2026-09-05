@@ -16,43 +16,11 @@ const excuse = (overrides: {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason?: string | null;
-  readonly dayPart?: "FULL_DAY" | "MORNING" | "AFTERNOON";
   readonly submittedAt: Date;
   readonly lateApprovedAt?: Date | null;
 }) => ({ reason: null, lateApprovedAt: null, ...overrides });
 
 describe("buildAttendanceCalendar", () => {
-  it("počítá zvlášť očekávané děti dopoledne a odpoledne", () => {
-    const [day] = buildAttendanceCalendar({
-      month: new Date(2026, 7, 1),
-      today: new Date(2026, 7, 3),
-      children,
-      attendance: [],
-      excuses: [
-        excuse({
-          id: "excuse-bo",
-          childId: "bo",
-          fromDate: new Date(2026, 7, 4),
-          toDate: new Date(2026, 7, 4),
-          submittedAt: new Date(2026, 7, 1, 8),
-          dayPart: "AFTERNOON",
-        }),
-      ],
-      closedDays: [],
-      noLunchDays: [],
-    }).filter((item) => item.dateKey === "2026-08-04");
-
-    expect(day.counts).toMatchObject({
-      expected: 3,
-      expectedMorning: 3,
-      expectedAfternoon: 2,
-    });
-    expect(day.children.afternoonAbsent).toEqual([
-      expect.objectContaining({ childId: "bo" }),
-    ]);
-    expect(day.children.morningAbsent).toEqual([]);
-  });
-
   it("počítá budoucí očekávanou účast z aktivních dětí a omluvenek", () => {
     const [day] = buildAttendanceCalendar({
       month: new Date(2026, 7, 1),
@@ -75,8 +43,6 @@ describe("buildAttendanceCalendar", () => {
 
     expect(day.counts).toEqual({
       expected: 2,
-      expectedMorning: 2,
-      expectedAfternoon: 2,
       present: 0,
       excused: 1,
       unexcused: 0,
@@ -110,8 +76,6 @@ describe("buildAttendanceCalendar", () => {
 
     expect(day.counts).toEqual({
       expected: 2,
-      expectedMorning: 2,
-      expectedAfternoon: 2,
       present: 1,
       excused: 1,
       unexcused: 0,

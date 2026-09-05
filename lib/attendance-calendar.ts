@@ -1,6 +1,5 @@
 import {
   getDayCoverage,
-  getDayPartCoverage,
   groupExcusesByChild,
   type CoveringExcuse,
 } from "./excuse-coverage";
@@ -50,8 +49,6 @@ export type AttendanceCalendarDay = {
   readonly isResolved: boolean;
   readonly counts: {
     readonly expected: number;
-    readonly expectedMorning: number;
-    readonly expectedAfternoon: number;
     readonly present: number;
     readonly excused: number;
     readonly unexcused: number;
@@ -65,8 +62,6 @@ export type AttendanceCalendarDay = {
     readonly waiting: ReadonlyArray<CalendarChildDetail>;
     readonly expected: ReadonlyArray<CalendarChildDetail>;
     readonly unknown: ReadonlyArray<CalendarChildDetail>;
-    readonly morningAbsent: ReadonlyArray<CalendarChildDetail>;
-    readonly afternoonAbsent: ReadonlyArray<CalendarChildDetail>;
   };
 };
 
@@ -127,29 +122,12 @@ function buildOpenDay(
   const waiting: CalendarChildDetail[] = [];
   const expected: CalendarChildDetail[] = [];
   const unknown: CalendarChildDetail[] = [];
-  const morningAbsent: CalendarChildDetail[] = [];
-  const afternoonAbsent: CalendarChildDetail[] = [];
-  let expectedMorning = 0;
-  let expectedAfternoon = 0;
 
   for (const child of children) {
     const record = attendance.find(
       (item) => item.childId === child.id && toLocalDateKey(item.date) === dateKey,
     );
-    const childExcuses = excusesByChild.get(child.id) ?? [];
-    const coverage = getDayCoverage(childExcuses, date);
-    const morning = getDayPartCoverage(childExcuses, date, "MORNING");
-    const afternoon = getDayPartCoverage(childExcuses, date, "AFTERNOON");
-
-    if (record?.presence !== "ABSENT" && !morning.covered) expectedMorning += 1;
-    if (record?.presence !== "ABSENT" && !afternoon.covered) expectedAfternoon += 1;
-
-    if (morning.covered && !afternoon.covered) {
-      morningAbsent.push(getChildDetail(child, morning.excuse?.reason));
-    }
-    if (afternoon.covered && !morning.covered) {
-      afternoonAbsent.push(getChildDetail(child, afternoon.excuse?.reason));
-    }
+    const coverage = getDayCoverage(excusesByChild.get(child.id) ?? [], date);
 
     if (record?.presence === "PRESENT") {
       present.push(getChildDetail(child));
@@ -182,24 +160,13 @@ function buildOpenDay(
     isResolved: isFuture || (waiting.length === 0 && unknown.length === 0),
     counts: {
       expected: expectedCount,
-      expectedMorning,
-      expectedAfternoon,
       present: present.length,
       excused: excused.length,
       unexcused: unexcused.length,
       waiting: waiting.length,
       unknown: unknown.length,
     },
-    children: {
-      present,
-      excused,
-      unexcused,
-      waiting,
-      expected,
-      unknown,
-      morningAbsent,
-      afternoonAbsent,
-    },
+    children: { present, excused, unexcused, waiting, expected, unknown },
   };
 }
 
@@ -219,26 +186,8 @@ function buildClosedDay(
     isLunchCancelled: false,
     closedReason,
     isResolved: true,
-    counts: {
-      expected: 0,
-      expectedMorning: 0,
-      expectedAfternoon: 0,
-      present: 0,
-      excused: 0,
-      unexcused: 0,
-      waiting: 0,
-      unknown: 0,
-    },
-    children: {
-      present: [],
-      excused: [],
-      unexcused: [],
-      waiting: [],
-      expected: [],
-      unknown: [],
-      morningAbsent: [],
-      afternoonAbsent: [],
-    },
+    counts: { expected: 0, present: 0, excused: 0, unexcused: 0, waiting: 0, unknown: 0 },
+    children: { present: [], excused: [], unexcused: [], waiting: [], expected: [], unknown: [] },
   };
 }
 

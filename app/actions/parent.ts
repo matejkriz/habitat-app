@@ -11,7 +11,6 @@ import {
   type ChildGender,
   type ClosedDay,
   type Excuse,
-  type ExcuseDayPart,
 } from "@/lib/types";
 import { getSchoolDaysInRange, isClosedDay } from "@/lib/school-days";
 import {
@@ -23,11 +22,7 @@ import {
   getExcusesOverlapping,
   updateExcuse as updateExcuseRecord,
 } from "@/lib/excuse";
-import {
-  getExcuseDayPartForRange,
-  parseCancelLunchChoice,
-  parseExcuseDayPart,
-} from "@/lib/excuse-input";
+import { parseCancelLunchChoice } from "@/lib/excuse-input";
 import {
   getDayCoverage,
   getExcuseStatusForDay,
@@ -71,7 +66,6 @@ type ChildExcuseItem = {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason: string | null;
-  readonly dayPart: ExcuseDayPart;
   readonly cancelLunch: boolean;
   readonly submittedAt: Date;
 };
@@ -250,7 +244,6 @@ export const getChildExcuses = async (
     fromDate: e.fromDate,
     toDate: e.toDate,
     reason: e.reason,
-    dayPart: e.dayPart,
     cancelLunch: e.cancelLunch,
     submittedAt: e.submittedAt,
   }));
@@ -313,7 +306,6 @@ export const submitExcuse = async (formData: FormData) => {
   const fromDateStr = formData.get("fromDate");
   const toDateStr = formData.get("toDate");
   const reasonValue = formData.get("reason");
-  const requestedDayPart = parseExcuseDayPart(formData.get("dayPart"));
   const cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
 
   if (
@@ -334,18 +326,12 @@ export const submitExcuse = async (formData: FormData) => {
 
   const fromDate = parseExcuseDate(fromDateStr);
   const toDate = parseExcuseDate(toDateStr);
-  const dayPart = getExcuseDayPartForRange(
-    requestedDayPart,
-    fromDate,
-    toDate,
-  );
   const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
 
   const excuses = await Promise.all(
     childIds.map((childId) =>
       createExcuse(childId, fromDate, toDate, reason, user.id, schoolDays, {
-        dayPart,
         cancelLunch,
       }),
     ),
@@ -366,8 +352,6 @@ export const submitExcuse = async (formData: FormData) => {
   revalidatePath("/rodic");
   revalidatePath("/rodic/omluvenka");
   revalidatePath("/kalendar");
-  revalidatePath("/ucitel/dochazka");
-  revalidatePath("/reditel/obedy");
 
   return {
     success: true,
@@ -392,7 +376,6 @@ type ExcuseEditInput = {
   readonly fromDate: string;
   readonly toDate: string;
   readonly reason: string;
-  readonly dayPart?: string;
 };
 
 export const editParentExcuse = async (
@@ -419,18 +402,11 @@ export const editParentExcuse = async (
       fromDate: parseExcuseDate(input.fromDate),
       toDate: parseExcuseDate(input.toDate),
       reason: input.reason.trim() || null,
-      dayPart:
-        input.dayPart === undefined
-          ? undefined
-          : parseExcuseDayPart(input.dayPart),
     },
     user.id,
   );
 
   revalidatePath("/rodic");
-  revalidatePath("/kalendar");
-  revalidatePath("/ucitel/dochazka");
-  revalidatePath("/reditel/obedy");
   return updated;
 };
 
@@ -451,9 +427,6 @@ export const deleteParentExcuse = async (excuseId: string): Promise<void> => {
 
   await deleteExcuseRecord(excuseId, user.id);
   revalidatePath("/rodic");
-  revalidatePath("/kalendar");
-  revalidatePath("/ucitel/dochazka");
-  revalidatePath("/reditel/obedy");
 };
 
 /**

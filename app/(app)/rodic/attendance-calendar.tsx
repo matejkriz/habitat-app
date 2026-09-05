@@ -34,12 +34,6 @@ function getStatusDetails(gender: ChildGender | null): StatusDetails {
     className: "bg-sage/10 text-sage-dark hover:bg-sage/20",
     dotClassName: "bg-sage",
   },
-  PARTIAL: {
-    label: "Částečná omluvenka",
-    shortLabel: "Část dne",
-    className: "bg-gold/15 text-gold-dark hover:bg-gold/25",
-    dotClassName: "bg-gold",
-  },
   PRESENT: {
     label: presentLabel,
     shortLabel: presentLabel,
@@ -176,16 +170,7 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
             <div key={`empty-${index}`} className="min-h-16 sm:min-h-24" aria-hidden="true" />
           ))}
           {days.map((day) => {
-            const baseDetails = statusDetails[day.status];
-            const partialLabel =
-              day.status === "PARTIAL"
-                ? day.absencePart === "MORNING"
-                  ? "Chybí dopoledne"
-                  : "Chybí odpoledne"
-                : null;
-            const details = partialLabel
-              ? { ...baseDetails, label: partialLabel, shortLabel: partialLabel }
-              : baseDetails;
+            const details = statusDetails[day.status];
             const disabled = day.status === "CLOSED";
             return (
               <button

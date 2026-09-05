@@ -27,16 +27,9 @@ export function getLunchStatus(
   attendance: LunchAttendance | undefined,
   coverage: DayCoverage,
   noLunch = false,
-  honorCancellationForPresentChild = false,
 ): LunchStatus | null {
   if (noLunch) return LunchStatus.NO_LUNCH;
   if (!attendance) return null;
-
-  // A child arriving only after lunch is present for the daily attendance,
-  // but a valid morning excuse may still have cancelled that lunch.
-  if (honorCancellationForPresentChild && coverage.lunchCancelled) {
-    return LunchStatus.EXCUSED;
-  }
 
   if (attendance.presence === Presence.PRESENT) {
     return LunchStatus.PRESENT;

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   excusesDay,
   getDayCoverage,
-  getDayPartCoverage,
   getExcuseDayState,
   getExcuseRangeState,
   getExcuseStatusForDay,
@@ -12,7 +11,7 @@ import {
   type CoveringExcuse,
 } from "./excuse-coverage";
 import { getLunchStatus, isPayableLunch, LunchStatus } from "./lunches";
-import { ExcuseDayPart, ExcuseStatus, Presence } from "./types";
+import { ExcuseStatus, Presence } from "./types";
 
 // August 2026: 19. is a Wednesday and 20. a Thursday, so both are school days.
 // 21.-23. is the Friday-to-Sunday closure.
@@ -138,44 +137,6 @@ describe("overlapping excuses", () => {
 
     expect(byChild.get("tobias")?.map((item) => item.id)).toEqual(["excuse-old"]);
     expect(byChild.get("adela")?.map((item) => item.id)).toEqual(["excuse-other"]);
-  });
-});
-
-describe("partial-day coverage", () => {
-  it("does not turn an afternoon-only excuse into a whole-day excuse", () => {
-    const afternoon = excuse({
-      dayPart: ExcuseDayPart.AFTERNOON,
-      submittedAt: AUG(10, 8),
-    });
-
-    expect(getDayCoverage([afternoon], AUG(19))).toMatchObject({
-      covered: false,
-      excused: false,
-    });
-    expect(
-      getDayPartCoverage([afternoon], AUG(19), ExcuseDayPart.MORNING),
-    ).toMatchObject({ covered: false, excused: false });
-    expect(
-      getDayPartCoverage([afternoon], AUG(19), ExcuseDayPart.AFTERNOON),
-    ).toMatchObject({ covered: true, excused: true });
-  });
-
-  it("combines separate morning and afternoon excuses into whole-day coverage", () => {
-    const morning = excuse({
-      id: "morning",
-      dayPart: ExcuseDayPart.MORNING,
-      submittedAt: AUG(10, 8),
-    });
-    const afternoon = excuse({
-      id: "afternoon",
-      dayPart: ExcuseDayPart.AFTERNOON,
-      submittedAt: AUG(10, 8),
-    });
-
-    expect(getDayCoverage([morning, afternoon], AUG(19))).toMatchObject({
-      covered: true,
-      excused: true,
-    });
   });
 });
 

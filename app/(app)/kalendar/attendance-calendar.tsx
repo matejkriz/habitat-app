@@ -9,6 +9,7 @@ import {
 import type { AttendanceCalendarDay, CalendarChildDetail } from "@/lib/attendance-calendar";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui";
+import { PRESENT_CHILDREN_LABEL } from "@/lib/presence-label";
 
 const WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
 
@@ -97,7 +98,7 @@ function CalendarDayButton({
   const statusLabel = day.isPast ? "přítomno" : "očekáváno";
   const accessibleStatus = day.isClosed
     ? day.closedReason || "zavřeno"
-    : `${day.counts.expected} ${statusLabel}, dopoledne ${day.counts.expectedMorning}, odpoledne ${day.counts.expectedAfternoon}`;
+    : `${day.counts.expected} ${statusLabel}`;
   const accessibleLunchStatus = day.isLunchCancelled ? ", bez oběda" : "";
 
   return (
@@ -164,12 +165,6 @@ function CalendarDayButton({
               {statusLabel}
             </span>
           </div>
-          {!day.isPast ? (
-            <div className="mt-1 grid grid-cols-2 gap-1 text-[9px] font-semibold text-charcoal-light sm:text-[10px]">
-              <span>Dop. {day.counts.expectedMorning}</span>
-              <span>Odp. {day.counts.expectedAfternoon}</span>
-            </div>
-          ) : null}
           <div className="mt-1 min-h-4 text-[9px] leading-tight text-charcoal-light sm:text-[11px]">
             {day.isToday && `${day.counts.present} dorazilo · ${day.counts.waiting} čekáme`}
             {day.isFuture && day.counts.excused > 0 && `${day.counts.excused} omluveno`}
@@ -236,9 +231,7 @@ function DayHoverPreview({
     day.children.waiting.length > 0 ||
     day.children.excused.length > 0 ||
     day.children.unexcused.length > 0 ||
-    day.children.unknown.length > 0 ||
-    day.children.morningAbsent.length > 0 ||
-    day.children.afternoonAbsent.length > 0;
+    day.children.unknown.length > 0;
 
   return (
     <div
@@ -264,22 +257,30 @@ function DayHoverPreview({
         </div>
       ) : (
         <div className="px-4 py-3.5">
-          <div className="grid grid-cols-2 gap-1.5 text-center">
+          <div className="grid grid-cols-4 gap-1.5 text-center">
             <div className="rounded-lg bg-sage/10 px-1 py-2">
-              <p className="text-lg font-extrabold leading-none text-sage-dark">{day.counts.expectedMorning}</p>
-              <p className="mt-1 text-[9px] text-charcoal-light">Dopoledne</p>
+              <p className="text-lg font-extrabold leading-none text-sage-dark">{day.counts.expected}</p>
+              <p className="mt-1 text-[9px] text-charcoal-light">očekáváme</p>
             </div>
             <div className="rounded-lg bg-sage/10 px-1 py-2">
-              <p className="text-lg font-extrabold leading-none text-sage-dark">{day.counts.expectedAfternoon}</p>
-              <p className="mt-1 text-[9px] text-charcoal-light">Odpoledne</p>
+              <p className="text-lg font-extrabold leading-none text-sage-dark">{day.counts.present}</p>
+              <p className="mt-1 text-[9px] text-charcoal-light">dorazilo</p>
+            </div>
+            <div className="rounded-lg bg-gold/10 px-1 py-2">
+              <p className="text-lg font-extrabold leading-none text-gold-dark">{day.counts.waiting}</p>
+              <p className="mt-1 text-[9px] text-charcoal-light">čekáme</p>
+            </div>
+            <div className="rounded-lg bg-coral/10 px-1 py-2">
+              <p className="text-lg font-extrabold leading-none text-coral-dark">
+                {day.counts.excused + day.counts.unexcused}
+              </p>
+              <p className="mt-1 text-[9px] text-charcoal-light">nedorazí</p>
             </div>
           </div>
 
           {hasExceptions ? (
             <div className="mt-3 max-h-52 space-y-2.5 overflow-hidden border-t border-cream-dark pt-3">
               <PreviewChildList title="Ještě čekáme" items={day.children.waiting} tone="gold" />
-              <PreviewChildList title="Jen dopoledne nepřijde" items={day.children.morningAbsent} tone="gold" />
-              <PreviewChildList title="Jen odpoledne nepřijde" items={day.children.afternoonAbsent} tone="gold" />
               <PreviewChildList title="Omluvené" items={day.children.excused} tone="gold" />
               <PreviewChildList title="Bez omluvenky" items={day.children.unexcused} tone="coral" />
               <PreviewChildList title="Bez zápisu" items={day.children.unknown} tone="neutral" />
@@ -397,29 +398,26 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="rounded-xl bg-sage/10 p-3 text-center">
-                  <p className="text-2xl font-extrabold text-sage-dark">{day.counts.expectedMorning}</p>
-                  <p className="text-xs text-charcoal-light">Dopoledne</p>
+                  <p className="text-2xl font-extrabold text-sage-dark">{day.counts.expected}</p>
+                  <p className="text-xs text-charcoal-light">
+                    {day.isPast ? PRESENT_CHILDREN_LABEL : "Očekávané děti"}
+                  </p>
                 </div>
                 <div className="rounded-xl bg-sage/10 p-3 text-center">
-                  <p className="text-2xl font-extrabold text-sage-dark">{day.counts.expectedAfternoon}</p>
-                  <p className="text-xs text-charcoal-light">Odpoledne</p>
+                  <p className="text-2xl font-extrabold text-sage-dark">{day.counts.present}</p>
+                  <p className="text-xs text-charcoal-light">Dorazilo</p>
                 </div>
-              </div>
-
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-sage/5 p-2 text-center">
-                  <p className="text-lg font-extrabold text-sage-dark">{day.counts.present}</p>
-                  <p className="text-[11px] text-charcoal-light">Dorazilo</p>
+                <div className="rounded-xl bg-gold/10 p-3 text-center">
+                  <p className="text-2xl font-extrabold text-gold-dark">{day.counts.waiting}</p>
+                  <p className="text-xs text-charcoal-light">Čekáme</p>
                 </div>
-                <div className="rounded-xl bg-gold/10 p-2 text-center">
-                  <p className="text-lg font-extrabold text-gold-dark">{day.counts.waiting}</p>
-                  <p className="text-[11px] text-charcoal-light">Čekáme</p>
-                </div>
-                <div className="rounded-xl bg-coral/10 p-2 text-center">
-                  <p className="text-lg font-extrabold text-coral-dark">{day.counts.excused + day.counts.unexcused}</p>
-                  <p className="text-[11px] text-charcoal-light">Nedorazí</p>
+                <div className="rounded-xl bg-coral/10 p-3 text-center">
+                  <p className="text-2xl font-extrabold text-coral-dark">
+                    {day.counts.excused + day.counts.unexcused}
+                  </p>
+                  <p className="text-xs text-charcoal-light">Nedorazí</p>
                 </div>
               </div>
 
@@ -427,8 +425,6 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
                 <ChildList title="Čekáme na příchod" items={day.children.waiting} tone="gold" />
                 <ChildList title="Očekáváme" items={day.children.expected} tone="sage" />
                 <ChildList title="Přítomné děti" items={day.children.present} tone="sage" />
-                <ChildList title="Jen dopoledne nepřijde" items={day.children.morningAbsent} tone="gold" />
-                <ChildList title="Jen odpoledne nepřijde" items={day.children.afternoonAbsent} tone="gold" />
                 <ChildList title="Omluvené děti" items={day.children.excused} tone="gold" />
                 <ChildList title="Nepřítomné bez omluvenky" items={day.children.unexcused} tone="coral" />
                 <ChildList title="Bez zápisu" items={day.children.unknown} tone="neutral" />
@@ -529,26 +525,22 @@ export function AttendanceCalendar({
         <button
           type="button"
           onClick={() => openDay(today)}
-          className="grid w-full grid-cols-4 gap-2 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[1.2fr_repeat(4,1fr)] sm:items-center sm:p-5"
+          className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[1.2fr_repeat(3,1fr)] sm:items-center sm:p-5"
         >
-          <div className="col-span-4 mb-1 sm:col-span-1 sm:mb-0">
+          <div className="col-span-3 mb-1 sm:col-span-1 sm:mb-0">
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-gold-dark">Dnes</p>
             <p className="mt-0.5 font-bold capitalize text-charcoal">{formatLongDate(today.dateKey)}</p>
           </div>
           {today.isClosed ? (
-            <div className="col-span-4">
+            <div className="col-span-3">
               <p className="text-lg font-extrabold text-charcoal">Habitat má dnes zavřeno</p>
               <p className="text-xs text-charcoal-light">{today.closedReason || "Dnes neprobíhá výuka."}</p>
             </div>
           ) : (
             <>
               <div>
-                <p className="text-2xl font-extrabold text-sage-dark">{today.counts.expectedMorning}</p>
-                <p className="text-xs text-charcoal-light">dopoledne</p>
-              </div>
-              <div>
-                <p className="text-2xl font-extrabold text-sage-dark">{today.counts.expectedAfternoon}</p>
-                <p className="text-xs text-charcoal-light">odpoledne</p>
+                <p className="text-2xl font-extrabold text-sage-dark">{today.counts.expected}</p>
+                <p className="text-xs text-charcoal-light">očekáváme</p>
               </div>
               <div>
                 <p className="text-2xl font-extrabold text-sage-dark">{today.counts.present}</p>

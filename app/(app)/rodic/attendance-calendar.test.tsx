@@ -21,13 +21,6 @@ const days = [
     isToday: false,
   },
   {
-    date: "2026-08-26",
-    dayNumber: 26,
-    status: "PARTIAL" as const,
-    absencePart: "AFTERNOON" as const,
-    isToday: false,
-  },
-  {
     date: "2026-08-25",
     dayNumber: 25,
     status: "PENDING" as const,
@@ -99,20 +92,6 @@ describe("AttendanceCalendar", () => {
     );
 
     expect(screen.getAllByText("Omluvena pozdě").length).toBeGreaterThan(0);
-  });
-
-  it("names the excused part of the day", () => {
-    render(
-      <AttendanceCalendar
-        childId="child-1"
-        childName="Žofie"
-        childGender="FEMALE"
-        month="2026-08"
-        days={days}
-      />,
-    );
-
-    expect(screen.getAllByText("Chybí odpoledne").length).toBeGreaterThan(0);
   });
 
   it("uses feminine attendance labels for a girl", () => {

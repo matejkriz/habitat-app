@@ -28,7 +28,6 @@ import {
   Textarea,
 } from "@/components/ui";
 import type { ExcuseRangeState } from "@/lib/excuse-coverage";
-import type { ExcuseDayPart } from "@/lib/types";
 import { formatDate, formatDateRange } from "@/lib/utils";
 
 interface Excuse {
@@ -36,7 +35,6 @@ interface Excuse {
   fromDate: Date;
   toDate: Date;
   reason: string | null;
-  dayPart: ExcuseDayPart;
   cancelLunch: boolean;
   rangeState: ExcuseRangeState;
   submittedAt: Date;
@@ -75,14 +73,7 @@ export default function ExcuseManagementPage() {
   const [createFromDate, setCreateFromDate] = useState("");
   const [createToDate, setCreateToDate] = useState("");
   const [createCancelLunch, setCreateCancelLunch] = useState(true);
-  const [createDayPart, setCreateDayPart] =
-    useState<ExcuseDayPart>("FULL_DAY");
   const [notice, setNotice] = useState("");
-  const hasMultipleCreateDays = Boolean(
-    createFromDate &&
-      createToDate &&
-      createFromDate !== createToDate,
-  );
 
   const loadExcuses = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
@@ -152,10 +143,6 @@ export default function ExcuseManagementPage() {
 
     try {
       const formData = new FormData(event.currentTarget);
-      formData.set(
-        "dayPart",
-        hasMultipleCreateDays ? "FULL_DAY" : createDayPart,
-      );
       formData.set("cancelLunch", String(createCancelLunch));
       const result = await createDirectorExcuse(formData);
       if (!result.success) {
@@ -168,7 +155,6 @@ export default function ExcuseManagementPage() {
       setCreateFromDate("");
       setCreateToDate("");
       setCreateCancelLunch(true);
-      setCreateDayPart("FULL_DAY");
       setNotice(
         createCancelLunch
           ? "Omluvenka byla uložena a rovnou schválena."
@@ -199,7 +185,6 @@ export default function ExcuseManagementPage() {
               setCreateFromDate("");
               setCreateToDate("");
               setCreateCancelLunch(true);
-              setCreateDayPart("FULL_DAY");
               setNotice("");
               setShowCreateForm(true);
             }}
@@ -267,20 +252,13 @@ export default function ExcuseManagementPage() {
                   value={createFromDate}
                   onChange={(event) => {
                     const nextFromDate = event.target.value;
-                    const nextToDate =
-                      nextFromDate &&
-                      (!createToDate || createToDate < nextFromDate)
-                        ? nextFromDate
-                        : createToDate;
                     setCreateFromDate(nextFromDate);
-                    setCreateToDate(nextToDate);
-                    if (
+                    setCreateToDate((currentToDate) =>
                       nextFromDate &&
-                      nextToDate &&
-                      nextFromDate !== nextToDate
-                    ) {
-                      setCreateDayPart("FULL_DAY");
-                    }
+                      (!currentToDate || currentToDate < nextFromDate)
+                        ? nextFromDate
+                        : currentToDate,
+                    );
                   }}
                   required
                 />
@@ -290,44 +268,16 @@ export default function ExcuseManagementPage() {
                   type="date"
                   value={createToDate}
                   min={createFromDate || undefined}
-                  onChange={(event) => {
-                    const nextToDate = event.target.value;
-                    setCreateToDate(nextToDate);
-                    if (
-                      createFromDate &&
-                      nextToDate &&
-                      createFromDate !== nextToDate
-                    ) {
-                      setCreateDayPart("FULL_DAY");
-                    }
-                  }}
+                  onChange={(event) => setCreateToDate(event.target.value)}
                   required
                 />
               </div>
-              {!hasMultipleCreateDays ? (
-                <Select
-                  label="Dítě bude chybět"
-                  name="dayPart"
-                  value={createDayPart}
-                  onChange={(event) =>
-                    setCreateDayPart(event.target.value as ExcuseDayPart)
-                  }
-                  options={[
-                    { value: "FULL_DAY", label: "Celý den" },
-                    { value: "MORNING", label: "Jen dopoledne" },
-                    { value: "AFTERNOON", label: "Jen odpoledne" },
-                  ]}
-                />
-              ) : null}
-              {!hasMultipleCreateDays && createDayPart === "MORNING" ? (
-                <p className="text-sm text-charcoal-light">
-                  Dítě přijde až odpoledne.
-                </p>
-              ) : !hasMultipleCreateDays && createDayPart === "AFTERNOON" ? (
-                <p className="text-sm text-charcoal-light">
-                  Dítě bude ve škole dopoledne, odpoledne bude chybět.
-                </p>
-              ) : null}
+              <Textarea
+                label="Důvod (volitelné)"
+                name="reason"
+                placeholder="Např. nemoc, rodinné důvody…"
+                rows={3}
+              />
               <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
                 <Toggle
                   id="director-cancel-lunch"
@@ -344,12 +294,6 @@ export default function ExcuseManagementPage() {
                   }
                 />
               </div>
-              <Textarea
-                label="Důvod (volitelné)"
-                name="reason"
-                placeholder="Např. nemoc, rodinné důvody…"
-                rows={3}
-              />
             </CardContent>
             <CardFooter className="justify-end gap-3">
               <Button
@@ -361,7 +305,6 @@ export default function ExcuseManagementPage() {
                   setCreateFromDate("");
                   setCreateToDate("");
                   setCreateCancelLunch(true);
-                  setCreateDayPart("FULL_DAY");
                 }}
                 disabled={isCreating}
               >
@@ -425,14 +368,6 @@ export default function ExcuseManagementPage() {
                       <p className="text-sm text-charcoal-light">
                         <span className="font-medium">Období:</span>{" "}
                         {formatDateRange(excuse.fromDate, excuse.toDate)}
-                      </p>
-                      <p className="text-sm text-charcoal-light">
-                        <span className="font-medium">Část dne:</span>{" "}
-                        {excuse.dayPart === "MORNING"
-                          ? "jen dopoledne"
-                          : excuse.dayPart === "AFTERNOON"
-                            ? "jen odpoledne"
-                            : "celý den"}
                       </p>
                       {excuse.reason && (
                         <p className="text-sm text-charcoal-light">

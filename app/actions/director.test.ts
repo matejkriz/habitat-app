@@ -153,26 +153,6 @@ describe("getLunchOverview", () => {
     expect(overview.children[0].payableLunches).toBe(2);
   });
 
-  it("does not charge lunch when a morning-only child arrives after lunch", async () => {
-    mocks.attendanceList.mockResolvedValue([
-      { id: "a-19", childId: "tobias", date: AUG(19), presence: "PRESENT" },
-      { id: "a-20", childId: "tobias", date: AUG(20), presence: "ABSENT" },
-    ]);
-    mocks.excusesList.mockResolvedValue([
-      {
-        ...approvedSingleDay,
-        fromDate: AUG(19),
-        toDate: AUG(19),
-        dayPart: "MORNING",
-      },
-    ]);
-
-    const overview = await getLunchOverview("2026-08");
-
-    expect(overview.children[0].statuses).toEqual(["excused", "unexcused"]);
-    expect(overview.children[0].payableLunches).toBe(1);
-  });
-
   it("marks every child gray and charges nobody on a day without lunch", async () => {
     mocks.excusesList.mockResolvedValue([]);
     mocks.noLunchDaysList.mockResolvedValue([{ date: AUG(19) }]);
@@ -408,55 +388,6 @@ describe("createDirectorExcuse", () => {
     expect(mocks.excusesCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({ cancelLunch: false }),
     });
-  });
-
-  it("stores an afternoon absence with the requested lunch cancellation", async () => {
-    const formData = new FormData();
-    formData.set("childId", "tobias");
-    formData.set("fromDate", "2026-08-19");
-    formData.set("toDate", "2026-08-19");
-    formData.set("dayPart", "AFTERNOON");
-    formData.set("cancelLunch", "true");
-
-    await expect(createDirectorExcuse(formData)).resolves.toEqual({
-      success: true,
-    });
-    expect(mocks.excusesCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        dayPart: "AFTERNOON",
-        cancelLunch: true,
-      }),
-    });
-  });
-
-  it("forces whole day when a submitted range spans multiple dates", async () => {
-    const formData = new FormData();
-    formData.set("childId", "tobias");
-    formData.set("fromDate", "2026-08-19");
-    formData.set("toDate", "2026-08-20");
-    formData.set("dayPart", "MORNING");
-
-    await expect(createDirectorExcuse(formData)).resolves.toEqual({
-      success: true,
-    });
-    expect(mocks.excusesCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({ dayPart: "FULL_DAY" }),
-    });
-  });
-
-  it("rejects an invalid day part safely", async () => {
-    const formData = new FormData();
-    formData.set("childId", "tobias");
-    formData.set("fromDate", "2026-08-19");
-    formData.set("toDate", "2026-08-19");
-    formData.set("dayPart", "EVENING");
-
-    await expect(createDirectorExcuse(formData)).resolves.toEqual({
-      success: false,
-      error: "Neplatná část dne.",
-    });
-    expect(mocks.childrenGet).not.toHaveBeenCalled();
-    expect(mocks.excusesCreate).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid lunch choice safely", async () => {

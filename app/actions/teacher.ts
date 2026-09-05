@@ -8,15 +8,13 @@ import {
   ExcuseStatus,
   type Child,
   type Attendance,
-  type ExcuseDayPart,
 } from "@/lib/types";
 import { isClosedDay } from "@/lib/school-days";
 import { recordBulkAttendance, canEnterAttendance } from "@/lib/attendance";
 import { getExcusesOverlapping } from "@/lib/excuse";
 import {
   getDayCoverage,
-  getDayPartCoverage,
-  getExcuseDayPartState,
+  getExcuseDayState,
   getExcuseStatusForDay,
   groupExcusesByChild,
   type ExcuseDayState,
@@ -33,7 +31,6 @@ type DailyExcuse = {
   readonly childId: string;
   readonly state: ExcuseDayState;
   readonly lunchCancelled: boolean;
-  readonly dayPart: ExcuseDayPart;
 };
 
 type DailyAttendance = {
@@ -117,43 +114,10 @@ export const getAttendanceForDate = async (
     excuses: [...excusesByChild.keys()].map((childId) => {
       const childExcuses = excusesByChild.get(childId) ?? [];
       const coverage = getDayCoverage(childExcuses, date);
-      const morning = getDayPartCoverage(childExcuses, date, "MORNING");
-      const afternoon = getDayPartCoverage(childExcuses, date, "AFTERNOON");
-      const morningState = getExcuseDayPartState(
-        childExcuses,
-        date,
-        "MORNING",
-      );
-      const afternoonState = getExcuseDayPartState(
-        childExcuses,
-        date,
-        "AFTERNOON",
-      );
-      const dayPart =
-        morning.covered && afternoon.covered
-          ? "FULL_DAY"
-          : morning.covered
-            ? "MORNING"
-            : "AFTERNOON";
-      const applicableStates =
-        dayPart === "MORNING"
-          ? [morningState]
-          : dayPart === "AFTERNOON"
-            ? [afternoonState]
-            : [morningState, afternoonState];
-      const state = applicableStates.includes("LATE")
-        ? "LATE"
-        : applicableStates.includes("LATE_APPROVED")
-          ? "LATE_APPROVED"
-          : "ON_TIME";
       return {
         childId,
-        dayPart,
-        state,
-        lunchCancelled:
-          coverage.lunchCancelled ||
-          morning.lunchCancelled ||
-          afternoon.lunchCancelled,
+        state: getExcuseDayState(childExcuses, date)!,
+        lunchCancelled: coverage.lunchCancelled,
       };
     }),
     noLunch: noLunchDay !== null,

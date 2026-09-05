@@ -2,30 +2,6 @@ import { describe, expect, it } from "vitest";
 import { buildParentCalendarMonth } from "./parent-calendar";
 
 describe("buildParentCalendarMonth", () => {
-  it("shows which part of the day is excused without hiding the whole day", () => {
-    const days = buildParentCalendarMonth({
-      month: new Date(2026, 7, 1),
-      attendance: [],
-      excuses: [
-        {
-          id: "excuse-afternoon",
-          childId: "child-1",
-          fromDate: new Date(2026, 7, 10),
-          toDate: new Date(2026, 7, 10),
-          dayPart: "AFTERNOON",
-          submittedAt: new Date(2026, 7, 1, 8),
-          lateApprovedAt: null,
-        },
-      ],
-      closedDays: [],
-    });
-
-    expect(days.find((day) => day.date === "2026-08-10")).toMatchObject({
-      status: "PARTIAL",
-      absencePart: "AFTERNOON",
-    });
-  });
-
   it("shows an approved excuse across its whole date range", () => {
     const days = buildParentCalendarMonth({
       month: new Date(2026, 7, 1),

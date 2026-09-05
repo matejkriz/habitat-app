@@ -9,7 +9,6 @@ import type {
   ChildGender,
   ClosedDay,
   Excuse,
-  ExcuseDayPart,
   NoLunchDay,
   ParentChild,
   Presence,
@@ -75,7 +74,6 @@ type RawExcuse = {
   readonly fromDate: number;
   readonly toDate: number;
   readonly reason?: string | null;
-  readonly dayPart?: ExcuseDayPart;
   readonly cancelLunch?: boolean;
   readonly submittedById: string;
   readonly submittedAt: number;
@@ -297,7 +295,6 @@ const fromRawExcuse = (raw: RawExcuse): Excuse => {
     fromDate: new Date(raw.fromDate),
     toDate: new Date(raw.toDate),
     reason: raw.reason ?? null,
-    dayPart: raw.dayPart ?? "FULL_DAY",
     cancelLunch: raw.cancelLunch ?? true,
     submittedById: raw.submittedById,
     submittedAt: new Date(raw.submittedAt),
@@ -1015,7 +1012,6 @@ export const db: any = {
         fromDate: toTimestamp(data.fromDate),
         toDate: toTimestamp(data.toDate),
         reason: data.reason == null ? null : String(data.reason),
-        dayPart: (data.dayPart as ExcuseDayPart | undefined) ?? "FULL_DAY",
         cancelLunch: data.cancelLunch !== false,
         submittedById: String(data.submittedById),
         submittedAt: data.submittedAt ? toTimestamp(data.submittedAt) : now,

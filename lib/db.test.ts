@@ -50,7 +50,6 @@ describe("legacy excuse rollout", () => {
 
     expect(excuse.lateApprovedAt).toEqual(new Date(legacyExcuse.updatedAt));
     expect(excuse.cancelLunch).toBe(true);
-    expect(excuse.dayPart).toBe("FULL_DAY");
   });
 
   it("preserves an explicit choice to keep lunch", async () => {

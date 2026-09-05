@@ -26,7 +26,7 @@ import {
   getPresenceLabel,
   PRESENT_CHILDREN_LABEL,
 } from "@/lib/presence-label";
-import type { ChildGender, ExcuseDayPart } from "@/lib/types";
+import type { ChildGender } from "@/lib/types";
 
 interface Child {
   id: string;
@@ -46,7 +46,6 @@ interface DailyExcuse {
   childId: string;
   state: "ON_TIME" | "LATE" | "LATE_APPROVED";
   lunchCancelled?: boolean;
-  dayPart?: ExcuseDayPart;
 }
 
 const excuseBadge = {
@@ -175,13 +174,8 @@ export default function TeacherAttendancePage() {
 
         // Initialize attendance state
         const nextAttendance: Record<string, boolean> = {};
-        const fullDayExcusedChildIds = new Set(
-          attendanceData.excuses
-            .filter(
-              (excuse) =>
-                !excuse.dayPart || excuse.dayPart === "FULL_DAY",
-            )
-            .map((excuse) => excuse.childId),
+        const excusedChildIds = new Set(
+          attendanceData.excuses.map((excuse) => excuse.childId),
         );
         childrenData.forEach((child) => {
           const record = attendanceData.attendance.find(
@@ -189,7 +183,7 @@ export default function TeacherAttendancePage() {
           );
           nextAttendance[child.id] = record
             ? record.presence === "PRESENT"
-            : !fullDayExcusedChildIds.has(child.id);
+            : !excusedChildIds.has(child.id);
         });
 
         dayCache.current.set(selectedDate, {
@@ -327,14 +321,6 @@ export default function TeacherAttendancePage() {
 
   const presentCount = Object.values(attendance).filter(Boolean).length;
   const absentCount = children.length - presentCount;
-  const expectedMorning = children.filter((child) => {
-    const dayPart = excuses[child.id]?.dayPart ?? "FULL_DAY";
-    return !excuses[child.id] || dayPart === "AFTERNOON";
-  }).length;
-  const expectedAfternoon = children.filter((child) => {
-    const dayPart = excuses[child.id]?.dayPart ?? "FULL_DAY";
-    return !excuses[child.id] || dayPart === "MORNING";
-  }).length;
 
   const today = new Date().toISOString().split("T")[0];
   const isInFuture = selectedDate > today;
@@ -485,29 +471,6 @@ export default function TeacherAttendancePage() {
                 </label>
               )}
 
-              <section
-                aria-label="Plánovaná účast"
-                className="rounded-lg border border-sage/20 bg-sage/5 p-4"
-              >
-                <p className="mb-3 text-sm font-semibold text-charcoal">
-                  Plán podle omluvenek
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-white px-3 py-2 text-center">
-                    <p className="text-2xl font-bold text-sage-dark">
-                      {expectedMorning}
-                    </p>
-                    <p className="text-xs text-charcoal-light">Dopoledne</p>
-                  </div>
-                  <div className="rounded-lg bg-white px-3 py-2 text-center">
-                    <p className="text-2xl font-bold text-sage-dark">
-                      {expectedAfternoon}
-                    </p>
-                    <p className="text-xs text-charcoal-light">Odpoledne</p>
-                  </div>
-                </div>
-              </section>
-
               {/* Summary */}
               <div className="flex flex-col items-stretch gap-4 rounded-lg bg-cream p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
@@ -562,21 +525,11 @@ export default function TeacherAttendancePage() {
                           {child.firstName} {child.lastName}
                         </span>
                         {excuses[child.id] && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {excuses[child.id].dayPart &&
-                            excuses[child.id].dayPart !== "FULL_DAY" ? (
-                              <Badge variant="info">
-                                {excuses[child.id].dayPart === "MORNING"
-                                  ? "Dopoledne nepřijde"
-                                  : "Odpoledne nepřijde"}
-                              </Badge>
-                            ) : null}
-                            <Badge
-                              variant={getExcuseBadge(excuses[child.id]).variant}
-                            >
-                              {getExcuseBadge(excuses[child.id]).label}
-                            </Badge>
-                          </div>
+                          <Badge
+                            variant={getExcuseBadge(excuses[child.id]).variant}
+                          >
+                            {getExcuseBadge(excuses[child.id]).label}
+                          </Badge>
                         )}
                       </div>
                     </div>

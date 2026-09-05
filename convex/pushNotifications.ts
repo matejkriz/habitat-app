@@ -49,7 +49,6 @@ async function enqueueExcuseEvent(
       fromTimestamp: excuse.fromDate,
       toTimestamp: excuse.toDate,
       reason: excuse.reason,
-      dayPart: excuse.dayPart,
     }),
     url: "/reditel/omluvenky",
     createdAt: now,
