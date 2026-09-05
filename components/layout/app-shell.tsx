@@ -255,7 +255,7 @@ export function AppShell({ children, user }: AppShellProps) {
   return (
     <div className="min-h-screen bg-cream">
       {/* Header */}
-      <header className="bg-white border-b border-cream-dark sticky top-0 z-40">
+      <header className="bg-white border-b border-cream-dark sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
@@ -369,7 +369,7 @@ export function AppShell({ children, user }: AppShellProps) {
       </header>
 
       {/* Mobile Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cream-dark z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cream-dark z-40 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around h-16">
           {navItems.slice(0, 5).map((item) => (
             <Link
@@ -394,7 +394,7 @@ export function AppShell({ children, user }: AppShellProps) {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-6">
         {children}
       </main>
     </div>

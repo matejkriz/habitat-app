@@ -104,6 +104,31 @@ describe("AppShell", () => {
     expect(excusesLink?.className).toContain("flex-1");
   });
 
+  it("keeps the mobile navigation and content clear of the device safe area", () => {
+    const { container } = render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    const mobileNavigation = Array.from(
+      container.querySelectorAll("nav")
+    ).find((navigationElement) =>
+      navigationElement.className.includes("md:hidden")
+    );
+    const main = container.querySelector("main");
+
+    expect(mobileNavigation?.className).toContain(
+      "pb-[env(safe-area-inset-bottom)]"
+    );
+    expect(container.querySelector("header")?.className).toContain(
+      "pt-[env(safe-area-inset-top)]"
+    );
+    expect(main?.className).toContain(
+      "pb-[calc(6rem+env(safe-area-inset-bottom))]"
+    );
+  });
+
   it("reveals sign out only after opening the user menu", () => {
     render(
       <AppShell user={director}>
