@@ -1,17 +1,41 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  withAuth: vi.fn(),
-  cookies: vi.fn(),
-  userGet: vi.fn(),
-  userCreate: vi.fn(),
-  userUpdate: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const request = { id: 0 };
+
+  return {
+    withAuth: vi.fn(),
+    cookies: vi.fn(),
+    userGet: vi.fn(),
+    userCreate: vi.fn(),
+    userUpdate: vi.fn(),
+    startRequest: () => {
+      request.id += 1;
+    },
+    cache: vi.fn(
+      <Arguments extends unknown[], Result>(
+        operation: (...args: Arguments) => Result,
+      ) => {
+        let cachedRequestId = -1;
+        let cachedResult: Result;
+
+        return (...args: Arguments): Result => {
+          if (cachedRequestId !== request.id) {
+            cachedRequestId = request.id;
+            cachedResult = operation(...args);
+          }
+          return cachedResult;
+        };
+      },
+    ),
+  };
+});
 
 vi.mock("@workos-inc/authkit-nextjs", () => ({
   withAuth: mocks.withAuth,
 }));
 vi.mock("next/headers", () => ({ cookies: mocks.cookies }));
+vi.mock("react", () => ({ cache: mocks.cache }));
 vi.mock("./db", () => ({
   db: {
     users: {
@@ -35,6 +59,7 @@ const personaUser = {
 
 describe("getDbUser development personas", () => {
   beforeEach(() => {
+    mocks.startRequest();
     vi.stubEnv("DEV_PERSONA_SWITCHER", "true");
     vi.stubEnv("WORKOS_API_KEY", "sk_test_example");
     vi.stubEnv("NODE_ENV", "production");
@@ -99,6 +124,23 @@ describe("getDbUser development personas", () => {
       role: "DIRECTOR",
     });
     expect(mocks.cookies).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates authentication and user lookup within one request", async () => {
+    vi.stubEnv("VERCEL_TARGET_ENV", "production");
+    vi.stubEnv("VERCEL_GIT_COMMIT_REF", "main");
+    mocks.userGet.mockResolvedValue({
+      ...personaUser,
+      id: "production-user",
+      workosId: "user_developer",
+      role: "DIRECTOR",
+    });
+
+    const [first, second] = await Promise.all([getDbUser(), getDbUser()]);
+
+    expect(first).toBe(second);
+    expect(mocks.withAuth).toHaveBeenCalledTimes(1);
+    expect(mocks.userGet).toHaveBeenCalledTimes(1);
   });
 
   it("links a prefilled user by email on first WorkOS sign-in", async () => {
