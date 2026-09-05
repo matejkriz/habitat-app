@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { ConvexHttpClient } from "convex/browser";
-import type { FunctionReference } from "convex/server";
+import { getFunctionName, type FunctionReference } from "convex/server";
 import { api } from "../convex/_generated/api";
+import { measureServerOperation } from "./server-timing";
 import type {
   Attendance,
   AuditLog,
@@ -208,12 +209,20 @@ type ConvexMutationReference = FunctionReference<"mutation">;
 const convexQuery = async <Ref extends ConvexQueryReference>(
   reference: Ref,
   args: Ref["_args"],
-): Promise<Ref["_returnType"]> => await getClient().query(reference, args);
+): Promise<Ref["_returnType"]> =>
+  await measureServerOperation(
+    `convex.query.${getFunctionName(reference)}`,
+    async () => await getClient().query(reference, args),
+  );
 
 const convexMutation = async <Ref extends ConvexMutationReference>(
   reference: Ref,
   args: Ref["_args"],
-): Promise<Ref["_returnType"]> => await getClient().mutation(reference, args);
+): Promise<Ref["_returnType"]> =>
+  await measureServerOperation(
+    `convex.mutation.${getFunctionName(reference)}`,
+    async () => await getClient().mutation(reference, args),
+  );
 
 const createId = (): string => `id_${randomUUID().replace(/-/g, "")}`;
 

@@ -9,6 +9,12 @@ const mocks = vi.hoisted(() => {
     userGet: vi.fn(),
     userCreate: vi.fn(),
     userUpdate: vi.fn(),
+    measureServerOperation: vi.fn(
+      async <Result>(
+        _operation: string,
+        operation: () => Promise<Result>,
+      ): Promise<Result> => await operation(),
+    ),
     startRequest: () => {
       request.id += 1;
     },
@@ -44,6 +50,9 @@ vi.mock("./db", () => ({
       update: mocks.userUpdate,
     },
   },
+}));
+vi.mock("./server-timing", () => ({
+  measureServerOperation: mocks.measureServerOperation,
 }));
 
 import { getDbUser } from "./auth";
@@ -141,6 +150,9 @@ describe("getDbUser development personas", () => {
     expect(first).toBe(second);
     expect(mocks.withAuth).toHaveBeenCalledTimes(1);
     expect(mocks.userGet).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.measureServerOperation.mock.calls.map(([operation]) => operation),
+    ).toEqual(["auth.getDbUser", "authkit.withAuth"]);
   });
 
   it("links a prefilled user by email on first WorkOS sign-in", async () => {

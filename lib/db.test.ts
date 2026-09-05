@@ -4,6 +4,12 @@ import { api } from "../convex/_generated/api";
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   mutation: vi.fn(),
+  measureServerOperation: vi.fn(
+    async <Result>(
+      _operation: string,
+      operation: () => Promise<Result>,
+    ): Promise<Result> => await operation(),
+  ),
 }));
 
 vi.mock("convex/browser", () => ({
@@ -11,6 +17,9 @@ vi.mock("convex/browser", () => ({
     query = mocks.query;
     mutation = mocks.mutation;
   },
+}));
+vi.mock("./server-timing", () => ({
+  measureServerOperation: mocks.measureServerOperation,
 }));
 
 import { db } from "./db";
@@ -137,6 +146,9 @@ describe("indexed startup adapter queries", () => {
       secret: "test-server-secret",
       workosId: "workos-1",
     });
+    expect(mocks.measureServerOperation.mock.calls[0]?.[0]).toBe(
+      "convex.query.db:findUser",
+    );
   });
 
   it("loads a parent's child links in one Convex request", async () => {
@@ -240,5 +252,17 @@ describe("indexed startup adapter queries", () => {
       secret: "test-server-secret",
       active: true,
     });
+  });
+
+  it("times Convex mutations by function name", async () => {
+    mocks.mutation.mockResolvedValue("convex-document-id");
+
+    await db.children.create({
+      data: { firstName: "Anna", lastName: "Malá", active: true },
+    });
+
+    expect(mocks.measureServerOperation.mock.calls[0]?.[0]).toBe(
+      "convex.mutation.db:insert",
+    );
   });
 });
