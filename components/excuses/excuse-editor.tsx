@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { DayPartSelector } from "@/components/excuses/day-part-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ExcuseDayPart } from "@/lib/types";
 
@@ -139,15 +139,9 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
         />
       </div>
       {!hasMultipleDays ? (
-        <Select
-          label="Dítě bude chybět"
+        <DayPartSelector
           value={dayPart}
-          onChange={(event) => setDayPart(event.target.value as ExcuseDayPart)}
-          options={[
-            { value: "FULL_DAY", label: "Celý den" },
-            { value: "MORNING", label: "Jen dopoledne" },
-            { value: "AFTERNOON", label: "Jen odpoledne" },
-          ]}
+          onChange={setDayPart}
         />
       ) : null}
       <Textarea

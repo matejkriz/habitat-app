@@ -28,9 +28,7 @@ describe("ExcuseEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2024-01-04" } });
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-04" } });
-    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
-      target: { value: "AFTERNOON" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: "Odpoledne" }));
     fireEvent.change(screen.getByLabelText("Důvod"), { target: { value: "Rodinné důvody" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
 
@@ -61,7 +59,7 @@ describe("ExcuseEditor", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
 
-    expect(screen.queryByLabelText("Dítě bude chybět")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Dítě bude chybět" })).toBeNull();
   });
 
   it("asks for confirmation before deleting", async () => {

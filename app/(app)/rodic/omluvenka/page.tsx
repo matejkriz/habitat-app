@@ -10,10 +10,10 @@ import {
   CardFooter,
   Button,
   Input,
-  Select,
   Toggle,
   Textarea,
 } from "@/components/ui";
+import { DayPartSelector } from "@/components/excuses/day-part-selector";
 import {
   getParentChildren,
   submitExcuse,
@@ -346,17 +346,9 @@ export default function NewExcusePage() {
             />
 
             {!hasMultipleDays ? (
-              <Select
-                label="Dítě bude chybět"
+              <DayPartSelector
                 value={dayPart}
-                onChange={(event) =>
-                  setDayPart(event.target.value as ExcuseDayPartValue)
-                }
-                options={[
-                  { value: ExcuseDayPart.FULL_DAY, label: "Celý den" },
-                  { value: ExcuseDayPart.MORNING, label: "Jen dopoledne" },
-                  { value: ExcuseDayPart.AFTERNOON, label: "Jen odpoledne" },
-                ]}
+                onChange={setDayPart}
               />
             ) : null}
 

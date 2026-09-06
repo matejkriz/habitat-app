@@ -111,9 +111,7 @@ describe("ExcuseManagementPage", () => {
     fireEvent.change(screen.getByLabelText("Od"), {
       target: { value: "2026-08-19" },
     });
-    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
-      target: { value: "AFTERNOON" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: "Odpoledne" }));
 
     const lunchToggle = screen.getByRole("switch");
     const reason = screen.getByLabelText("Důvod (volitelné)");
@@ -135,22 +133,20 @@ describe("ExcuseManagementPage", () => {
 
     await screen.findByText("Žádné omluvenky");
     fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
-    expect(screen.getByLabelText("Dítě bude chybět")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Dítě bude chybět" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Dítě"), {
       target: { value: "child-1" },
     });
     fireEvent.change(screen.getByLabelText("Od"), {
       target: { value: "2026-08-19" },
     });
-    expect(screen.getByLabelText("Dítě bude chybět")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
-      target: { value: "MORNING" },
-    });
+    expect(screen.getByRole("group", { name: "Dítě bude chybět" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Dopoledne" }));
     fireEvent.change(screen.getByLabelText("Do"), {
       target: { value: "2026-08-20" },
     });
 
-    expect(screen.queryByLabelText("Dítě bude chybět")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Dítě bude chybět" })).toBeNull();
     expect(screen.getByRole("switch")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Uložit omluvenku" }));
 

@@ -14,6 +14,7 @@ import {
   ExcuseEditor,
   type ExcuseEditValues,
 } from "@/components/excuses/excuse-editor";
+import { DayPartSelector } from "@/components/excuses/day-part-selector";
 import {
   Card,
   CardFooter,
@@ -305,18 +306,10 @@ export default function ExcuseManagementPage() {
                 />
               </div>
               {!hasMultipleCreateDays ? (
-                <Select
-                  label="Dítě bude chybět"
+                <DayPartSelector
                   name="dayPart"
                   value={createDayPart}
-                  onChange={(event) =>
-                    setCreateDayPart(event.target.value as ExcuseDayPart)
-                  }
-                  options={[
-                    { value: "FULL_DAY", label: "Celý den" },
-                    { value: "MORNING", label: "Jen dopoledne" },
-                    { value: "AFTERNOON", label: "Jen odpoledne" },
-                  ]}
+                  onChange={setCreateDayPart}
                 />
               ) : null}
               {!hasMultipleCreateDays && createDayPart === "MORNING" ? (

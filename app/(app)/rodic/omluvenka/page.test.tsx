@@ -110,13 +110,16 @@ describe("NewExcusePage", () => {
     render(<NewExcusePage />);
 
     await screen.findByRole("checkbox", { name: "Anna" });
-    const dayPart = screen.getByLabelText<HTMLSelectElement>("Dítě bude chybět");
-    expect(dayPart.value).toBe("FULL_DAY");
+    const dayPart = screen.getByRole("group", { name: "Dítě bude chybět" });
+    expect(
+      screen.getByRole("radio", { name: "Celý den" }),
+    ).toHaveProperty("checked", true);
+    expect(dayPart).toBeTruthy();
     const lunchToggle = screen.getByRole("switch");
     const reason = screen.getByLabelText("Důvod (volitelné)");
     expect(lunchToggle.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    fireEvent.change(dayPart, { target: { value: "AFTERNOON" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Odpoledne" }));
 
     expect(
       screen.getByText(
@@ -132,9 +135,7 @@ describe("NewExcusePage", () => {
     render(<NewExcusePage />);
 
     await screen.findByRole("checkbox", { name: "Anna" });
-    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
-      target: { value: "AFTERNOON" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: "Odpoledne" }));
     fireEvent.change(screen.getByLabelText("Od"), {
       target: { value: "2026-09-10" },
     });
@@ -154,20 +155,18 @@ describe("NewExcusePage", () => {
     render(<NewExcusePage />);
 
     await screen.findByRole("checkbox", { name: "Anna" });
-    expect(screen.getByLabelText("Dítě bude chybět")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Dítě bude chybět" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Od"), {
       target: { value: "2026-09-10" },
     });
-    expect(screen.getByLabelText("Dítě bude chybět")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Dítě bude chybět"), {
-      target: { value: "AFTERNOON" },
-    });
+    expect(screen.getByRole("group", { name: "Dítě bude chybět" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Odpoledne" }));
 
     fireEvent.change(screen.getByLabelText("Do"), {
       target: { value: "2026-09-11" },
     });
 
-    expect(screen.queryByLabelText("Dítě bude chybět")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Dítě bude chybět" })).toBeNull();
     expect(screen.getByRole("switch")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
 
