@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito, Geist_Mono } from "next/font/google";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
+import { IOS_STARTUP_IMAGES } from "@/app/pwa-startup-images";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import "./globals.css";
 
@@ -27,6 +28,7 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Habitat Docházka",
+    startupImage: IOS_STARTUP_IMAGES,
   },
   formatDetection: {
     telephone: false,
