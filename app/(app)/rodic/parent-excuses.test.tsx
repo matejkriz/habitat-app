@@ -13,6 +13,7 @@ const excuse = {
   id: "excuse-1",
   fromDate: new Date(2024, 0, 2),
   toDate: new Date(2024, 0, 3),
+  dayPart: "FULL_DAY" as const,
   reason: "Nemoc",
   cancelLunch: true,
   submittedAt: new Date(2024, 0, 1),
@@ -55,6 +56,14 @@ describe("ParentExcuses", () => {
     expect(screen.getByText("Oběd zůstává přihlášený")).toBeTruthy();
   });
 
+  it("shows an afternoon-only excuse", () => {
+    render(
+      <ParentExcuses excuses={[{ ...excuse, dayPart: "AFTERNOON" }]} />,
+    );
+
+    expect(screen.getByText("Jen odpoledne")).toBeTruthy();
+  });
+
   it("saves changes through the parent action", async () => {
     actions.editParentExcuse.mockResolvedValue({
       ...excuse,
@@ -72,6 +81,7 @@ describe("ParentExcuses", () => {
       expect(actions.editParentExcuse).toHaveBeenCalledWith("excuse-1", {
         fromDate: "2024-01-02",
         toDate: "2024-01-03",
+        dayPart: "FULL_DAY",
         reason: "Rodinné důvody",
       });
     });

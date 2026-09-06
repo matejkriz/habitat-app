@@ -10,12 +10,14 @@ import {
   type ExcuseEditValues,
 } from "@/components/excuses/excuse-editor";
 import { formatDateRange } from "@/lib/utils";
+import type { ExcuseDayPart } from "@/lib/types";
 
 type ParentExcuse = {
   readonly id: string;
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason: string | null;
+  readonly dayPart: ExcuseDayPart;
   readonly cancelLunch: boolean;
   readonly submittedAt: Date;
 };
@@ -33,6 +35,7 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
               fromDate: updated.fromDate,
               toDate: updated.toDate,
               reason: updated.reason,
+              dayPart: updated.dayPart,
             }
           : excuse,
       ),
@@ -60,6 +63,13 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
               <p className="text-sm text-charcoal-light">
                 {excuse.reason || "Bez uvedeného důvodu"}
               </p>
+              {excuse.dayPart !== "FULL_DAY" ? (
+                <p className="text-xs font-semibold text-gold-dark">
+                  {excuse.dayPart === "MORNING"
+                    ? "Jen dopoledne"
+                    : "Jen odpoledne"}
+                </p>
+              ) : null}
               {!excuse.cancelLunch ? (
                 <p className="text-xs font-medium text-charcoal-light">
                   Oběd zůstává přihlášený
