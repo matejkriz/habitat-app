@@ -7,6 +7,7 @@
     "dev": "portless run next dev --webpack",
     "build": "next build --webpack",
     "build:vercel": "if [ -n \"$CONVEX_DEPLOY_KEY\" ]; then convex deploy --cmd 'pnpm build' --cmd-url-env-var-name CONVEX_URL; else pnpm build; fi",
+    "generate:pwa-startup": "node scripts/generate-ios-startup-images.mjs",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -49,6 +50,7 @@
     "eslint-config-next": "16.3.1",
     "happy-dom": "^20.1.0",
     "portless": "^0.15.5",
+    "sharp": "0.35.3",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.16"
