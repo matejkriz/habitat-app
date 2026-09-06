@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/workos-client";
 import { Avatar, Button } from "@/components/ui";
 import { DevPersonaSwitcher } from "./dev-persona-switcher";
+import { AppUpdateBanner } from "./app-update-banner";
 import { PushNotificationToggle } from "./push-notification-toggle";
 import type { DevPersonaId } from "@/lib/dev-persona";
 import type { UserRole } from "@/lib/types";
@@ -390,6 +391,7 @@ export function AppShell({ children, user }: AppShellProps) {
             </div>
           </div>
         </div>
+        <AppUpdateBanner />
       </header>
 
       {/* Mobile Navigation */}

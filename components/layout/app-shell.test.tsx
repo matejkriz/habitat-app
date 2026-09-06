@@ -63,6 +63,8 @@ afterEach(() => {
   signOut.mockClear();
   navigation.pathname = "/reditel";
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  Reflect.deleteProperty(navigator, "standalone");
 });
 
 describe("AppShell", () => {
@@ -250,5 +252,37 @@ describe("AppShell", () => {
 
     expect(overviewLink.getAttribute("aria-current")).toBe("page");
     expect(overviewLink.className).toContain("text-gold");
+  });
+
+  it("attaches an available update below the top bar in the installed PWA", async () => {
+    vi.stubEnv(
+      "NEXT_PUBLIC_APP_COMMIT_SHA",
+      "1111111111111111111111111111111111111111",
+    );
+    Object.defineProperty(navigator, "standalone", {
+      configurable: true,
+      value: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          version: "2026.09.06",
+          commitSha: "2222222222222222222222222222222222222222",
+        }),
+      ),
+    );
+
+    render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>,
+    );
+
+    const message = await screen.findByText("Je dostupná nová verze.");
+    const header = message.closest("header");
+
+    expect(header).not.toBeNull();
+    expect(header?.firstElementChild?.contains(message)).toBe(false);
   });
 });
