@@ -200,10 +200,14 @@ const roleLabels: Record<UserRole, string> = {
   DIRECTOR: "Ředitel",
 };
 
+const GITHUB_REPOSITORY_URL = "https://github.com/matejkriz/habitat-app";
+
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const navItems = roleNavItems[user.role];
   const visiblePathname = pathname === "/" ? navItems[0].href : pathname;
+  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "vývoj";
+  const appCommitSha = process.env.NEXT_PUBLIC_APP_COMMIT_SHA;
   const { signOut } = useAuth();
   const [navigationState, setNavigationState] = useState<NavigationState>({
     pathname,
@@ -360,6 +364,26 @@ export function AppShell({ children, user }: AppShellProps) {
                       </svg>
                       Odhlásit
                     </Button>
+                    <div
+                      role="none"
+                      className="mt-1 border-t border-cream-dark px-3 pb-1 pt-2 text-center font-mono text-[11px] tabular-nums text-charcoal-light/70"
+                    >
+                      Verze {appVersion}
+                      {appCommitSha && (
+                        <>
+                          {" ("}
+                          <a
+                            href={`${GITHUB_REPOSITORY_URL}/commit/${appCommitSha}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline decoration-charcoal-light/30 underline-offset-2 transition-colors hover:text-charcoal"
+                          >
+                            {appCommitSha.slice(0, 7)}
+                          </a>
+                          )
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -36,3 +36,16 @@ describe("service worker response headers", () => {
     );
   });
 });
+
+describe("application version configuration", () => {
+  it("exposes a Prague calendar date and Git commit", () => {
+    expect(nextConfig).toMatchObject({
+      env: {
+        NEXT_PUBLIC_APP_VERSION: expect.stringMatching(
+          /^\d{4}\.\d{2}\.\d{2}$/,
+        ),
+        NEXT_PUBLIC_APP_COMMIT_SHA: expect.stringMatching(/^[a-f\d]{40}$/),
+      },
+    });
+  });
+});

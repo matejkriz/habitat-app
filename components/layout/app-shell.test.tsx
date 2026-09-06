@@ -62,6 +62,7 @@ afterEach(() => {
   cleanup();
   signOut.mockClear();
   navigation.pathname = "/reditel";
+  vi.unstubAllEnvs();
 });
 
 describe("AppShell", () => {
@@ -173,6 +174,33 @@ describe("AppShell", () => {
       screen.queryByRole("menuitemcheckbox", { name: "Notifikace" })
     ).toBeNull();
   });
+
+  it.each(["PARENT", "TEACHER", "DIRECTOR"] as const)(
+    "shows the calendar version to %s users",
+    (role) => {
+      vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "2026.09.06");
+      vi.stubEnv(
+        "NEXT_PUBLIC_APP_COMMIT_SHA",
+        "0123456789abcdef0123456789abcdef01234567",
+      );
+      render(
+        <AppShell user={{ ...director, role }}>
+          <div>Obsah</div>
+        </AppShell>,
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Otevřít uživatelské menu" }),
+      );
+
+      expect(screen.getByText(/Verze 2026\.09\.06/)).toBeTruthy();
+      expect(
+        screen.getByRole("link", { name: "0123456" }).getAttribute("href"),
+      ).toBe(
+        "https://github.com/matejkriz/habitat-app/commit/0123456789abcdef0123456789abcdef01234567",
+      );
+    },
+  );
 
   it("highlights a mobile destination as soon as its navigation starts", () => {
     render(
