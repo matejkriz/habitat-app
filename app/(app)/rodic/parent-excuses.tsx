@@ -26,7 +26,9 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
   const [excuses, setExcuses] = useState(initialExcuses);
 
   const handleSave = async (id: string, values: ExcuseEditValues) => {
-    const updated = await editParentExcuse(id, values);
+    const result = await editParentExcuse(id, values);
+    if (!result.success) throw new Error(result.error);
+    const updated = result.excuse;
     setExcuses((current) =>
       current.map((excuse) =>
         excuse.id === id

@@ -10,7 +10,7 @@ import {
   type ExcuseDayPart as ExcuseDayPartValue,
   type UserRole as UserRoleType,
 } from "./types";
-import { validateExcuseDates } from "./excuse-rules";
+import { ExcuseValidationError, validateExcuseDates } from "./excuse-rules";
 import { getExcuseDayPartForRange } from "./excuse-input";
 import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
@@ -264,7 +264,7 @@ export async function updateExcuse(
   const newToDate = updates.toDate || current.toDate;
   const validation = validateExcuseDates(newFromDate, newToDate);
   if (!validation.valid) {
-    throw new Error(validation.error);
+    throw new ExcuseValidationError(validation.error);
   }
   const newDayPart = getExcuseDayPartForRange(
     updates.dayPart ?? current.dayPart,
@@ -281,7 +281,7 @@ export async function updateExcuse(
     startOfDay(newFromDate) < startOfDay(current.fromDate) ||
     startOfDay(newToDate) > startOfDay(current.toDate)
   ) {
-    throw new Error(
+    throw new ExcuseValidationError(
       "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.",
     );
   }

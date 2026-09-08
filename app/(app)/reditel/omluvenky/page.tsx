@@ -136,7 +136,8 @@ export default function ExcuseManagementPage() {
   };
 
   const handleEdit = async (excuseId: string, values: ExcuseEditValues) => {
-    await editExcuse(excuseId, values);
+    const result = await editExcuse(excuseId, values);
+    if (!result.success) throw new Error(result.error);
     await loadExcuses(false);
   };
 

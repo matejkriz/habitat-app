@@ -51,7 +51,7 @@ describe("ExcuseManagementPage", () => {
     mocks.getExcuses
       .mockResolvedValueOnce([lateExcuse])
       .mockResolvedValueOnce([{ ...lateExcuse, fromDate: new Date(2026, 7, 20), rangeState: "ON_TIME" }]);
-    mocks.editExcuse.mockResolvedValue(undefined);
+    mocks.editExcuse.mockResolvedValue({ success: true, excuse: lateExcuse });
     render(<ExcuseManagementPage />);
 
     expect(await screen.findByText("Pozdě")).toBeTruthy();
@@ -96,6 +96,19 @@ describe("ExcuseManagementPage", () => {
       cancelLunch: "true",
     });
     await waitFor(() => expect(mocks.getExcuses).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows an edit validation error without discarding the form or reloading", async () => {
+    const error = "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.";
+    mocks.getExcuses.mockResolvedValue([lateExcuse]);
+    mocks.editExcuse.mockResolvedValue({ success: false, error });
+    render(<ExcuseManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upravit" }));
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-08-21" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(error);
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("2026-08-21");
+    expect(mocks.getExcuses).toHaveBeenCalledOnce();
   });
 
   it("lets the director choose an afternoon absence and choose what happens to lunch", async () => {

@@ -41,7 +41,7 @@ import {
   NO_COVERAGE,
   type ExcuseRangeState,
 } from "@/lib/excuse-coverage";
-import { parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
+import { ExcuseValidationError, parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
 import {
   getExcuseDayPartForRange,
   parseCancelLunchChoice,
@@ -619,26 +619,34 @@ type ExcuseEditInput = {
 export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
   const user = await requireDirector();
 
-  const updated = await updateExcuseRecord(
-    excuseId,
-    {
-      fromDate: parseExcuseDate(input.fromDate),
-      toDate: parseExcuseDate(input.toDate),
-      reason: input.reason.trim() || null,
-      dayPart:
-        input.dayPart === undefined
-          ? undefined
-          : parseExcuseDayPart(input.dayPart),
-    },
-    user.id,
-  );
+  let updated: Excuse;
+  try {
+    updated = await updateExcuseRecord(
+      excuseId,
+      {
+        fromDate: parseExcuseDate(input.fromDate),
+        toDate: parseExcuseDate(input.toDate),
+        reason: input.reason.trim() || null,
+        dayPart:
+          input.dayPart === undefined
+            ? undefined
+            : parseExcuseDayPart(input.dayPart),
+      },
+      user.id,
+    );
+  } catch (error) {
+    if (error instanceof ExcuseValidationError) {
+      return { success: false as const, error: error.message };
+    }
+    throw error;
+  }
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/reditel/obedy");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
-  return updated;
+  return { success: true as const, excuse: updated };
 }
 
 export async function deleteExcuse(excuseId: string): Promise<void> {

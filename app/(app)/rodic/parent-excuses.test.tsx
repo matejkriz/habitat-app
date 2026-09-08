@@ -66,8 +66,8 @@ describe("ParentExcuses", () => {
 
   it("saves changes through the parent action", async () => {
     actions.editParentExcuse.mockResolvedValue({
-      ...excuse,
-      reason: "Rodinné důvody",
+      success: true,
+      excuse: { ...excuse, reason: "Rodinné důvody" },
     });
 
     render(<ParentExcuses excuses={[excuse]} />);
@@ -97,5 +97,17 @@ describe("ParentExcuses", () => {
 
     await waitFor(() => expect(actions.deleteParentExcuse).toHaveBeenCalledWith("excuse-1"));
     expect(screen.getByText("Zatím nemáte žádné omluvenky.")).toBeTruthy();
+  });
+
+  it("shows validation errors and keeps the unsaved edit open", async () => {
+    const error = "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.";
+    actions.editParentExcuse.mockResolvedValue({ success: false, error });
+    render(<ParentExcuses excuses={[excuse]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-04" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(error);
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("2024-01-04");
+    expect(screen.getByText("2. 1. – 3. 1.")).toBeTruthy();
   });
 });

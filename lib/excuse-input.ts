@@ -2,6 +2,7 @@ import {
   ExcuseDayPart,
   type ExcuseDayPart as ExcuseDayPartValue,
 } from "./types";
+import { ExcuseValidationError } from "./excuse-rules";
 
 export function parseCancelLunchChoice(value: FormDataEntryValue | null): boolean {
   if (value === null || value === "true") return true;
@@ -19,7 +20,7 @@ export function parseExcuseDayPart(
   if (value === ExcuseDayPart.MORNING) return ExcuseDayPart.MORNING;
   if (value === ExcuseDayPart.AFTERNOON) return ExcuseDayPart.AFTERNOON;
 
-  throw new Error("Neplatná část dne.");
+  throw new ExcuseValidationError("Neplatná část dne.");
 }
 
 export function getExcuseDayPartForRange(

@@ -33,7 +33,7 @@ import {
   getExcuseStatusForDay,
   getLateDays,
 } from "@/lib/excuse-coverage";
-import { parseExcuseDate, resolveExcuseChildIds } from "@/lib/excuse-rules";
+import { ExcuseValidationError, parseExcuseDate, resolveExcuseChildIds } from "@/lib/excuse-rules";
 import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
 
@@ -413,25 +413,33 @@ export const editParentExcuse = async (
     throw new Error("Access denied");
   }
 
-  const updated = await updateExcuseRecord(
-    excuseId,
-    {
-      fromDate: parseExcuseDate(input.fromDate),
-      toDate: parseExcuseDate(input.toDate),
-      reason: input.reason.trim() || null,
-      dayPart:
-        input.dayPart === undefined
-          ? undefined
-          : parseExcuseDayPart(input.dayPart),
-    },
-    user.id,
-  );
+  let updated: Excuse;
+  try {
+    updated = await updateExcuseRecord(
+      excuseId,
+      {
+        fromDate: parseExcuseDate(input.fromDate),
+        toDate: parseExcuseDate(input.toDate),
+        reason: input.reason.trim() || null,
+        dayPart:
+          input.dayPart === undefined
+            ? undefined
+            : parseExcuseDayPart(input.dayPart),
+      },
+      user.id,
+    );
+  } catch (error) {
+    if (error instanceof ExcuseValidationError) {
+      return { success: false as const, error: error.message };
+    }
+    throw error;
+  }
 
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/reditel/obedy");
-  return updated;
+  return { success: true as const, excuse: updated };
 };
 
 export const deleteParentExcuse = async (excuseId: string): Promise<void> => {
