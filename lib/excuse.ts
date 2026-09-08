@@ -319,7 +319,7 @@ export async function updateExcuse(
   const normalizedTo = new Date(newToDate);
   normalizedTo.setHours(0, 0, 0, 0);
 
-  return db.excuses.update({
+  const updated = await db.excuses.update({
     where: { id: excuseId },
     data: {
       fromDate: normalizedFrom,
@@ -329,6 +329,48 @@ export async function updateExcuse(
       cancelLunch: newCancelLunch,
     },
   });
+
+  const changed =
+    current.fromDate.getTime() !== updated.fromDate.getTime() ||
+    current.toDate.getTime() !== updated.toDate.getTime() ||
+    current.reason !== updated.reason ||
+    current.dayPart !== updated.dayPart;
+
+  if (changed) {
+    try {
+      const [child, parent, schoolDays] = await Promise.all([
+        db.children.get({
+          where: { id: updated.childId },
+          select: { firstName: true, lastName: true },
+        }),
+        db.users.get({
+          where: { id: updated.submittedById },
+          select: { name: true },
+        }),
+        getSchoolDaysInRange(updated.fromDate, updated.toDate),
+      ]);
+      if (child && parent) {
+        // Await the webhook so the server does not stop before sending the edit.
+        await sendExcuseNotification({
+          change: "UPDATED",
+          childName: `${child.firstName} ${child.lastName}`,
+          parentName: parent.name || "Neznámý rodič",
+          fromDate: updated.fromDate,
+          toDate: updated.toDate,
+          reason: updated.reason,
+          dayPart: updated.dayPart,
+          cancelLunch: updated.cancelLunch,
+          isOnTime: getLateDays(updated, schoolDays).length === 0,
+          automaticallyApproved:
+            updated.lateApprovedAt !== null && updated.lateApprovedById === null,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to send updated excuse to Slack:", error);
+    }
+  }
+
+  return updated;
 }
 
 /**

@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireServerSecret } from "./serverSecret";
+import type { Doc } from "./_generated/dataModel";
+import { enqueueExcuseEvent } from "./pushNotifications";
 
 const tableName = v.union(
   v.literal("users"),
@@ -273,7 +275,8 @@ export const patchById = mutation({
     patch: documentValue,
   },
   returns: v.boolean(),
-  handler: async ({ db }, args) => {
+  handler: async (ctx, args) => {
+    const { db } = ctx;
     requireServerSecret(args.secret);
     const current = await db
       .query(args.table)
@@ -284,7 +287,27 @@ export const patchById = mutation({
       throw new Error(`Document not found in ${args.table} for id ${args.id}`);
     }
 
-    await db.patch(current._id, args.patch);
+    if (args.table === "excuses") {
+      const previous = current as Doc<"excuses">;
+      // Give each saved revision a distinct key, including concurrent edits.
+      await db.patch(previous._id, {
+        ...args.patch,
+        updatedAt: Math.max(Date.now(), previous.updatedAt + 1),
+      });
+      const updated = await db.get(previous._id);
+      if (updated && (
+        previous.fromDate !== updated.fromDate ||
+        previous.toDate !== updated.toDate ||
+        (previous.reason ?? null) !== (updated.reason ?? null) ||
+        (previous.dayPart ?? "FULL_DAY") !== (updated.dayPart ?? "FULL_DAY") ||
+        (previous.cancelLunch ?? true) !== (updated.cancelLunch ?? true)
+      )) {
+        // The edit and its delivery records commit together or both roll back.
+        await enqueueExcuseEvent(ctx, updated, "EXCUSE_UPDATED");
+      }
+    } else {
+      await db.patch(current._id, args.patch);
+    }
     return true;
   },
 });

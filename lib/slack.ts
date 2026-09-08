@@ -1,11 +1,12 @@
 /**
  * Slack Notification Service for Habitat
- * Sends notifications to #omluvenky channel when new excuses are submitted
+ * Sends notifications to #omluvenky when excuses are submitted or edited
  */
 
 import type { ExcuseDayPart } from "./types";
 
 export interface ExcuseNotificationData {
+  change?: "UPDATED";
   childName: string;
   parentName: string;
   fromDate: Date;
@@ -63,13 +64,14 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
       : dayPart === "AFTERNOON"
         ? "Jen odpoledne"
         : "Celý den";
+  const title = data.change === "UPDATED" ? "Změna omluvenky" : "Nová omluvenka";
 
   const blocks = [
     {
       type: "header",
       text: {
         type: "plain_text",
-        text: "📝 Nová omluvenka",
+        text: `📝 ${title}`,
         emoji: true,
       },
     },
@@ -114,7 +116,7 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
   }
 
   // Simple text fallback for notifications
-  const text = `Nová omluvenka: ${childName} (${dateRange}, ${dayPartText.toLocaleLowerCase("cs-CZ")}) - ${statusText}`;
+  const text = `${title}: ${childName} (${dateRange}, ${dayPartText.toLocaleLowerCase("cs-CZ")}) - ${statusText}`;
 
   return { blocks, text };
 }
