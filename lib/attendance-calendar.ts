@@ -54,6 +54,7 @@ export type AttendanceCalendarDay = {
     readonly expectedAfternoon: number;
     readonly present: number;
     readonly excused: number;
+    readonly pending: number;
     readonly unexcused: number;
     readonly waiting: number;
     readonly unknown: number;
@@ -61,6 +62,7 @@ export type AttendanceCalendarDay = {
   readonly children: {
     readonly present: ReadonlyArray<CalendarChildDetail>;
     readonly excused: ReadonlyArray<CalendarChildDetail>;
+    readonly pending: ReadonlyArray<CalendarChildDetail>;
     readonly unexcused: ReadonlyArray<CalendarChildDetail>;
     readonly waiting: ReadonlyArray<CalendarChildDetail>;
     readonly expected: ReadonlyArray<CalendarChildDetail>;
@@ -123,6 +125,7 @@ function buildOpenDay(
   const isFuture = dateKey > todayKey;
   const present: CalendarChildDetail[] = [];
   const excused: CalendarChildDetail[] = [];
+  const pending: CalendarChildDetail[] = [];
   const unexcused: CalendarChildDetail[] = [];
   const waiting: CalendarChildDetail[] = [];
   const expected: CalendarChildDetail[] = [];
@@ -155,6 +158,8 @@ function buildOpenDay(
       present.push(getChildDetail(child));
     } else if (coverage.excused) {
       excused.push(getChildDetail(child, coverage.excuse?.reason));
+    } else if (coverage.covered) {
+      pending.push(getChildDetail(child, coverage.excuse?.reason));
     } else if (record?.presence === "ABSENT") {
       unexcused.push(getChildDetail(child));
     } else if (isPast) {
@@ -186,6 +191,7 @@ function buildOpenDay(
       expectedAfternoon,
       present: present.length,
       excused: excused.length,
+      pending: pending.length,
       unexcused: unexcused.length,
       waiting: waiting.length,
       unknown: unknown.length,
@@ -193,6 +199,7 @@ function buildOpenDay(
     children: {
       present,
       excused,
+      pending,
       unexcused,
       waiting,
       expected,
@@ -225,6 +232,7 @@ function buildClosedDay(
       expectedAfternoon: 0,
       present: 0,
       excused: 0,
+      pending: 0,
       unexcused: 0,
       waiting: 0,
       unknown: 0,
@@ -232,6 +240,7 @@ function buildClosedDay(
     children: {
       present: [],
       excused: [],
+      pending: [],
       unexcused: [],
       waiting: [],
       expected: [],

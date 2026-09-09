@@ -150,6 +150,47 @@ describe("AttendanceCalendar day preview", () => {
 
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
+
+  it("shows a late excuse that is waiting for approval", () => {
+    render(
+      <AttendanceCalendar
+        startMonthKey={null}
+        initialMonth={{
+          monthKey: "2026-09",
+          totalChildren: children.length,
+          days: buildAttendanceCalendar({
+            month: new Date(2026, 8, 1),
+            today: new Date(2026, 8, 9, 20),
+            children,
+            attendance: [],
+            excuses: [
+              {
+                id: "excuse-bo",
+                childId: "bo",
+                fromDate: new Date(2026, 8, 10),
+                toDate: new Date(2026, 8, 10),
+                reason: "Nemoc",
+                submittedAt: new Date(2026, 8, 9, 20),
+                lateApprovedAt: null,
+              },
+            ],
+            closedDays: [],
+            noLunchDays: [],
+          }),
+        }}
+      />,
+    );
+
+    const day = screen.getAllByRole("button", {
+      name: /čtvrtek 10\. září 2026/i,
+    })[0];
+    expect(day.textContent).toContain("1 omluveno pozdě");
+
+    fireEvent.click(day);
+
+    expect(screen.getByText("Pozdní omluvenky")).toBeTruthy();
+    expect(screen.getByText("Bo Svoboda")).toBeTruthy();
+  });
 });
 
 describe("AttendanceCalendar supporting copy", () => {

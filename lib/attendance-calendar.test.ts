@@ -79,11 +79,39 @@ describe("buildAttendanceCalendar", () => {
       expectedAfternoon: 2,
       present: 0,
       excused: 1,
+      pending: 0,
       unexcused: 0,
       waiting: 0,
       unknown: 0,
     });
     expect(day.children.excused[0]).toMatchObject({ childId: "bo", reason: "Rodinná cesta" });
+  });
+
+  it("odečte z očekávané účasti i pozdní omluvenku čekající na schválení", () => {
+    const [day] = buildAttendanceCalendar({
+      month: new Date(2026, 8, 1),
+      today: new Date(2026, 8, 9, 20),
+      children,
+      attendance: [],
+      excuses: [
+        excuse({
+          id: "excuse-bo",
+          childId: "bo",
+          fromDate: new Date(2026, 8, 10),
+          toDate: new Date(2026, 8, 10),
+          reason: "Nemoc",
+          submittedAt: new Date(2026, 8, 9, 20),
+        }),
+      ],
+      closedDays: [],
+      noLunchDays: [],
+    }).filter((item) => item.dateKey === "2026-09-10");
+
+    expect(day.counts).toMatchObject({ expected: 2, pending: 1, excused: 0 });
+    expect(day.children.pending[0]).toMatchObject({
+      childId: "bo",
+      reason: "Nemoc",
+    });
   });
 
   it("u dneška rozlišuje dorazivší, omluvené, nepřítomné a děti, na které se čeká", () => {
@@ -114,6 +142,7 @@ describe("buildAttendanceCalendar", () => {
       expectedAfternoon: 2,
       present: 1,
       excused: 1,
+      pending: 0,
       unexcused: 0,
       waiting: 1,
       unknown: 0,

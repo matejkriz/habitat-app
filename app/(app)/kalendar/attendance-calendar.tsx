@@ -95,6 +95,12 @@ function CalendarDayButton({
   readonly onHoverEnd: () => void;
 }) {
   const statusLabel = day.isPast ? "přítomno" : "očekáváno";
+  const futureExcuseSummary = [
+    day.counts.excused > 0 ? `${day.counts.excused} omluveno` : "",
+    day.counts.pending > 0 ? `${day.counts.pending} omluveno pozdě` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const accessibleStatus = day.isClosed
     ? day.closedReason || "zavřeno"
     : `${day.counts.expected} ${statusLabel}, dopoledne ${day.counts.expectedMorning}, odpoledne ${day.counts.expectedAfternoon}`;
@@ -172,7 +178,7 @@ function CalendarDayButton({
           ) : null}
           <div className="mt-1 min-h-4 text-[9px] leading-tight text-charcoal-light sm:text-[11px]">
             {day.isToday && `${day.counts.present} dorazilo · ${day.counts.waiting} čekáme`}
-            {day.isFuture && day.counts.excused > 0 && `${day.counts.excused} omluveno`}
+            {day.isFuture && futureExcuseSummary}
             {day.isPast && day.counts.unknown > 0 && (
               <span className="font-semibold text-coral-dark">{day.counts.unknown} bez zápisu</span>
             )}
@@ -235,6 +241,7 @@ function DayHoverPreview({
   const hasExceptions =
     day.children.waiting.length > 0 ||
     day.children.excused.length > 0 ||
+    day.children.pending.length > 0 ||
     day.children.unexcused.length > 0 ||
     day.children.unknown.length > 0 ||
     day.children.morningAbsent.length > 0 ||
@@ -281,6 +288,7 @@ function DayHoverPreview({
               <PreviewChildList title="Jen dopoledne nepřijde" items={day.children.morningAbsent} tone="gold" />
               <PreviewChildList title="Jen odpoledne nepřijde" items={day.children.afternoonAbsent} tone="gold" />
               <PreviewChildList title="Omluvené" items={day.children.excused} tone="gold" />
+              <PreviewChildList title="Pozdní omluvenky" items={day.children.pending} tone="coral" />
               <PreviewChildList title="Bez omluvenky" items={day.children.unexcused} tone="coral" />
               <PreviewChildList title="Bez zápisu" items={day.children.unknown} tone="neutral" />
             </div>
@@ -418,7 +426,9 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
                   <p className="text-[11px] text-charcoal-light">Čekáme</p>
                 </div>
                 <div className="rounded-xl bg-coral/10 p-2 text-center">
-                  <p className="text-lg font-extrabold text-coral-dark">{day.counts.excused + day.counts.unexcused}</p>
+                  <p className="text-lg font-extrabold text-coral-dark">
+                    {day.counts.excused + day.counts.pending + day.counts.unexcused}
+                  </p>
                   <p className="text-[11px] text-charcoal-light">Nedorazí</p>
                 </div>
               </div>
@@ -430,6 +440,7 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
                 <ChildList title="Jen dopoledne nepřijde" items={day.children.morningAbsent} tone="gold" />
                 <ChildList title="Jen odpoledne nepřijde" items={day.children.afternoonAbsent} tone="gold" />
                 <ChildList title="Omluvené děti" items={day.children.excused} tone="gold" />
+                <ChildList title="Pozdní omluvenky" items={day.children.pending} tone="coral" />
                 <ChildList title="Nepřítomné bez omluvenky" items={day.children.unexcused} tone="coral" />
                 <ChildList title="Bez zápisu" items={day.children.unknown} tone="neutral" />
               </div>
