@@ -95,6 +95,10 @@ function CalendarDayButton({
   readonly onHoverEnd: () => void;
 }) {
   const statusLabel = day.isPast ? "přítomno" : "očekáváno";
+  const showSplitPlanningCount =
+    !day.isPast &&
+    (day.children.morningAbsent.length > 0 ||
+      day.children.afternoonAbsent.length > 0);
   const futureExcuseSummary = [
     day.counts.excused > 0 ? `${day.counts.excused} omluveno` : "",
     day.counts.pending > 0 ? `${day.counts.pending} omluveno pozdě` : "",
@@ -103,7 +107,9 @@ function CalendarDayButton({
     .join(" · ");
   const accessibleStatus = day.isClosed
     ? day.closedReason || "zavřeno"
-    : `${day.counts.expected} ${statusLabel}, dopoledne ${day.counts.expectedMorning}, odpoledne ${day.counts.expectedAfternoon}`;
+    : showSplitPlanningCount
+      ? `očekáváno: dopoledne ${day.counts.expectedMorning}, odpoledne ${day.counts.expectedAfternoon}`
+      : `${day.counts.expected} ${statusLabel}`;
   const accessibleLunchStatus = day.isLunchCancelled ? ", bez oběda" : "";
 
   return (
@@ -162,18 +168,30 @@ function CalendarDayButton({
         </div>
       ) : (
         <div className="mt-1 sm:mt-2">
-          <div className="flex items-baseline gap-1">
-            <span className="text-xl font-extrabold leading-none text-sage-dark sm:text-3xl">
-              {day.counts.expected}
-            </span>
-            <span className="hidden text-[10px] font-semibold text-charcoal-light sm:inline">
-              {statusLabel}
-            </span>
+          <div aria-hidden="true" className="flex items-baseline gap-1">
+            {showSplitPlanningCount ? (
+              <span className="whitespace-nowrap text-xl font-extrabold leading-none tabular-nums text-sage-dark sm:text-3xl">
+                {day.counts.expectedMorning}
+                <span className="mx-0.5 font-semibold text-sage">/</span>
+                {day.counts.expectedAfternoon}
+              </span>
+            ) : (
+              <span className="text-xl font-extrabold leading-none tabular-nums text-sage-dark sm:text-3xl">
+                {day.counts.expected}
+              </span>
+            )}
+            {!showSplitPlanningCount ? (
+              <span className="hidden text-[10px] font-semibold text-charcoal-light sm:inline">
+                {statusLabel}
+              </span>
+            ) : null}
           </div>
-          {!day.isPast ? (
-            <div className="mt-1 grid grid-cols-2 gap-1 text-[9px] font-semibold text-charcoal-light sm:text-[10px]">
-              <span>Dop. {day.counts.expectedMorning}</span>
-              <span>Odp. {day.counts.expectedAfternoon}</span>
+          {showSplitPlanningCount ? (
+            <div
+              aria-hidden="true"
+              className="mt-1 text-[9px] font-semibold leading-none text-charcoal-light sm:text-[10px]"
+            >
+              dop. / odp.
             </div>
           ) : null}
           <div className="mt-1 min-h-4 text-[9px] leading-tight text-charcoal-light sm:text-[11px]">
