@@ -1178,6 +1178,7 @@ export const db: any = {
     }),
   },
   tripFunds: {
+    parentOverview: (parentId: string) => convexQuery(api.db.getParentTripFundOverview, { secret: getServerSecret(), parentId }),
     createExpense: (date: Date, expense: number, overrides: { childId: string; amount: number }[], recordedById: string) => convexMutation(api.db.createTripExpense, {
       secret: getServerSecret(), date: date.getTime(), expense, overrides, recordedById,
     }),

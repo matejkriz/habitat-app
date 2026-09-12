@@ -212,6 +212,7 @@ export const setNoLunchForDate = async (
   revalidatePath("/kalendar");
   revalidatePath("/reditel");
   revalidatePath("/");
+  revalidatePath("/rodic");
 
   return { noLunch: savedNoLunch };
 };

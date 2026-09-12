@@ -538,3 +538,20 @@ export const createTripExpense = mutation({
     return null;
   },
 });
+
+export const getParentTripFundOverview = query({
+  args: { secret: v.string(), parentId: v.string() },
+  handler: async ({ db }, args): Promise<TripFundOverview> => {
+    requireServerSecret(args.secret);
+    const links = await db.query("parentChildren").withIndex("by_parent_id", q => q.eq("parentId", args.parentId)).collect();
+    if (links.length === 0) return { days: [], children: [] };
+    const childIds = new Set(links.map(link => link.childId));
+    const overview = await readTripFundOverview(db);
+    const children = overview.children.filter(child => childIds.has(child.childId));
+    const columns = overview.days.flatMap((_, index) => children.some(child => child.amounts[index] !== null) ? [index] : []);
+    return {
+      days: columns.map(index => ({ date: overview.days[index].date, name: overview.days[index].name, expense: null })),
+      children: children.map(child => ({ ...child, amounts: columns.map(index => child.amounts[index]) })),
+    };
+  },
+});

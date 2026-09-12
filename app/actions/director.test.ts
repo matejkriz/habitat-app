@@ -288,6 +288,12 @@ describe("updateChild", () => {
     expect(mocks.childrenUpdate).toHaveBeenLastCalledWith({ where: { id: "tobias" }, data: { fundSent: null } });
   });
 
+  it.each(["PARENT", "TEACHER"])("prevents %s from changing fund contributions", async (role) => {
+    mocks.getDbUser.mockResolvedValue({ id: "parent-1", role });
+    await expect(updateChild("tobias", { fundSent: 1500 })).rejects.toThrow("Unauthorized");
+    expect(mocks.childrenUpdate).not.toHaveBeenCalled();
+  });
+
   it.each([-1, 1.5, Infinity, NaN])("rejects invalid fund contribution %s", async fundSent => {
     await expect(updateChild("tobias", { fundSent })).rejects.toThrow();
     expect(mocks.childrenUpdate).not.toHaveBeenCalled();

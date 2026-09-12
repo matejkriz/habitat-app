@@ -28,6 +28,7 @@ export async function saveDayDetails(dateKey: string, details: DayDetailsPatch):
   revalidatePath("/reditel/deti");
   revalidatePath("/reditel");
   revalidatePath("/");
+  revalidatePath("/rodic");
 }
 
 export async function getDayTripExpenses(dateKey: string): Promise<ChildTripExpense[]> {
@@ -46,6 +47,7 @@ export async function setChildTripExpense(dateKey: string, childId: string, amou
   revalidatePath("/reditel/deti");
   revalidatePath("/reditel");
   revalidatePath("/");
+  revalidatePath("/rodic");
 }
 
 export async function createTripExpense(dateKey: string, expense: number, overrides: { childId: string; amount: number }[]): Promise<void> {
@@ -60,4 +62,5 @@ export async function createTripExpense(dateKey: string, expense: number, overri
   revalidatePath("/reditel/deti");
   revalidatePath("/reditel");
   revalidatePath("/");
+  revalidatePath("/rodic");
 }
