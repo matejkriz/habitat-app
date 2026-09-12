@@ -81,7 +81,7 @@ export function isDevPersonaModeAllowed(
     environment.VERCEL_TARGET_ENV === undefined;
   const isDevelopPreview =
     environment.VERCEL_TARGET_ENV === "preview" &&
-    ["develop", "workos"].includes(environment.VERCEL_GIT_COMMIT_REF ?? "");
+    ["develop", "workos", "calendar"].includes(environment.VERCEL_GIT_COMMIT_REF ?? "");
 
   return isLocalDevelopment || isDevelopPreview;
 }
