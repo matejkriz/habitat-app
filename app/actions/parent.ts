@@ -1,5 +1,6 @@
 "use server";
 
+import type { DaySummary } from "@/lib/day-details";
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -289,7 +290,7 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     999,
   );
 
-  const [attendance, excuses, closedDays] = await Promise.all([
+  const [attendance, excuses, closedDays, dayDetails] = await Promise.all([
     db.attendance.list({
       where: { childId, date: { gte: monthStart, lte: monthEnd } },
     }) as Promise<ReadonlyArray<Attendance>>,
@@ -297,14 +298,19 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     db.closedDays.list({
       where: { date: { gte: monthStart, lte: monthEnd } },
     }) as Promise<ReadonlyArray<ClosedDay>>,
+    db.dayDetails.list(monthStart, monthEnd) as Promise<DaySummary[]>,
   ]);
 
+  const namesByDate = new Map(dayDetails.map(day => [day.date, day.name]));
   return buildParentCalendarMonth({
     month: monthStart,
     attendance,
     excuses,
     closedDays: closedDays.map((day) => day.date),
-  });
+  }).map(day => ({
+    ...day,
+    name: namesByDate.get(new Date(monthStart.getFullYear(), monthStart.getMonth(), day.dayNumber).getTime()) ?? null,
+  }));
 };
 
 /**

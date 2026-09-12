@@ -163,17 +163,27 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
       </div>
 
       <div className="px-2 py-3 sm:px-5 sm:py-5">
-        <div className="mb-1 grid grid-cols-7" aria-hidden="true">
-          {WEEKDAYS.map((weekday) => (
-            <div key={weekday} className="py-2 text-center text-[11px] font-bold uppercase tracking-wide text-charcoal-light sm:text-xs">
+        <div className="mb-1 grid grid-cols-4 sm:grid-cols-7" aria-hidden="true">
+          {WEEKDAYS.map((weekday, index) => (
+            <div
+              key={weekday}
+              className={cn(
+                "py-2 text-center text-[11px] font-bold uppercase tracking-wide text-charcoal-light sm:text-xs",
+                index >= 4 && "hidden sm:block",
+              )}
+            >
               {weekday}
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1 sm:gap-2" aria-label={title}>
+        <div className="grid grid-cols-4 gap-1 sm:grid-cols-7 sm:gap-2" aria-label={title}>
           {Array.from({ length: leadingEmptyDays }, (_, index) => (
-            <div key={`empty-${index}`} className="min-h-16 sm:min-h-24" aria-hidden="true" />
+            <div
+              key={`empty-${index}`}
+              className={cn("h-24 sm:h-28", leadingEmptyDays >= 4 && "hidden sm:block")}
+              aria-hidden="true"
+            />
           ))}
           {days.map((day) => {
             const baseDetails = statusDetails[day.status];
@@ -187,6 +197,7 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
               ? { ...baseDetails, label: partialLabel, shortLabel: partialLabel }
               : baseDetails;
             const disabled = day.status === "CLOSED";
+            const weekdayIndex = (leadingEmptyDays + day.dayNumber - 1) % 7;
             return (
               <button
                 key={day.date}
@@ -204,16 +215,23 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
                 onPointerLeave={cancelLongPress}
                 onPointerCancel={cancelLongPress}
                 onContextMenu={(event) => event.preventDefault()}
-                aria-label={`${fullDateLabel(day.date)}, ${details.label}${disabled ? "" : ", zadat omluvenku"}`}
+                aria-label={`${fullDateLabel(day.date)}${day.name ? `, ${day.name}` : ""}, ${details.label}${disabled ? "" : ", zadat omluvenku"}`}
                 className={cn(
-                  "relative flex min-h-16 touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:min-h-24 sm:items-stretch sm:p-2.5",
+                  "relative flex h-24 min-w-0 overflow-hidden touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:h-28 sm:items-stretch sm:p-2.5",
                   details.className,
+                  weekdayIndex >= 4 && "hidden sm:flex",
                   disabled && "cursor-default active:scale-100",
                   day.isToday && "ring-2 ring-gold ring-offset-2",
                 )}
               >
-                <span className="text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
-                <span className="flex flex-col items-center gap-1 sm:items-start">
+                <span className="shrink-0 text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
+                <span
+                  title={day.name ?? undefined}
+                  className="my-1 line-clamp-2 h-8 w-full shrink-0 break-words text-center text-[11px] font-semibold leading-4 sm:text-left sm:text-xs sm:leading-4"
+                >
+                  {day.name}
+                </span>
+                <span className="flex shrink-0 flex-col items-center gap-1 sm:items-start">
                   <span className={cn("size-2 rounded-full sm:hidden", details.dotClassName)} />
                   <span className="hidden text-[11px] font-bold leading-tight sm:block">
                     {details.shortLabel}

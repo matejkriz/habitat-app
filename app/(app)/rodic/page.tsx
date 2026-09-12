@@ -1,3 +1,4 @@
+import { DayReportsSection } from "@/components/overview/day-reports";
 import { ParentLunchSection, ParentTripFundSection } from "@/components/overview/parent-overviews";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
@@ -6,7 +7,6 @@ import { UserRole, type ChildGender } from "@/lib/types";
 import {
   getParentChildren,
   getChildTodayStatus,
-  getChildAttendanceHistory,
   getChildCalendarMonth,
   getChildExcuses,
   getChildStats,
@@ -23,10 +23,6 @@ import { parseMonth } from "@/lib/parent-calendar";
 import { getPresenceLabel } from "@/lib/presence-label";
 import { ChildSelector } from "./child-selector";
 import { AttendanceCalendar } from "./attendance-calendar";
-import {
-  AttendanceHistoryRow,
-  type AttendanceHistoryItem,
-} from "./attendance-history-row";
 import { NewExcuseLink } from "./new-excuse-link";
 import { ParentExcuses } from "./parent-excuses";
 
@@ -154,56 +150,6 @@ async function StatsCard({ childId }: { childId: string }) {
             <p className="text-2xl font-bold text-coral-dark">{stats.unexcused}</p>
             <p className="text-xs text-charcoal-light">Neomluveno</p>
           </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-async function AttendanceHistory({
-  childId,
-  childGender,
-}: {
-  childId: string;
-  childGender: ChildGender | null;
-}) {
-  const history =
-    (await getChildAttendanceHistory(childId)) as ReadonlyArray<AttendanceHistoryItem>;
-
-  if (history.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Historie docházky</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-charcoal-light text-center py-8">
-            Zatím nemáme žádné záznamy docházky.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Poslední dny
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {history.map((record) => (
-            <AttendanceHistoryRow
-              key={record.id}
-              record={record}
-              childGender={childGender}
-            />
-          ))}
         </div>
       </CardContent>
     </Card>
@@ -356,10 +302,7 @@ export default async function ParentDashboard({
       </div>
 
       <Suspense fallback={<LoadingCard />}>
-        <AttendanceHistory
-          childId={selectedChildId}
-          childGender={selectedChild.gender}
-        />
+        <DayReportsSection />
       </Suspense>
 
       <Suspense fallback={<LoadingCard />}>

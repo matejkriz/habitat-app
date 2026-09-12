@@ -17,6 +17,7 @@ const days = [
   {
     date: "2026-08-24",
     dayNumber: 24,
+    name: "Výlet do lesa",
     status: "EXPECTED" as const,
     isToday: false,
   },
@@ -59,6 +60,8 @@ describe("AttendanceCalendar", () => {
     const day = screen.getByRole("button", { name: /pondělí 24. srpna/i });
 
     expect(day.textContent).toContain("24.");
+    expect(day.textContent).toContain("Výlet do lesa");
+    expect(day.getAttribute("aria-label")).toContain("Výlet do lesa");
   });
 
   it("opens a prefilled excuse from a day click", () => {

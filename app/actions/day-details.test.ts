@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), createExpense: vi.fn(), get: vi.fn(), save: vi.fn(), listExpenses: vi.fn(), setExpense: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), reports: vi.fn(), createExpense: vi.fn(), get: vi.fn(), save: vi.fn(), listExpenses: vi.fn(), setExpense: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.user }));
-vi.mock("@/lib/db", () => ({ db: { tripFunds: { createExpense: mocks.createExpense }, dayDetails: { get: mocks.get, save: mocks.save }, childTripExpenses: { list: mocks.listExpenses, set: mocks.setExpense } } }));
+vi.mock("@/lib/db", () => ({ db: { tripFunds: { createExpense: mocks.createExpense }, dayDetails: { reports: mocks.reports, get: mocks.get, save: mocks.save }, childTripExpenses: { list: mocks.listExpenses, set: mocks.setExpense } } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-import { createTripExpense, getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense } from "./day-details";
+import { getDayReports, createTripExpense, getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense } from "./day-details";
 
 describe("day detail access", () => {
   beforeEach(() => {
@@ -60,4 +60,17 @@ describe("day detail access", () => {
     expect(mocks.createExpense).toHaveBeenCalledWith(new Date(2026, 8, 10), 100, [{ childId: "child", amount: 0 }], "director");
   });
 
+});
+
+describe("report feed access", () => {
+  it.each(["PARENT", "DIRECTOR"])("allows %s to read reports", async role => {
+    mocks.user.mockResolvedValue({ role });
+    mocks.reports.mockResolvedValue({ reports: [], nextBefore: null });
+    expect(await getDayReports(123)).toEqual({ reports: [], nextBefore: null });
+    expect(mocks.reports).toHaveBeenCalledWith(123);
+  });
+  it.each(["TEACHER", null])("rejects %s", async role => {
+    mocks.user.mockResolvedValue(role ? { role } : null);
+    await expect(getDayReports()).rejects.toThrow("Unauthorized");
+  });
 });

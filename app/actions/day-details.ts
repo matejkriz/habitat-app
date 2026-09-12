@@ -64,3 +64,10 @@ export async function createTripExpense(dateKey: string, expense: number, overri
   revalidatePath("/");
   revalidatePath("/rodic");
 }
+
+export async function getDayReports(before?: number) {
+  const user = await getDbUser();
+  if (!user || (user.role !== "DIRECTOR" && user.role !== "PARENT")) throw new Error("Unauthorized");
+  if (before !== undefined && !Number.isFinite(before)) throw new Error("Neplatné datum");
+  return db.dayDetails.reports(before);
+}
