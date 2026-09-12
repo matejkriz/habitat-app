@@ -145,8 +145,8 @@ export default async function LunchesPage({
                       </span>
                     </th>
                   ))}
-                  <th className="sticky right-0 top-0 z-30 min-w-24 border-b border-l border-cream-dark bg-[#f8f1e7] px-3 py-2 text-center font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]">
-                    K úhradě
+                  <th className="sticky right-0 top-0 z-30 min-w-16 border-b border-l border-cream-dark bg-[#f8f1e7] px-1.5 py-2 text-center font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:min-w-24 md:px-3">
+                    Celkem
                   </th>
                 </tr>
               </thead>
@@ -192,11 +192,11 @@ export default async function LunchesPage({
                     })}
                     <td
                       className={cn(
-                        "sticky right-0 z-10 border-b border-l border-cream-dark px-3 py-2 text-center shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]",
+                        "sticky right-0 z-10 border-b border-l border-cream-dark px-1.5 py-2 text-center shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:px-3",
                         rowIndex % 2 === 0 ? "bg-[#fcf7ef]" : "bg-[#f8f1e7]",
                       )}
                     >
-                      <span className="inline-grid min-w-10 place-items-center rounded-full bg-gold/15 px-2.5 py-1 text-base font-extrabold tabular-nums text-gold-dark">
+                      <span className="inline-grid min-w-8 place-items-center rounded-full bg-gold/15 px-2 py-1 text-base font-extrabold tabular-nums text-gold-dark md:min-w-10 md:px-2.5">
                         {child.payableLunches}
                       </span>
                     </td>

@@ -66,19 +66,37 @@ describe("LunchesPage", () => {
     expect(dayHeading.className).toContain("top-0");
   });
 
-  it("only fixes the payable column horizontally on mobile", async () => {
+  it("only fixes the total column horizontally on mobile", async () => {
     await renderLunchesPage();
 
     const childHeading = screen.getByRole("columnheader", { name: "Dítě" });
     const childRow = screen.getByRole("rowheader", { name: "Tobiáš Tornádo" });
-    const payableHeading = screen.getByRole("columnheader", { name: "K úhradě" });
+    const totalHeading = screen.getByRole("columnheader", { name: "Celkem" });
     const payableCell = screen.getByText("1").closest("td");
 
+    expect(screen.queryByRole("columnheader", { name: "K úhradě" })).toBeNull();
     expect(childHeading.className).toContain("md:left-0");
     expect(childRow.className).toContain("md:sticky");
     expect(childRow.className).toContain("md:left-0");
-    expect(payableHeading.className).toContain("right-0");
+    expect(totalHeading.className).toContain("right-0");
     expect(payableCell?.className).toContain("sticky");
     expect(payableCell?.className).toContain("right-0");
+  });
+
+  it("uses a narrower total column only on mobile", async () => {
+    await renderLunchesPage();
+
+    const totalHeading = screen.getByRole("columnheader", { name: "Celkem" });
+    const totalBadge = screen.getByText("1");
+    const totalCell = totalBadge.closest("td");
+
+    expect(totalHeading.className).toContain("min-w-16");
+    expect(totalHeading.className).toContain("px-1.5");
+    expect(totalHeading.className).toContain("md:min-w-24");
+    expect(totalHeading.className).toContain("md:px-3");
+    expect(totalCell?.className).toContain("px-1.5");
+    expect(totalCell?.className).toContain("md:px-3");
+    expect(totalBadge.className).toContain("min-w-8");
+    expect(totalBadge.className).toContain("md:min-w-10");
   });
 });
