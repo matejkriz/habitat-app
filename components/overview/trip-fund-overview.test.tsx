@@ -2,8 +2,10 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TripFundOverviewSection } from "./trip-fund-overview";
 
+vi.mock("@/app/actions/day-details", () => ({ setChildTripExpense: vi.fn(), createTripExpense: vi.fn(), getDayTripExpenses: vi.fn() }));
+
 const mocks = vi.hoisted(() => ({ getTripFundOverview: vi.fn() }));
-vi.mock("@/app/actions/director", () => ({ getTripFundOverview: mocks.getTripFundOverview }));
+vi.mock("@/app/actions/director", () => ({ getTripFundOverview: mocks.getTripFundOverview, updateChild: vi.fn() }));
 
 describe("TripFundOverviewSection", () => {
   it("shows deposits, dated trip charges and balances with absent cells distinct from zero", async () => {
@@ -17,7 +19,7 @@ describe("TripFundOverviewSection", () => {
     });
     render(await TripFundOverviewSection());
     const headings = screen.getAllByRole("columnheader").map(header => header.textContent);
-    expect(headings).toEqual(["Dítě", "Příjem do fondu", "10. 9. 2026Jarmark", "Zůstatek"]);
+    expect(headings).toEqual(["Dítě", "Příjem", "10. 9. 2026Jarmark", "Zůstatek"]);
     const anna = screen.getByRole("rowheader", { name: "Anna Malá" }).closest("tr")!;
     expect(within(anna).getByText(/500\s*Kč/)).toBeTruthy();
     expect(within(anna).getByText(/80\s*Kč/)).toBeTruthy();
