@@ -112,6 +112,16 @@ function getTomorrowButton(): HTMLElement {
 afterEach(() => cleanup());
 
 describe("AttendanceCalendar planning count", () => {
+  it("adds a period to the day number but not to the child count", () => {
+    renderCalendar();
+
+    const day = getTodayButton();
+
+    expect(within(day).getByText("3.", { exact: true })).toBeTruthy();
+    expect(within(day).getByText("2", { exact: true })).toBeTruthy();
+    expect(within(day).queryByText("2.", { exact: true })).toBeNull();
+  });
+
   it("shows one count when every excuse covers the whole day", () => {
     renderExcuseCalendar([
       calendarExcuse({

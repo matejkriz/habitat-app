@@ -45,6 +45,22 @@ describe("AttendanceCalendar", () => {
     vi.useRealTimers();
   });
 
+  it("adds a period to the day number", () => {
+    render(
+      <AttendanceCalendar
+        childId="child-1"
+        childName="Žofie"
+        childGender="FEMALE"
+        month="2026-08"
+        days={days}
+      />,
+    );
+
+    const day = screen.getByRole("button", { name: /pondělí 24. srpna/i });
+
+    expect(day.textContent).toContain("24.");
+  });
+
   it("opens a prefilled excuse from a day click", () => {
     render(
       <AttendanceCalendar

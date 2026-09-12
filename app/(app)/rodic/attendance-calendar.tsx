@@ -212,7 +212,7 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
                   day.isToday && "ring-2 ring-gold ring-offset-2",
                 )}
               >
-                <span className="text-sm font-extrabold sm:text-base">{day.dayNumber}</span>
+                <span className="text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
                 <span className="flex flex-col items-center gap-1 sm:items-start">
                   <span className={cn("size-2 rounded-full sm:hidden", details.dotClassName)} />
                   <span className="hidden text-[11px] font-bold leading-tight sm:block">
