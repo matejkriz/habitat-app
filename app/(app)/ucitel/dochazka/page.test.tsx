@@ -105,10 +105,11 @@ describe("TeacherAttendancePage", () => {
     expect(await screen.findByText("Tento den byl označený jako den bez oběda.")).toBeTruthy();
   });
 
-  it("shows whether each excused child was excused on time", async () => {
+  it("does not show excuse timeliness in attendance", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
       { id: "child-2", firstName: "Oskar", lastName: "Okurka", gender: "MALE" },
+      { id: "child-3", firstName: "Pavel", lastName: "Pampeliška", gender: "MALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
@@ -116,6 +117,7 @@ describe("TeacherAttendancePage", () => {
       excuses: [
         { childId: "child-1", state: "ON_TIME" },
         { childId: "child-2", state: "LATE" },
+        { childId: "child-3", state: "LATE_APPROVED", lunchCancelled: false },
       ],
     });
 
@@ -124,46 +126,57 @@ describe("TeacherAttendancePage", () => {
     await waitFor(() => {
       expect(screen.getByText("Žofie Žížalka")).toBeTruthy();
     });
-    expect(screen.getByText("Omluveno včas")).toBeTruthy();
-    expect(screen.getByText("Omluveno pozdě")).toBeTruthy();
-  });
-
-  it("shows director-approved late excuses without calling them on time", async () => {
-    mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
-    ]);
-    mocks.getAttendanceForDate.mockResolvedValue({
-      isClosed: false,
-      attendance: [],
-      excuses: [{ childId: "child-1", state: "LATE_APPROVED" }],
-    });
-
-    render(<TeacherAttendancePage />);
-
-    expect(await screen.findByText("Pozdě – schváleno")).toBeTruthy();
     expect(screen.queryByText("Omluveno včas")).toBeNull();
+    expect(screen.queryByText("Omluveno pozdě")).toBeNull();
+    expect(screen.queryByText("Pozdě – schváleno")).toBeNull();
+    expect(screen.queryByText("Pozdě – oběd ponechán")).toBeNull();
   });
 
-  it("shows that a late excuse needed no approval when lunch was kept", async () => {
+  it("keeps child details and attendance controls separated on narrow screens", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      {
+        id: "child-1",
+        firstName: "Amália",
+        lastName: "Procházková",
+        gender: "FEMALE",
+      },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [{ childId: "child-1", state: "LATE" }],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    const attendanceToggle = await screen.findByRole<HTMLInputElement>(
+      "checkbox",
+      { name: "Docházka: Amália Procházková" },
+    );
+    const row = attendanceToggle.closest("label");
+    const controls = attendanceToggle.parentElement?.parentElement;
+
+    expect(row?.className).toContain("grid");
+    expect(row?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(controls?.className).toContain("shrink-0");
+    expect(controls?.className).toContain("flex-col");
+    expect(controls?.className).toContain("sm:flex-row");
+  });
+
+  it("keeps partial-day information without showing excuse timeliness", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
       attendance: [],
-      excuses: [
-        {
-          childId: "child-1",
-          state: "LATE_APPROVED",
-          lunchCancelled: false,
-        },
-      ],
+      excuses: [{ childId: "child-1", state: "ON_TIME", dayPart: "MORNING" }],
     });
 
     render(<TeacherAttendancePage />);
 
-    expect(await screen.findByText("Pozdě – oběd ponechán")).toBeTruthy();
-    expect(screen.queryByText("Pozdě – schváleno")).toBeNull();
+    expect(await screen.findByText("Dopoledne nepřijde")).toBeTruthy();
+    expect(screen.queryByText("Omluveno včas")).toBeNull();
   });
 
   it("prefills excused children as absent unless attendance was already saved", async () => {

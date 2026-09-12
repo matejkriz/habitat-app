@@ -49,23 +49,6 @@ interface DailyExcuse {
   dayPart?: ExcuseDayPart;
 }
 
-const excuseBadge = {
-  ON_TIME: { variant: "excused", label: "Omluveno včas" },
-  LATE: { variant: "unexcused", label: "Omluveno pozdě" },
-  LATE_APPROVED: { variant: "excused", label: "Pozdě – schváleno" },
-} as const;
-
-function getExcuseBadge(excuse: DailyExcuse) {
-  if (
-    excuse.state === "LATE_APPROVED" &&
-    excuse.lunchCancelled === false
-  ) {
-    return { variant: "excused", label: "Pozdě – oběd ponechán" } as const;
-  }
-
-  return excuseBadge[excuse.state];
-}
-
 interface CachedAttendanceDay {
   readonly children: ReadonlyArray<Child>;
   readonly attendance: Readonly<Record<string, boolean>>;
@@ -542,7 +525,7 @@ export default function TeacherAttendancePage() {
                 {children.map((child) => (
                   <label
                     key={child.id}
-                    className={`flex min-h-12 select-none items-center justify-between rounded-lg border p-3 transition-[background-color,border-color,transform] ${
+                    className={`grid min-h-12 select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg border p-3 transition-[background-color,border-color,transform] ${
                       isInFuture
                         ? "cursor-default"
                         : "cursor-pointer active:scale-[0.99]"
@@ -558,30 +541,24 @@ export default function TeacherAttendancePage() {
                         size="sm"
                       />
                       <div className="flex min-w-0 flex-col items-start gap-1">
-                        <span className="font-medium text-charcoal">
+                        <span className="break-words font-medium leading-tight text-charcoal">
                           {child.firstName} {child.lastName}
                         </span>
-                        {excuses[child.id] && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {excuses[child.id].dayPart &&
-                            excuses[child.id].dayPart !== "FULL_DAY" ? (
-                              <Badge variant="info">
-                                {excuses[child.id].dayPart === "MORNING"
-                                  ? "Dopoledne nepřijde"
-                                  : "Odpoledne nepřijde"}
-                              </Badge>
-                            ) : null}
-                            <Badge
-                              variant={getExcuseBadge(excuses[child.id]).variant}
-                            >
-                              {getExcuseBadge(excuses[child.id]).label}
-                            </Badge>
-                          </div>
-                        )}
+                        {excuses[child.id]?.dayPart &&
+                        excuses[child.id].dayPart !== "FULL_DAY" ? (
+                          <Badge
+                            className="whitespace-normal text-left"
+                            variant="info"
+                          >
+                            {excuses[child.id].dayPart === "MORNING"
+                              ? "Dopoledne nepřijde"
+                              : "Odpoledne nepřijde"}
+                          </Badge>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-sm font-medium ${
+                    <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                      <span className={`whitespace-nowrap text-sm font-medium ${
                         attendance[child.id] ? "text-sage" : "text-coral"
                       }`}>
                         {getPresenceLabel(attendance[child.id], child.gender)}
