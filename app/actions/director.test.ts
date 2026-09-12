@@ -278,6 +278,18 @@ describe("updateChild", () => {
     mocks.auditLogsCreate.mockResolvedValue(undefined);
   });
 
+  it("stores and clears the amount sent to a child's fund", async () => {
+    await updateChild("tobias", { fundSent: 1500 });
+    expect(mocks.childrenUpdate).toHaveBeenCalledWith({ where: { id: "tobias" }, data: { fundSent: 1500 } });
+    await updateChild("tobias", { fundSent: null });
+    expect(mocks.childrenUpdate).toHaveBeenLastCalledWith({ where: { id: "tobias" }, data: { fundSent: null } });
+  });
+
+  it.each([-1, 1.5, Infinity, NaN])("rejects invalid fund contribution %s", async fundSent => {
+    await expect(updateChild("tobias", { fundSent })).rejects.toThrow();
+    expect(mocks.childrenUpdate).not.toHaveBeenCalled();
+  });
+
   it("approves existing excuses when lunches are disabled", async () => {
     mocks.excusesList.mockResolvedValue([spanningLate, approvedSingleDay]);
 

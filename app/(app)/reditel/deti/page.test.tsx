@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChildrenManagementPage from "./page";
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/app/actions/director", () => mocks);
 
 describe("ChildrenManagementPage", () => {
+  afterEach(cleanup);
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAllChildrenWithParents.mockResolvedValue([
@@ -54,4 +55,13 @@ describe("ChildrenManagementPage", () => {
     );
     expect(await screen.findByText("Bez obědů")).toBeTruthy();
   });
+  it("edits a child's fund contribution", async () => {
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upravit fond Anna Malá" }));
+    fireEvent.change(screen.getByLabelText("Posláno do fondu (Kč)"), { target: { value: "1500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit fond" }));
+    await waitFor(() => expect(mocks.updateChild).toHaveBeenCalledWith("anna", { fundSent: 1500 }));
+    expect(await screen.findByText(/Zůstatek:.*1\s*500/)).toBeTruthy();
+  });
+
 });

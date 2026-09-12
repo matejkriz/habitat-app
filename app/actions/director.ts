@@ -1,5 +1,7 @@
 "use server";
 
+import { validateCrowns, type TripFund } from "@/lib/day-details";
+
 import { getDbUser, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getPresenceLabel } from "@/lib/presence-label";
@@ -878,6 +880,9 @@ export async function exportAttendanceCSV(
  * Type for child with parents
  */
 export type ChildWithParents = {
+  fundSent?: number | null;
+  fundSpent?: number;
+  fundBalance?: number;
   id: string;
   firstName: string;
   lastName: string;
@@ -915,7 +920,12 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
     orderBy: [{ active: "desc" }, { lastName: "asc" }, { firstName: "asc" }],
   })) as ReadonlyArray<ChildWithParentsRow>;
 
+  const funds = new Map((await db.tripFunds.list() as TripFund[]).map(fund => [fund.childId, fund]));
+
   return children.map((child) => ({
+    fundSent: funds.get(child.id)?.fundSent ?? null,
+    fundSpent: funds.get(child.id)?.fundSpent ?? 0,
+    fundBalance: funds.get(child.id)?.fundBalance ?? 0,
     id: child.id,
     firstName: child.firstName,
     lastName: child.lastName,
@@ -1011,6 +1021,7 @@ export async function updateChild(
     lastName?: string;
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
+    fundSent?: number | null;
   },
 ) {
   const user = await requireDirector();
@@ -1028,6 +1039,7 @@ export async function updateChild(
     lastName?: string;
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
+    fundSent?: number | null;
   } = {};
   if (data.firstName !== undefined) {
     if (!data.firstName.trim()) {
@@ -1052,6 +1064,11 @@ export async function updateChild(
       throw new Error("Neplatné nastavení obědů");
     }
     updateData.doesNotTakeLunch = data.doesNotTakeLunch;
+  }
+
+  if (data.fundSent !== undefined) {
+    if (data.fundSent !== null) validateCrowns(data.fundSent);
+    updateData.fundSent = data.fundSent;
   }
 
   // Create audit log
