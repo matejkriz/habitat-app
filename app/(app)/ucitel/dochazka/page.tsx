@@ -551,8 +551,8 @@ export default function TeacherAttendancePage() {
                             variant="info"
                           >
                             {excuses[child.id].dayPart === "MORNING"
-                              ? "Dopoledne nepřijde"
-                              : "Odpoledne nepřijde"}
+                              ? "Jen odpoledne"
+                              : "Jen dopoledne"}
                           </Badge>
                         ) : null}
                       </div>

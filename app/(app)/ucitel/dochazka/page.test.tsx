@@ -175,7 +175,7 @@ describe("TeacherAttendancePage", () => {
 
     render(<TeacherAttendancePage />);
 
-    expect(await screen.findByText("Dopoledne nepřijde")).toBeTruthy();
+    expect(await screen.findByText("Jen odpoledne")).toBeTruthy();
     expect(screen.queryByText("Omluveno včas")).toBeNull();
   });
 
@@ -222,7 +222,7 @@ describe("TeacherAttendancePage", () => {
 
     await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
     expect(screen.getAllByRole<HTMLInputElement>("checkbox")[0].checked).toBe(true);
-    expect(screen.getByText("Odpoledne nepřijde")).toBeTruthy();
+    expect(screen.getByText("Jen dopoledne")).toBeTruthy();
     const plan = screen.getByRole("region", { name: "Plánovaná účast" });
     expect(within(plan).getByText("2", { selector: "p" })).toBeTruthy();
     expect(within(plan).getByText("1", { selector: "p" })).toBeTruthy();
