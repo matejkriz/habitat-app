@@ -21,7 +21,7 @@ const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
           className
         )}
       >
-        <div className="relative">
+        <div className="relative shrink-0">
           <input
             ref={ref}
             type="checkbox"
@@ -32,7 +32,7 @@ const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
           <div
             className={cn(
               "w-11 h-6 rounded-full transition-colors duration-200",
-              "bg-cream-dark peer-checked:bg-gold",
+              "bg-charcoal/40 ring-1 ring-inset ring-charcoal/60 peer-checked:bg-gold peer-checked:ring-gold-dark",
               "peer-focus-visible:ring-2 peer-focus-visible:ring-gold peer-focus-visible:ring-offset-2"
             )}
           />
