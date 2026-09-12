@@ -12,7 +12,6 @@ import {
   Input,
   Avatar,
   Badge,
-  Toggle,
 } from "@/components/ui";
 import {
   getAllChildren,
@@ -430,8 +429,21 @@ export default function TeacherAttendancePage() {
                 if (cachedDay) dayCache.current.set(selectedDate, { ...cachedDay, details: next });
                 if (selectedDateRef.current === selectedDate) setDetails(next);
               }}>
-                <Toggle aria-label="Tento den nebyl oběd" label="Tento den nebyl oběd" checked={noLunch} disabled={isSavingNoLunch || isClosed} onChange={handleNoLunchChange}
-                  description="Den se v přehledu obědů označí šedě a žádnému dítěti se nezapočítá." />
+                <label className={`flex min-h-11 items-start gap-3 py-2 ${isSavingNoLunch || isClosed ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
+                  <input
+                    type="checkbox"
+                    checked={noLunch}
+                    disabled={isSavingNoLunch || isClosed}
+                    onChange={handleNoLunchChange}
+                    aria-labelledby="no-lunch-label"
+                    aria-describedby="no-lunch-description"
+                    className="mt-0.5 size-5 shrink-0 cursor-pointer accent-charcoal disabled:cursor-not-allowed"
+                  />
+                  <span className="flex flex-col">
+                    <span id="no-lunch-label" className="text-sm font-medium text-charcoal">Tento den nebyl oběd</span>
+                    <span id="no-lunch-description" className="text-xs text-charcoal-light">Den se v přehledu obědů označí šedě a žádnému dítěti se nezapočítá.</span>
+                  </span>
+                </label>
               </DayDetailsForm>
               <TripExpenses key={selectedDate} dateKey={selectedDate} defaultExpense={details.expense ?? null} revision={tripRevision} />
             </div>
