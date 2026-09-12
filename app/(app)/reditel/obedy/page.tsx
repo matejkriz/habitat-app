@@ -125,17 +125,17 @@ export default async function LunchesPage({
             Tento měsíc nemá žádné školní dny.
           </div>
         ) : (
-          <div className="overflow-x-auto overscroll-x-contain">
+          <div className="overflow-x-auto overscroll-x-contain max-md:max-h-[calc(100dvh-8rem)] max-md:overflow-y-auto max-md:overscroll-y-contain">
             <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 min-w-48 border-b border-r border-cream-dark bg-[#fbf7f1] px-4 py-3 text-left font-bold text-charcoal shadow-[6px_0_12px_-12px_rgba(61,61,61,0.8)]">
+                  <th className="sticky top-0 z-30 min-w-48 border-b border-r border-cream-dark bg-[#fbf7f1] px-4 py-3 text-left font-bold text-charcoal shadow-[6px_0_12px_-12px_rgba(61,61,61,0.8)] md:left-0">
                     Dítě
                   </th>
                   {overview.days.map((day) => (
                     <th
                       key={day.key}
-                      className="min-w-12 border-b border-r border-cream-dark bg-[#fbf7f1] px-1 py-2 text-center"
+                      className="sticky top-0 z-20 min-w-12 border-b border-r border-cream-dark bg-[#fbf7f1] px-1 py-2 text-center"
                     >
                       <span className="block text-[10px] font-bold uppercase tracking-wide text-charcoal-light">
                         {day.weekday}
@@ -145,7 +145,7 @@ export default async function LunchesPage({
                       </span>
                     </th>
                   ))}
-                  <th className="sticky right-0 z-20 min-w-24 border-b border-l border-cream-dark bg-[#f8f1e7] px-3 py-2 text-center font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]">
+                  <th className="sticky right-0 top-0 z-30 min-w-24 border-b border-l border-cream-dark bg-[#f8f1e7] px-3 py-2 text-center font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]">
                     K úhradě
                   </th>
                 </tr>
@@ -156,7 +156,7 @@ export default async function LunchesPage({
                     <th
                       scope="row"
                       className={cn(
-                        "sticky left-0 z-10 border-b border-r border-cream-dark px-4 py-3 text-left shadow-[6px_0_12px_-12px_rgba(61,61,61,0.8)]",
+                        "border-b border-r border-cream-dark px-4 py-3 text-left shadow-[6px_0_12px_-12px_rgba(61,61,61,0.8)] md:sticky md:left-0 md:z-10",
                         rowIndex % 2 === 0 ? "bg-white" : "bg-[#fdfaf6]",
                       )}
                     >
