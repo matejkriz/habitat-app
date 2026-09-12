@@ -22,6 +22,7 @@ import {
   Badge,
   Toggle,
 } from "@/components/ui";
+import { ChildFund } from "./child-fund";
 import type { ChildGender } from "@/lib/types";
 
 type Parent = {
@@ -723,6 +724,8 @@ function ChildRow({
           </div>
         )}
       </div>
+
+      <ChildFund child={child} />
 
       {/* Parents list */}
       <div className="mt-3 pt-3 border-t border-cream-dark">

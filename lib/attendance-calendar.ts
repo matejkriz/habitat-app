@@ -39,6 +39,8 @@ export type CalendarChildDetail = {
 };
 
 export type AttendanceCalendarDay = {
+  readonly name?: string | null;
+  readonly expense?: number | null;
   readonly dateKey: string;
   readonly dayNumber: number;
   readonly isToday: boolean;

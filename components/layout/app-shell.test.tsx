@@ -84,7 +84,6 @@ describe("AppShell", () => {
         "/reditel",
         "/ucitel/dochazka",
         "/kalendar",
-        "/reditel/obedy",
         "/reditel/omluvenky",
       ])
     );
@@ -204,6 +203,12 @@ describe("AppShell", () => {
     },
   );
 
+  it("keeps the director overview without a separate lunches tab", () => {
+    render(<AppShell user={director}><div>Obsah</div></AppShell>);
+    expect(screen.getAllByRole("link", { name: "Přehled" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Obědy" })).toBeNull();
+  });
+
   it("highlights a mobile destination as soon as its navigation starts", () => {
     render(
       <AppShell user={director}>
@@ -215,13 +220,13 @@ describe("AppShell", () => {
       screen.getAllByRole("link", { name }).at(-1) as HTMLAnchorElement;
 
     expect(getMobileLink("Přehled").className).toContain("text-gold");
-    expect(getMobileLink("Docházka").className).toContain("text-charcoal-light");
+    expect(getMobileLink("Den").className).toContain("text-charcoal-light");
 
-    fireEvent.click(getMobileLink("Docházka"));
+    fireEvent.click(getMobileLink("Den"));
 
     expect(getMobileLink("Přehled").className).toContain("text-charcoal-light");
-    expect(getMobileLink("Docházka").className).toContain("text-gold");
-    expect(getMobileLink("Docházka").getAttribute("aria-busy")).toBe("true");
+    expect(getMobileLink("Den").className).toContain("text-gold");
+    expect(getMobileLink("Den").getAttribute("aria-busy")).toBe("true");
   });
 
   it("does not leave the current destination in a pending state", () => {

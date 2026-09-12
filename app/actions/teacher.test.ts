@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   auditLogsCreate: vi.fn(),
 }));
 
+vi.mock("./day-details", () => ({ getDayDetailsForDate: vi.fn().mockResolvedValue({ name: null }) }));
+
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
 vi.mock("@/lib/school-days", () => ({ isClosedDay: mocks.isClosedDay }));
 vi.mock("@/lib/db", () => ({

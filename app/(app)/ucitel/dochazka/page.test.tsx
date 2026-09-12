@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   setNoLunchForDate: vi.fn(),
 }));
 
+vi.mock("@/app/actions/day-details", () => ({ saveDayDetails: vi.fn(), getDayTripExpenses: async () => [], setChildTripExpense: vi.fn() }));
+
 vi.mock("@/app/actions/teacher", () => mocks);
 
 import TeacherAttendancePage from "./page";
@@ -91,6 +93,9 @@ describe("TeacherAttendancePage", () => {
 
     render(<TeacherAttendancePage />);
 
+    const summary = await screen.findByText("Podrobnosti", { selector: "summary" });
+    expect(summary.closest("details")!.open).toBe(false);
+    fireEvent.click(summary);
     const checkbox = await screen.findByRole<HTMLInputElement>("checkbox", {
       name: "Tento den nebyl oběd",
     });
@@ -627,4 +632,14 @@ describe("TeacherAttendancePage", () => {
     expect(vibrate).toHaveBeenCalledOnce();
     expect(vibrate).toHaveBeenCalledWith(10);
   });
+});
+
+it("shows the event name even when details are collapsed", async () => {
+  mocks.getAllChildren.mockResolvedValue([]);
+  mocks.getAttendanceForDate.mockResolvedValue({ isClosed: false, attendance: [], excuses: [], canManageLunch: true, noLunch: false, details: { name: "Výlet na Karlštejn", expense: 150, report: "Poznámky" } });
+  render(<TeacherAttendancePage />);
+  expect(await screen.findByText("Výlet na Karlštejn", { selector: "p" })).toBeTruthy();
+  expect(screen.getByText("Podrobnosti", { selector: "summary" }).closest("details")!.open).toBe(false);
+  expect(screen.getByRole("heading", { name: "Den" })).toBeTruthy();
+  cleanup();
 });

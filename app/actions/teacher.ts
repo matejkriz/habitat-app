@@ -1,5 +1,7 @@
 "use server";
 
+import { getDayDetailsForDate } from "./day-details";
+import type { DayDetails } from "@/lib/day-details";
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -37,6 +39,7 @@ type DailyExcuse = {
 };
 
 type DailyAttendance = {
+  readonly details: DayDetails;
   readonly isClosed: boolean;
   readonly attendance: ReadonlyArray<AttendanceRecord>;
   readonly excuses: ReadonlyArray<DailyExcuse>;
@@ -75,9 +78,10 @@ export const getAttendanceForDate = async (
   const date = new Date(dateStr);
   date.setHours(0, 0, 0, 0);
 
-  const closed = await isClosedDay(date);
+  const [closed, details] = await Promise.all([isClosedDay(date), getDayDetailsForDate(dateStr)]);
   if (closed) {
     return {
+      details,
       isClosed: true,
       attendance: [],
       excuses: [],
@@ -108,6 +112,7 @@ export const getAttendanceForDate = async (
     getDayCoverage(excusesByChild.get(childId) ?? [], date);
 
   return {
+    details,
     isClosed: false,
     attendance: attendance.map((a) => ({
       childId: a.childId,
@@ -205,7 +210,9 @@ export const setNoLunchForDate = async (
 
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
+  revalidatePath("/rodic");
 
   return { noLunch: savedNoLunch };
 };
@@ -272,7 +279,8 @@ export const saveAttendance = async (
 
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/rodic");
 
   return { success: true, recordCount: records.length };

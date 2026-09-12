@@ -14,21 +14,25 @@ import {
   ABSENT_CHILDREN_LABEL,
   PRESENT_CHILDREN_LABEL,
 } from "@/lib/presence-label";
+import { LunchOverviewSection } from "@/components/overview/lunch-overview";
+import { TripFundOverviewSection } from "@/components/overview/trip-fund-overview";
 import { AuditQuickAction } from "./audit-quick-action";
 
 export const metadata = {
-  title: "Administrace",
+  title: "Přehled",
 };
 
-async function DashboardContent() {
-  const stats = await getDashboardStats();
+type SearchParams = Promise<{ month?: string | string[] }>;
+
+async function DashboardContent({ searchParams }: { searchParams: SearchParams }) {
+  const [stats, params] = await Promise.all([getDashboardStats(), searchParams]);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-charcoal">Administrace</h1>
+          <h1 className="text-2xl font-bold text-charcoal">Přehled</h1>
           <p className="text-charcoal-light">Přehled a správa systému</p>
         </div>
       </div>
@@ -264,6 +268,13 @@ async function DashboardContent() {
 
         <AuditQuickAction />
       </div>
+
+      <Suspense fallback={<p className="text-charcoal-light">Načítání obědů…</p>}>
+        <LunchOverviewSection month={params.month} />
+      </Suspense>
+      <Suspense fallback={<p className="text-charcoal-light">Načítání výletního fondu…</p>}>
+        <TripFundOverviewSection />
+      </Suspense>
     </div>
   );
 }
@@ -276,10 +287,10 @@ function LoadingDashboard() {
   );
 }
 
-export default function DirectorDashboard() {
+export default function DirectorDashboard({ searchParams }: { searchParams: SearchParams }) {
   return (
     <Suspense fallback={<LoadingDashboard />}>
-      <DashboardContent />
+      <DashboardContent searchParams={searchParams} />
     </Suspense>
   );
 }

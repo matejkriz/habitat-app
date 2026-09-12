@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
+import { validateCrowns, validateDayDetails, type TripFundOverview } from "../lib/day-details";
 import { requireServerSecret } from "./serverSecret";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
@@ -328,5 +329,229 @@ export const deleteById = mutation({
 
     await db.delete(current._id);
     return true;
+  },
+});
+
+export const saveDayDetails = mutation({
+  args: {
+    secret: v.string(), date: v.number(), recordedById: v.string(),
+    name: v.optional(v.union(v.string(), v.null())),
+    expense: v.optional(v.union(v.number(), v.null())),
+    report: v.optional(v.union(v.string(), v.null())),
+  },
+  returns: v.null(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (!Number.isFinite(args.date) || !Number.isFinite(new Date(args.date).getTime())) throw new Error("Neplatné datum");
+    validateDayDetails(args);
+    const current = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique();
+    const patch = {
+      ...(args.name === undefined ? {} : { name: args.name?.trim() || null }),
+      ...(args.expense === undefined ? {} : { expense: args.expense }),
+      recordedById: args.recordedById, updatedAt: Date.now(),
+    };
+    if (current) await db.patch(current._id, patch);
+    else await db.insert("dayDetails", { date: args.date, ...patch });
+    if (args.report !== undefined) {
+      const report = await db.query("dayReports").withIndex("by_date", q => q.eq("date", args.date)).unique();
+      if (!args.report) {
+        if (report) await db.delete(report._id);
+      } else {
+        const value = { date: args.date, report: args.report, recordedById: args.recordedById, updatedAt: Date.now() };
+        if (report) await db.patch(report._id, value);
+        else await db.insert("dayReports", value);
+      }
+    }
+    await db.insert("auditLogs", {
+      id: `day_${args.date}_${Date.now()}`, userId: args.recordedById, action: "UPDATE",
+      entityType: "DayDetails", entityId: String(args.date),
+      previousValue: { name: current?.name ?? null, expense: current?.expense ?? null },
+      newValue: { ...patch, reportChanged: args.report !== undefined }, createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+export const getDayDetails = query({
+  args: { secret: v.string(), date: v.number(), includeReport: v.boolean() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const day = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique();
+    const report = args.includeReport
+      ? await db.query("dayReports").withIndex("by_date", q => q.eq("date", args.date)).unique()
+      : null;
+    return { name: day?.name ?? null, expense: day?.expense ?? null,
+      ...(args.includeReport ? { report: report?.report ?? null } : {}) };
+  },
+});
+
+export const listDayDetails = query({
+  args: { secret: v.string(), from: v.number(), to: v.number() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const days = await db.query("dayDetails").withIndex("by_date", q => q.gte("date", args.from).lte("date", args.to)).collect();
+    return days.map(day => ({ date: day.date, name: day.name ?? null, expense: day.expense ?? null }));
+  },
+});
+
+async function readTripFundOverview(db: QueryCtx["db"]): Promise<TripFundOverview> {
+  const [children, days, attendance, overrides] = await Promise.all([
+    db.query("children").collect(),
+    db.query("dayDetails").collect(),
+    db.query("attendance").collect(),
+    db.query("childTripExpenses").collect(),
+  ]);
+  const details = new Map(days.map(day => [day.date, day]));
+  // Individual amounts remain chargeable even if the day's default was cleared.
+  const dates = new Set([
+    ...days.filter(day => day.expense != null).map(day => day.date),
+    ...overrides.map(row => row.date),
+  ]);
+  const tripDays = [...dates].sort((a, b) => a - b).map(date => ({
+    date, name: details.get(date)?.name ?? null, expense: details.get(date)?.expense ?? null,
+  }));
+  const individual = new Map(overrides.map(row => [`${row.childId}:${row.date}`, row.amount]));
+  const present = new Set(attendance.filter(row => row.presence === "PRESENT").map(row => `${row.childId}:${row.date}`));
+
+  return {
+    days: tripDays,
+    children: children.map(child => {
+      const amounts = tripDays.map(day => {
+        const key = `${child.id}:${day.date}`;
+        return present.has(key) ? individual.get(key) ?? day.expense ?? 0 : null;
+      });
+      const fundSpent = amounts.reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
+      return {
+        childId: child.id, firstName: child.firstName, lastName: child.lastName,
+        fundSent: child.fundSent ?? null, amounts, fundSpent,
+        fundBalance: (child.fundSent ?? 0) - fundSpent,
+      };
+    }),
+  };
+}
+
+export const getTripFundOverview = query({
+  args: { secret: v.string() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    return readTripFundOverview(db);
+  },
+});
+
+export const getTripFunds = query({
+  args: { secret: v.string() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const overview = await readTripFundOverview(db);
+    return overview.children.map(({ childId, fundSent, fundSpent, fundBalance }) => ({
+      childId, fundSent, fundSpent, fundBalance,
+    }));
+  },
+});
+
+export const getDayTripExpenses = query({
+  args: { secret: v.string(), date: v.number() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const [day, attendance, overrides] = await Promise.all([
+      db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique(),
+      db.query("attendance").withIndex("by_date", q => q.eq("date", args.date)).collect(),
+      db.query("childTripExpenses").withIndex("by_date", q => q.eq("date", args.date)).collect(),
+    ]);
+    const individual = new Map(overrides.map(row => [row.childId, row.amount]));
+    const rows = await Promise.all(attendance.filter(record => record.presence === "PRESENT").map(async record => {
+      const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", record.childId)).unique();
+      if (!child) return null;
+      return { childId: child.id, name: `${child.firstName} ${child.lastName}`,
+        amount: individual.get(child.id) ?? day?.expense ?? 0, override: individual.get(child.id) ?? null };
+    }));
+    return rows.filter(row => row !== null).sort((a, b) => a.name.localeCompare(b.name, "cs"));
+  },
+});
+
+export const setChildTripExpense = mutation({
+  args: { secret: v.string(), date: v.number(), childId: v.string(), amount: v.union(v.number(), v.null()), recordedById: v.string() },
+  returns: v.null(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (!Number.isFinite(args.date)) throw new Error("Neplatné datum");
+    if (args.amount !== null) validateCrowns(args.amount);
+    const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", args.childId)).unique();
+    if (!child) throw new Error("Dítě nebylo nalezeno");
+    const attendance = await db.query("attendance").withIndex("by_child_date", q => q.eq("childId", args.childId).eq("date", args.date)).unique();
+    if (attendance?.presence !== "PRESENT") throw new Error("Nejprve dítě označte jako přítomné a uložte docházku");
+    const current = await db.query("childTripExpenses").withIndex("by_child_date", q => q.eq("childId", args.childId).eq("date", args.date)).unique();
+    if (args.amount === null) {
+      if (current) await db.delete(current._id);
+    } else {
+      const value = { date: args.date, childId: args.childId, amount: args.amount, recordedById: args.recordedById, updatedAt: Date.now() };
+      if (current) await db.patch(current._id, value);
+      else await db.insert("childTripExpenses", value);
+    }
+    await db.insert("auditLogs", { id: `trip_${args.childId}_${args.date}_${Date.now()}`,
+      userId: args.recordedById, action: "UPDATE", entityType: "ChildTripExpense", entityId: `${args.childId}:${args.date}`,
+      previousValue: { amount: current?.amount ?? null }, newValue: { amount: args.amount }, createdAt: Date.now() });
+    return null;
+  },
+});
+
+export const createTripExpense = mutation({
+  args: {
+    secret: v.string(), date: v.number(), expense: v.number(), recordedById: v.string(),
+    overrides: v.array(v.object({ childId: v.string(), amount: v.number() })),
+  },
+  returns: v.null(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (!Number.isFinite(args.date) || !Number.isFinite(new Date(args.date).getTime())) throw new Error("Neplatné datum");
+    validateCrowns(args.expense);
+    const ids = new Set<string>();
+    for (const row of args.overrides) {
+      validateCrowns(row.amount);
+      if (ids.has(row.childId)) throw new Error("Dítě je uvedené vícekrát");
+      ids.add(row.childId);
+    }
+    const [day, existing, attendance] = await Promise.all([
+      db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique(),
+      db.query("childTripExpenses").withIndex("by_date", q => q.eq("date", args.date)).first(),
+      db.query("attendance").withIndex("by_date", q => q.eq("date", args.date)).collect(),
+    ]);
+    if (day?.expense != null || existing) throw new Error("Pro tento den už je útrata zadaná. Upravte ji v tabulce nebo v detailu dne.");
+    const present = new Set(attendance.filter(row => row.presence === "PRESENT").map(row => row.childId));
+    for (const row of args.overrides) {
+      const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", row.childId)).unique();
+      if (!child) throw new Error("Dítě nebylo nalezeno");
+      if (!present.has(row.childId)) throw new Error("Individuální útratu lze uložit jen přítomnému dítěti. Zkontrolujte docházku.");
+    }
+    const updatedAt = Date.now();
+    const patch = { expense: args.expense, recordedById: args.recordedById, updatedAt };
+    if (day) await db.patch(day._id, patch);
+    else await db.insert("dayDetails", { date: args.date, ...patch });
+    for (const row of args.overrides) {
+      await db.insert("childTripExpenses", { ...row, date: args.date, recordedById: args.recordedById, updatedAt });
+    }
+    await db.insert("auditLogs", {
+      id: `trip_create_${args.date}_${updatedAt}`, userId: args.recordedById,
+      action: "CREATE", entityType: "TripExpense", entityId: String(args.date),
+      previousValue: null, newValue: { expense: args.expense, overrides: args.overrides }, createdAt: updatedAt,
+    });
+    return null;
+  },
+});
+
+export const getParentTripFundOverview = query({
+  args: { secret: v.string(), parentId: v.string() },
+  handler: async ({ db }, args): Promise<TripFundOverview> => {
+    requireServerSecret(args.secret);
+    const links = await db.query("parentChildren").withIndex("by_parent_id", q => q.eq("parentId", args.parentId)).collect();
+    if (links.length === 0) return { days: [], children: [] };
+    const childIds = new Set(links.map(link => link.childId));
+    const overview = await readTripFundOverview(db);
+    const children = overview.children.filter(child => childIds.has(child.childId));
+    const columns = overview.days.flatMap((_, index) => children.some(child => child.amounts[index] !== null) ? [index] : []);
+    return {
+      days: columns.map(index => ({ date: overview.days[index].date, name: overview.days[index].name, expense: null })),
+      children: children.map(child => ({ ...child, amounts: columns.map(index => child.amounts[index]) })),
+    };
   },
 });

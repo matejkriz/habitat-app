@@ -7,6 +7,9 @@ import {
   type AttendanceCalendarMonth,
 } from "@/app/actions/calendar";
 import type { AttendanceCalendarDay, CalendarChildDetail } from "@/lib/attendance-calendar";
+import { TripExpenses } from "@/components/days/trip-expenses";
+import { DayDetailsForm } from "@/components/days/day-details-form";
+import type { DayDetails } from "@/lib/day-details";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui";
 
@@ -115,14 +118,14 @@ function CalendarDayButton({
   return (
     <button
       type="button"
-      aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}${accessibleLunchStatus}`}
+      aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}${accessibleLunchStatus}${day.name ? `, ${day.name}` : ""}`}
       onClick={onOpen}
       onPointerEnter={(event) => event.pointerType === "mouse" && onHoverStart(event)}
       onPointerMove={(event) => event.pointerType === "mouse" && onHoverMove(event)}
       onPointerLeave={onHoverEnd}
       onPointerCancel={onHoverEnd}
       className={cn(
-        "group relative min-h-20 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-28 sm:p-2.5",
+        "group relative flex min-w-0 min-h-28 flex-col overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-36 sm:p-2.5",
         "focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-gold",
         day.isClosed
           ? "border-cream-dark/70 bg-cream-dark/35 text-charcoal-light hover:bg-cream-dark/60"
@@ -203,6 +206,9 @@ function CalendarDayButton({
           </div>
         </div>
       )}
+      <span className="mt-auto block w-full truncate pt-2 text-[11px] font-semibold leading-4 text-charcoal sm:text-xs" title={day.name ?? undefined}>
+        {day.name || "\u00a0"}
+      </span>
     </button>
   );
 }
@@ -363,7 +369,9 @@ function ChildList({
   );
 }
 
-function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose: () => void }) {
+function DayDetailModal({ day, onClose, canManageDetails, onSaved }: {
+  day: AttendanceCalendarDay; onClose: () => void; canManageDetails: boolean; onSaved: (details: DayDetails) => void;
+}) {
   const router = useRouter();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -414,6 +422,13 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
         </header>
 
         <div className="overflow-y-auto px-5 py-5 sm:px-6">
+          {day.name && <p className="mb-5 whitespace-pre-wrap break-words text-lg font-bold text-charcoal">{day.name}</p>}
+          {canManageDetails && (
+            <div className="mb-5 rounded-xl border border-cream-dark bg-cream/30 p-4">
+              <DayDetailsForm dateKey={day.dateKey} initialDetails={{ name: day.name ?? null, expense: day.expense ?? null }} onSaved={onSaved} />
+              <TripExpenses dateKey={day.dateKey} defaultExpense={day.expense ?? null} />
+            </div>
+          )}
           {day.isClosed ? (
             <div className="rounded-xl bg-cream-dark/60 p-5 text-center">
               <p className="font-bold text-charcoal">Habitat má zavřeno</p>
@@ -471,7 +486,7 @@ function DayDetailModal({ day, onClose }: { day: AttendanceCalendarDay; onClose:
             className="h-12 w-full sm:w-auto"
             onClick={() => router.push(`/ucitel/dochazka?date=${day.dateKey}`)}
           >
-            Otevřít den v Docházce
+            Otevřít den
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
@@ -701,7 +716,11 @@ export function AttendanceCalendar({
           top={hoverPreview.top}
         />
       )}
-      {selectedDay && <DayDetailModal day={selectedDay} onClose={() => setSelectedDay(null)} />}
+      {selectedDay && <DayDetailModal key={selectedDay.dateKey} day={selectedDay} canManageDetails={calendar.canManageDetails ?? false}
+        onClose={() => setSelectedDay(null)} onSaved={details => {
+          setSelectedDay({ ...selectedDay, ...details });
+          setCalendar(current => ({ ...current, days: current.days.map(day => day.dateKey === selectedDay.dateKey ? { ...day, ...details } : day) }));
+        }} />}
     </div>
   );
 }

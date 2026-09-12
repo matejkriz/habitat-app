@@ -6,7 +6,7 @@ import TeacherAttendancePage from "./ucitel/dochazka/page";
 import DirectorDashboard from "./reditel/page";
 
 interface HomePageProps {
-  readonly searchParams: Promise<{ child?: string; month?: string }>;
+  readonly searchParams: Promise<{ child?: string; month?: string; lunchMonth?: string }>;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -22,6 +22,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     case UserRole.TEACHER:
       return <TeacherAttendancePage />;
     case UserRole.DIRECTOR:
-      return <DirectorDashboard />;
+      return <DirectorDashboard searchParams={searchParams} />;
   }
 }

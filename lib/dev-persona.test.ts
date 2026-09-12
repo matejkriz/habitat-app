@@ -34,7 +34,7 @@ describe("development persona policy", () => {
         ...shared,
         NODE_ENV: "production",
         VERCEL_TARGET_ENV: "preview",
-        VERCEL_GIT_COMMIT_REF: "workos",
+        VERCEL_GIT_COMMIT_REF: "calendar",
       }),
     ).toBe(true);
   });

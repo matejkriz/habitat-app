@@ -1,5 +1,10 @@
 "use server";
 
+import { validateCrowns, type TripFund, type TripFundOverview } from "@/lib/day-details";
+
+import { loadLunchOverview, type LunchOverview } from "@/lib/lunch-overview";
+export type { LunchOverview } from "@/lib/lunch-overview";
+
 import { getDbUser, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getPresenceLabel } from "@/lib/presence-label";
@@ -13,18 +18,10 @@ import {
   type ChildGender,
   type Excuse,
   type ExcuseDayPart,
-  type NoLunchDay,
   type ParentChild,
   type User,
 } from "@/lib/types";
 import { getSchoolDaysInRange } from "@/lib/school-days";
-import {
-  getLocalDateKey,
-  getLunchStatus,
-  isPayableLunch,
-  sortChildrenWithSiblings,
-  type LunchStatus,
-} from "@/lib/lunches";
 import { revalidatePath } from "next/cache";
 import {
   createExcuse,
@@ -34,7 +31,6 @@ import {
 } from "@/lib/excuse";
 import {
   getDayCoverage,
-  getDayPartCoverage,
   getExcuseRangeState,
   groupExcusesByChild,
   isExcuseSettled,
@@ -93,36 +89,6 @@ type ChildWithParentsRow = Child & {
       readonly name: string | null;
       readonly email: string | null;
     };
-  }>;
-};
-
-type LunchChildWithParentsRow = Child & {
-  readonly parents: ReadonlyArray<{
-    readonly parent: {
-      readonly id: string;
-    };
-  }>;
-};
-
-export type LunchOverview = {
-  readonly month: string;
-  readonly monthLabel: string;
-  readonly days: ReadonlyArray<{
-    readonly key: string;
-    readonly day: number;
-    readonly weekday: string;
-  }>;
-  readonly children: ReadonlyArray<{
-    readonly id: string;
-    readonly firstName: string;
-    readonly lastName: string;
-    readonly statuses: ReadonlyArray<LunchStatus | null>;
-    readonly payableLunches: number;
-  }>;
-  readonly childrenWithoutLunch: ReadonlyArray<{
-    readonly id: string;
-    readonly firstName: string;
-    readonly lastName: string;
   }>;
 };
 
@@ -187,126 +153,22 @@ async function getSchoolDaysCoveringExcuses(
   return getSchoolDaysInRange(new Date(from), new Date(to));
 }
 
+export async function getTripFundOverview(): Promise<TripFundOverview> {
+  await requireDirector();
+  const overview: TripFundOverview = await db.tripFunds.overview();
+  return {
+    ...overview,
+    children: overview.children.sort((a, b) =>
+      a.lastName.localeCompare(b.lastName, "cs") || a.firstName.localeCompare(b.firstName, "cs")),
+  };
+}
+
 /**
  * Get the monthly lunch billing overview for all active children.
  */
 export async function getLunchOverview(month: string): Promise<LunchOverview> {
   await requireDirector();
-
-  const match = /^(\d{4})-(\d{2})$/.exec(month);
-  const year = match ? Number(match[1]) : Number.NaN;
-  const monthIndex = match ? Number(match[2]) - 1 : Number.NaN;
-
-  if (
-    !Number.isInteger(year) ||
-    year < 2000 ||
-    year > 2100 ||
-    !Number.isInteger(monthIndex) ||
-    monthIndex < 0 ||
-    monthIndex > 11
-  ) {
-    throw new Error("Neplatný měsíc");
-  }
-
-  const startOfMonth = new Date(year, monthIndex, 1);
-  const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
-
-  const [schoolDays, children, attendance, excuses, noLunchDays] = await Promise.all([
-    getSchoolDaysInRange(startOfMonth, endOfMonth),
-    db.children.list({
-      where: { active: true },
-      include: {
-        parents: {
-          include: {
-            parent: {
-              select: { id: true },
-            },
-          },
-        },
-      },
-    }) as Promise<ReadonlyArray<LunchChildWithParentsRow>>,
-    db.attendance.list({
-      where: {
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-    }) as Promise<ReadonlyArray<Attendance>>,
-    getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
-    db.noLunchDays.list({
-      where: { date: { gte: startOfMonth, lte: endOfMonth } },
-    }) as Promise<ReadonlyArray<NoLunchDay>>,
-  ]);
-
-  const excusesByChild = groupExcusesByChild(excuses);
-  const sortedChildren = sortChildrenWithSiblings(
-    children.map((child) => ({
-      ...child,
-      parentIds: child.parents.map(({ parent }) => parent.id),
-    })),
-  );
-  const childrenWithLunch = sortedChildren.filter(
-    (child) => !child.doesNotTakeLunch,
-  );
-  const childrenWithoutLunch = sortedChildren.filter(
-    (child) => child.doesNotTakeLunch,
-  );
-  const attendanceByChildAndDate = new Map(
-    attendance.map((record) => [
-      `${record.childId}:${getLocalDateKey(record.date)}`,
-      record,
-    ]),
-  );
-  const noLunchDateKeys = new Set(noLunchDays.map((day) => getLocalDateKey(day.date)));
-  const days = schoolDays.map((date) => ({
-    date,
-    key: getLocalDateKey(date),
-    day: date.getDate(),
-    weekday: ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"][date.getDay()],
-  }));
-
-  return {
-    month,
-    monthLabel: new Intl.DateTimeFormat("cs-CZ", {
-      month: "long",
-      year: "numeric",
-    }).format(startOfMonth),
-    days: days.map(({ key, day, weekday }) => ({ key, day, weekday })),
-    children: childrenWithLunch.map((child) => {
-      const childExcuses = excusesByChild.get(child.id) ?? [];
-      const statuses = days.map((day) => {
-        const wholeDayCoverage = getDayCoverage(childExcuses, day.date);
-        const morningCoverage = getDayPartCoverage(
-          childExcuses,
-          day.date,
-          "MORNING",
-        );
-        const usesMorningCancellation =
-          !wholeDayCoverage.covered && morningCoverage.covered;
-
-        return getLunchStatus(
-          attendanceByChildAndDate.get(`${child.id}:${day.key}`),
-          usesMorningCancellation ? morningCoverage : wholeDayCoverage,
-          noLunchDateKeys.has(day.key),
-          usesMorningCancellation,
-        );
-      });
-
-      return {
-        id: child.id,
-        firstName: child.firstName,
-        lastName: child.lastName,
-        statuses,
-        payableLunches: statuses.filter(isPayableLunch).length,
-      };
-    }),
-    childrenWithoutLunch: childrenWithoutLunch.map((child) => ({
-      id: child.id,
-      firstName: child.firstName,
-      lastName: child.lastName,
-    })),
-  };
+  return loadLunchOverview(month);
 }
 
 /**
@@ -554,7 +416,8 @@ export async function createDirectorExcuse(
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/ucitel/dochazka");
 
   return { success: true };
@@ -612,7 +475,8 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/ucitel/dochazka");
 
   return updated;
@@ -652,7 +516,8 @@ export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
   return { success: true as const, excuse: updated };
@@ -663,7 +528,8 @@ export async function deleteExcuse(excuseId: string): Promise<void> {
   await deleteExcuseRecord(excuseId, user.id);
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
 }
@@ -720,7 +586,9 @@ export async function addClosedDay(dateStr: string, description?: string) {
 
   revalidatePath("/reditel/volne-dny");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
+  revalidatePath("/rodic");
 
   return closedDay;
 }
@@ -759,7 +627,9 @@ export async function removeClosedDay(id: string) {
 
   revalidatePath("/reditel/volne-dny");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
+  revalidatePath("/rodic");
 }
 
 /**
@@ -878,6 +748,9 @@ export async function exportAttendanceCSV(
  * Type for child with parents
  */
 export type ChildWithParents = {
+  fundSent?: number | null;
+  fundSpent?: number;
+  fundBalance?: number;
   id: string;
   firstName: string;
   lastName: string;
@@ -915,7 +788,12 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
     orderBy: [{ active: "desc" }, { lastName: "asc" }, { firstName: "asc" }],
   })) as ReadonlyArray<ChildWithParentsRow>;
 
+  const funds = new Map((await db.tripFunds.list() as TripFund[]).map(fund => [fund.childId, fund]));
+
   return children.map((child) => ({
+    fundSent: funds.get(child.id)?.fundSent ?? null,
+    fundSpent: funds.get(child.id)?.fundSpent ?? 0,
+    fundBalance: funds.get(child.id)?.fundBalance ?? 0,
     id: child.id,
     firstName: child.firstName,
     lastName: child.lastName,
@@ -996,7 +874,9 @@ export async function createChild(
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
+  revalidatePath("/rodic");
 
   return child;
 }
@@ -1011,6 +891,7 @@ export async function updateChild(
     lastName?: string;
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
+    fundSent?: number | null;
   },
 ) {
   const user = await requireDirector();
@@ -1028,6 +909,7 @@ export async function updateChild(
     lastName?: string;
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
+    fundSent?: number | null;
   } = {};
   if (data.firstName !== undefined) {
     if (!data.firstName.trim()) {
@@ -1052,6 +934,11 @@ export async function updateChild(
       throw new Error("Neplatné nastavení obědů");
     }
     updateData.doesNotTakeLunch = data.doesNotTakeLunch;
+  }
+
+  if (data.fundSent !== undefined) {
+    if (data.fundSent !== null) validateCrowns(data.fundSent);
+    updateData.fundSent = data.fundSent;
   }
 
   // Create audit log
@@ -1097,12 +984,12 @@ export async function updateChild(
   }
 
   revalidatePath("/reditel/deti");
-  revalidatePath("/reditel");
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return updated;
 }
@@ -1141,7 +1028,9 @@ export async function toggleChildActive(childId: string, active: boolean) {
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
+  revalidatePath("/rodic");
 
   return updated;
 }
@@ -1210,7 +1099,8 @@ export async function assignParentToChild(parentId: string, childId: string) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return parentChild;
 }
@@ -1270,5 +1160,6 @@ export async function removeParentFromChild(parentId: string, childId: string) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 }

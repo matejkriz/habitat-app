@@ -11,10 +11,12 @@ import {
   type ClosedDay,
   type NoLunchDay,
 } from "@/lib/types";
+import type { DaySummary } from "@/lib/day-details";
 import { toLocalDateKey } from "@/lib/school-calendar";
 
 export type AttendanceCalendarMonth = {
   readonly monthKey: string;
+  readonly canManageDetails?: boolean;
   readonly totalChildren: number;
   readonly days: ReadonlyArray<AttendanceCalendarDay>;
 };
@@ -70,7 +72,7 @@ export async function getAttendanceCalendarMonth(
   const startDate = new Date(year, monthIndex, 1);
   const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [children, attendance, excuses, closedDays, noLunchDays] = await Promise.all([
+  const [children, attendance, excuses, closedDays, dayDetails, noLunchDays] = await Promise.all([
     db.children.list({
       where: { active: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -82,16 +84,19 @@ export async function getAttendanceCalendarMonth(
     db.closedDays.list({
       where: { date: { gte: startDate, lte: endDate } },
     }) as Promise<ReadonlyArray<ClosedDay>>,
+    db.dayDetails.list(startDate, endDate) as Promise<DaySummary[]>,
     db.noLunchDays.list({
       where: { date: { gte: startDate, lte: endDate } },
     }) as Promise<ReadonlyArray<NoLunchDay>>,
   ]);
 
+  const detailsByDate = new Map(dayDetails.map(day => [day.date, day]));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   return {
     monthKey,
+    canManageDetails: user.role === UserRole.DIRECTOR,
     totalChildren: children.length,
     days: buildAttendanceCalendar({
       month: startDate,
@@ -101,6 +106,10 @@ export async function getAttendanceCalendarMonth(
       excuses,
       closedDays,
       noLunchDays,
+    }).map(day => {
+      const details = detailsByDate.get(new Date(`${day.dateKey}T00:00:00`).getTime());
+      return { ...day, name: details?.name ?? null,
+        ...(user.role === UserRole.DIRECTOR ? { expense: details?.expense ?? null } : {}) };
     }),
   };
 }
