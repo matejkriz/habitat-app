@@ -20,12 +20,7 @@ import {
   setNoLunchForDate,
 } from "@/app/actions/teacher";
 import { formatDateWithWeekday } from "@/lib/utils";
-import {
-  ABSENT_CHILDREN_LABEL,
-  ALL_CHILDREN_PRESENT_LABEL,
-  getPresenceLabel,
-  PRESENT_CHILDREN_LABEL,
-} from "@/lib/presence-label";
+import { getPresenceLabel } from "@/lib/presence-label";
 import type { ChildGender, ExcuseDayPart } from "@/lib/types";
 
 interface Child {
@@ -52,6 +47,7 @@ interface DailyExcuse {
 interface CachedAttendanceDay {
   readonly children: ReadonlyArray<Child>;
   readonly attendance: Readonly<Record<string, boolean>>;
+  readonly savedAttendance: Readonly<Record<string, boolean>> | null;
   readonly excuses: Readonly<Record<string, DailyExcuse>>;
   readonly isClosed: boolean;
   readonly noLunch: boolean;
@@ -73,14 +69,6 @@ function AttendanceSkeleton() {
       className="space-y-4"
     >
       <div aria-hidden="true" className="animate-pulse space-y-4">
-        <div className="flex items-center justify-between rounded-lg bg-cream p-4">
-          <div className="flex gap-4">
-            <div className="h-12 w-14 rounded-md bg-cream-dark" />
-            <div className="h-12 w-16 rounded-md bg-cream-dark" />
-          </div>
-          <div className="h-9 w-32 rounded-lg bg-cream-dark" />
-        </div>
-
         <div className="space-y-2">
           {[0, 1, 2, 3].map((row) => (
             <div
@@ -116,6 +104,9 @@ export default function TeacherAttendancePage() {
       : new Date().toISOString().split("T")[0]
   );
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
+  const [savedAttendance, setSavedAttendance] = useState<
+    Readonly<Record<string, boolean>> | null
+  >(null);
   const [excuses, setExcuses] = useState<Record<string, DailyExcuse>>({});
   const [isClosed, setIsClosed] = useState(false);
   const [noLunch, setNoLunch] = useState(false);
@@ -175,9 +166,18 @@ export default function TeacherAttendancePage() {
             : !fullDayExcusedChildIds.has(child.id);
         });
 
+        const nextSavedAttendance =
+          nextChildren.length > 0 &&
+          nextChildren.every((child) =>
+            attendanceData.attendance.some((record) => record.childId === child.id),
+          )
+            ? nextAttendance
+            : null;
+
         dayCache.current.set(selectedDate, {
           children: nextChildren,
           attendance: nextAttendance,
+          savedAttendance: nextSavedAttendance,
           excuses: nextExcuses,
           isClosed: attendanceData.isClosed,
           noLunch: attendanceData.noLunch,
@@ -187,6 +187,7 @@ export default function TeacherAttendancePage() {
         setIsClosed(attendanceData.isClosed);
         setExcuses(nextExcuses);
         setAttendance(nextAttendance);
+        setSavedAttendance(nextSavedAttendance);
         setNoLunch(attendanceData.noLunch);
         setCanManageLunch(attendanceData.canManageLunch);
         setLoadedDate(selectedDate);
@@ -213,21 +214,13 @@ export default function TeacherAttendancePage() {
     setSuccess("");
   };
 
-  const handleSetAllPresent = () => {
-    const newAttendance: Record<string, boolean> = {};
-    children.forEach((child) => {
-      newAttendance[child.id] = true;
-    });
-    setAttendance(newAttendance);
-    setSuccess("");
-  };
-
   const handleDateChange = (date: string) => {
     selectedDateRef.current = date;
     const cachedDay = dayCache.current.get(date);
     if (cachedDay) {
       setChildren([...cachedDay.children]);
       setAttendance({ ...cachedDay.attendance });
+      setSavedAttendance(cachedDay.savedAttendance);
       setExcuses({ ...cachedDay.excuses });
       setIsClosed(cachedDay.isClosed);
       setNoLunch(cachedDay.noLunch);
@@ -246,6 +239,7 @@ export default function TeacherAttendancePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving || !needsSave) return;
     setError("");
     setSuccess("");
     setIsSaving(true);
@@ -262,14 +256,20 @@ export default function TeacherAttendancePage() {
       dayCache.current.set(selectedDate, {
         children: [...children],
         attendance: { ...attendance },
+        savedAttendance: { ...attendance },
         excuses: { ...excuses },
         isClosed,
         noLunch,
         canManageLunch,
       });
-      setSuccess(`Docházka uložena (${result.recordCount} záznamů)`);
+      if (selectedDateRef.current === selectedDate) {
+        setSavedAttendance({ ...attendance });
+        setSuccess(`Docházka uložena (${result.recordCount} záznamů)`);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nepodařilo se uložit docházku.");
+      if (selectedDateRef.current === selectedDate) {
+        setError(err instanceof Error ? err.message : "Nepodařilo se uložit docházku.");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -308,8 +308,14 @@ export default function TeacherAttendancePage() {
     }
   };
 
-  const presentCount = Object.values(attendance).filter(Boolean).length;
-  const absentCount = children.length - presentCount;
+  const needsSave =
+    savedAttendance === null ||
+    children.some((child) => attendance[child.id] !== savedAttendance[child.id]);
+  const saveLabel = !needsSave
+    ? "Uloženo"
+    : savedAttendance === null
+      ? "Potvrdit docházku"
+      : "Uložit změny";
   const expectedMorning = children.filter((child) => {
     const dayPart = excuses[child.id]?.dayPart ?? "FULL_DAY";
     return !excuses[child.id] || dayPart === "AFTERNOON";
@@ -491,35 +497,6 @@ export default function TeacherAttendancePage() {
                 </div>
               </section>
 
-              {/* Summary */}
-              <div className="flex flex-col items-stretch gap-4 rounded-lg bg-cream p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-sage">{presentCount}</p>
-                    <p className="text-xs text-charcoal-light">
-                      {PRESENT_CHILDREN_LABEL}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-coral">{absentCount}</p>
-                    <p className="text-xs text-charcoal-light">
-                      {ABSENT_CHILDREN_LABEL}
-                    </p>
-                  </div>
-                </div>
-                {!isInFuture && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSetAllPresent}
-                    className="w-full sm:w-auto"
-                  >
-                    {ALL_CHILDREN_PRESENT_LABEL}
-                  </Button>
-                )}
-              </div>
-
               {/* Children list */}
               <div className="space-y-2">
                 {children.map((child) => (
@@ -590,14 +567,23 @@ export default function TeacherAttendancePage() {
             </CardContent>
 
             {!isInFuture && (
-              <CardFooter>
-                <Button
-                  type="submit"
-                  isLoading={isSaving}
-                  className="w-full"
+              <CardFooter className={needsSave ? "h-16 md:h-auto" : undefined}>
+                <div
+                  className={needsSave
+                    ? "fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-2xl md:static md:mx-0 md:w-full md:max-w-none"
+                    : "w-full"
+                  }
                 >
-                  Uložit docházku
-                </Button>
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    isLoading={isSaving}
+                    disabled={!needsSave}
+                    className="w-full h-12 shadow-md"
+                  >
+                    {saveLabel}
+                  </Button>
+                </div>
               </CardFooter>
             )}
           </form>
