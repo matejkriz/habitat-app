@@ -1178,6 +1178,7 @@ export const db: any = {
     }),
   },
   tripFunds: {
+    overview: () => convexQuery(api.db.getTripFundOverview, { secret: getServerSecret() }),
     list: () => convexQuery(api.db.getTripFunds, { secret: getServerSecret() }),
   },
 

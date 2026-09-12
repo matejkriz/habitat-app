@@ -76,4 +76,37 @@ describe("day details and trip funds", () => {
     }
   });
 
+  it("returns a complete fund ledger including individual-only days and zero amounts", async () => {
+    const t = convexTest(schema, modules);
+    const earlier = date - 40 * 86400000;
+    const later = date + 86400000;
+    const attendanceId = await t.run(async ({ db }) => {
+      for (const id of ["present", "absent", "unknown"]) {
+        await db.insert("children", { id, firstName: id, lastName: "Test", active: true, fundSent: 500, createdAt: date, updatedAt: date });
+      }
+      await db.insert("attendance", { id: "absent", childId: "absent", date, presence: "ABSENT", createdAt: date, updatedAt: date });
+      await db.insert("attendance", { id: "earlier", childId: "present", date: earlier, presence: "PRESENT", createdAt: date, updatedAt: date });
+      await db.insert("attendance", { id: "later", childId: "present", date: later, presence: "PRESENT", createdAt: date, updatedAt: date });
+      return db.insert("attendance", { id: "present", childId: "present", date, presence: "PRESENT", createdAt: date, updatedAt: date });
+    });
+    await t.mutation(api.db.saveDayDetails, change);
+    await t.mutation(api.db.saveDayDetails, { secret, date: earlier, expense: 0, recordedById: "director" });
+    await t.mutation(api.db.saveDayDetails, { secret, date: later + 86400000, name: "Jen jméno", recordedById: "director" });
+    await t.mutation(api.db.setChildTripExpense, { secret, date, childId: "present", amount: 80, recordedById: "director" });
+    await t.mutation(api.db.setChildTripExpense, { secret, date: later, childId: "present", amount: 600, recordedById: "director" });
+    await expect(t.query(api.db.getTripFundOverview, { secret: "wrong" })).rejects.toThrow();
+    const overview = await t.query(api.db.getTripFundOverview, { secret });
+    expect(overview.days.map(day => day.date)).toEqual([earlier, date, later]);
+    expect(overview.days[1].name).toBe("Jarmark");
+    expect(overview.children[0]).toMatchObject({ childId: "present", fundSent: 500, amounts: [0, 80, 600], fundSpent: 680, fundBalance: -180 });
+    for (const child of overview.children.slice(1)) {
+      expect(child.amounts).toEqual([null, null, null]);
+      expect(child.fundBalance).toBe(500);
+    }
+    await t.run(({ db }) => db.patch(attendanceId, { presence: "ABSENT" }));
+    const corrected = await t.query(api.db.getTripFundOverview, { secret });
+    expect(corrected.children[0]).toMatchObject({ amounts: [0, null, 600], fundBalance: -100 });
+    expect((await t.query(api.db.getTripFunds, { secret }))[0].fundBalance).toBe(-100);
+  });
+
 });

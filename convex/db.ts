@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { validateCrowns, validateDayDetails } from "../lib/day-details";
+import { mutation, query, type QueryCtx } from "./_generated/server";
+import { validateCrowns, validateDayDetails, type TripFundOverview } from "../lib/day-details";
 import { requireServerSecret } from "./serverSecret";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
@@ -394,24 +394,58 @@ export const listDayDetails = query({
   },
 });
 
+async function readTripFundOverview(db: QueryCtx["db"]): Promise<TripFundOverview> {
+  const [children, days, attendance, overrides] = await Promise.all([
+    db.query("children").collect(),
+    db.query("dayDetails").collect(),
+    db.query("attendance").collect(),
+    db.query("childTripExpenses").collect(),
+  ]);
+  const details = new Map(days.map(day => [day.date, day]));
+  // Individual amounts remain chargeable even if the day's default was cleared.
+  const dates = new Set([
+    ...days.filter(day => day.expense != null).map(day => day.date),
+    ...overrides.map(row => row.date),
+  ]);
+  const tripDays = [...dates].sort((a, b) => a - b).map(date => ({
+    date, name: details.get(date)?.name ?? null, expense: details.get(date)?.expense ?? null,
+  }));
+  const individual = new Map(overrides.map(row => [`${row.childId}:${row.date}`, row.amount]));
+  const present = new Set(attendance.filter(row => row.presence === "PRESENT").map(row => `${row.childId}:${row.date}`));
+
+  return {
+    days: tripDays,
+    children: children.map(child => {
+      const amounts = tripDays.map(day => {
+        const key = `${child.id}:${day.date}`;
+        return present.has(key) ? individual.get(key) ?? day.expense ?? 0 : null;
+      });
+      const fundSpent = amounts.reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
+      return {
+        childId: child.id, firstName: child.firstName, lastName: child.lastName,
+        fundSent: child.fundSent ?? null, amounts, fundSpent,
+        fundBalance: (child.fundSent ?? 0) - fundSpent,
+      };
+    }),
+  };
+}
+
+export const getTripFundOverview = query({
+  args: { secret: v.string() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    return readTripFundOverview(db);
+  },
+});
+
 export const getTripFunds = query({
   args: { secret: v.string() },
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
-    const [children, days, attendance, overrides] = await Promise.all([
-      db.query("children").collect(), db.query("dayDetails").collect(), db.query("attendance").collect(),
-      db.query("childTripExpenses").collect(),
-    ]);
-    const individual = new Map(overrides.map(row => [`${row.childId}:${row.date}`, row.amount]));
-    const expenses = new Map(days.map(day => [day.date, day.expense ?? 0]));
-    const spent = new Map<string, number>();
-    for (const record of attendance) {
-      if (record.presence === "PRESENT") {
-        spent.set(record.childId, (spent.get(record.childId) ?? 0) + (individual.get(`${record.childId}:${record.date}`) ?? expenses.get(record.date) ?? 0));
-      }
-    }
-    return children.map(child => ({ childId: child.id, fundSent: child.fundSent ?? null,
-      fundSpent: spent.get(child.id) ?? 0, fundBalance: (child.fundSent ?? 0) - (spent.get(child.id) ?? 0) }));
+    const overview = await readTripFundOverview(db);
+    return overview.children.map(({ childId, fundSent, fundSpent, fundBalance }) => ({
+      childId, fundSent, fundSpent, fundBalance,
+    }));
   },
 });
 
