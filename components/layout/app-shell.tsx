@@ -79,7 +79,7 @@ const roleNavItems: Record<UserRole, NavItem[]> = {
   TEACHER: [
     {
       href: "/ucitel/dochazka",
-      label: "Docházka",
+      label: "Den",
       icon: (
         <svg
           className="w-5 h-5"
@@ -128,7 +128,7 @@ const roleNavItems: Record<UserRole, NavItem[]> = {
     },
     {
       href: "/ucitel/dochazka",
-      label: "Docházka",
+      label: "Den",
       icon: (
         <svg
           className="w-5 h-5"

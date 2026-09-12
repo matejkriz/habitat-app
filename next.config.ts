@@ -22,6 +22,7 @@ const appCommitSha =
 
 const nextConfig: NextConfig = {
   turbopack: {},
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion,
     NEXT_PUBLIC_APP_COMMIT_SHA: appCommitSha,

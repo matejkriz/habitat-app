@@ -215,13 +215,13 @@ describe("AppShell", () => {
       screen.getAllByRole("link", { name }).at(-1) as HTMLAnchorElement;
 
     expect(getMobileLink("Přehled").className).toContain("text-gold");
-    expect(getMobileLink("Docházka").className).toContain("text-charcoal-light");
+    expect(getMobileLink("Den").className).toContain("text-charcoal-light");
 
-    fireEvent.click(getMobileLink("Docházka"));
+    fireEvent.click(getMobileLink("Den"));
 
     expect(getMobileLink("Přehled").className).toContain("text-charcoal-light");
-    expect(getMobileLink("Docházka").className).toContain("text-gold");
-    expect(getMobileLink("Docházka").getAttribute("aria-busy")).toBe("true");
+    expect(getMobileLink("Den").className).toContain("text-gold");
+    expect(getMobileLink("Den").getAttribute("aria-busy")).toBe("true");
   });
 
   it("does not leave the current destination in a pending state", () => {

@@ -11,6 +11,8 @@ import {
   type CalendarExcuse,
 } from "@/lib/attendance-calendar";
 
+vi.mock("@/app/actions/day-details", () => ({ saveDayDetails: vi.fn() }));
+
 vi.mock("@/app/actions/calendar", () => ({
   getAttendanceCalendarMonth: vi.fn(),
 }));
@@ -351,4 +353,16 @@ describe("AttendanceCalendar month limit", () => {
 
     expect(screen.getByRole("button", { name: "Předchozí měsíc" })).toBeTruthy();
   });
+});
+
+ it("shows a truncated event name in the grid and its full text in the detail", () => {
+  const name = "Jarmark a výlet na velmi vzdálený hrad s dlouhým názvem";
+  const days = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3), children, attendance: [], excuses: [], closedDays: [], noLunchDays: [] });
+  render(<AttendanceCalendar startMonthKey={null} initialMonth={{ monthKey: "2026-08", totalChildren: 2, days: days.map(day => ({ ...day, name: day.dateKey === "2026-08-04" ? name : null })) }} />);
+  const event = screen.getAllByText(name).find(element => element.className.includes("truncate"));
+  expect(event).toBeTruthy();
+  fireEvent.click(event!.closest("button")!);
+  expect(within(screen.getByRole("dialog")).getByText(name)).toBeTruthy();
+  expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Otevřít den" })).toBeTruthy();
+  expect(screen.queryByLabelText("Útrata na dítě (Kč)")).toBeNull();
 });

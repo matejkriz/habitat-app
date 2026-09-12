@@ -12,6 +12,7 @@ import {
   Input,
   Avatar,
   Badge,
+  Toggle,
 } from "@/components/ui";
 import {
   getAllChildren,
@@ -19,6 +20,8 @@ import {
   saveAttendance,
   setNoLunchForDate,
 } from "@/app/actions/teacher";
+import { DayDetailsForm } from "@/components/days/day-details-form";
+import type { DayDetails } from "@/lib/day-details";
 import { formatDateWithWeekday } from "@/lib/utils";
 import { getPresenceLabel } from "@/lib/presence-label";
 import type { ChildGender, ExcuseDayPart } from "@/lib/types";
@@ -45,6 +48,7 @@ interface DailyExcuse {
 }
 
 interface CachedAttendanceDay {
+  readonly details: DayDetails;
   readonly children: ReadonlyArray<Child>;
   readonly attendance: Readonly<Record<string, boolean>>;
   readonly savedAttendance: Readonly<Record<string, boolean>> | null;
@@ -110,6 +114,7 @@ export default function TeacherAttendancePage() {
   const [excuses, setExcuses] = useState<Record<string, DailyExcuse>>({});
   const [isClosed, setIsClosed] = useState(false);
   const [noLunch, setNoLunch] = useState(false);
+  const [details, setDetails] = useState<DayDetails>({ name: null });
   const [canManageLunch, setCanManageLunch] = useState(false);
   const [loadedDate, setLoadedDate] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,6 +137,7 @@ export default function TeacherAttendancePage() {
         ])) as [
           ReadonlyArray<Child>,
           {
+            readonly details?: DayDetails;
             readonly isClosed: boolean;
             readonly attendance: ReadonlyArray<AttendanceRecord>;
             readonly excuses: ReadonlyArray<DailyExcuse>;
@@ -175,6 +181,7 @@ export default function TeacherAttendancePage() {
             : null;
 
         dayCache.current.set(selectedDate, {
+          details: attendanceData.details ?? { name: null },
           children: nextChildren,
           attendance: nextAttendance,
           savedAttendance: nextSavedAttendance,
@@ -183,6 +190,7 @@ export default function TeacherAttendancePage() {
           noLunch: attendanceData.noLunch,
           canManageLunch: attendanceData.canManageLunch,
         });
+        setDetails(attendanceData.details ?? { name: null });
         setChildren(nextChildren);
         setIsClosed(attendanceData.isClosed);
         setExcuses(nextExcuses);
@@ -218,6 +226,7 @@ export default function TeacherAttendancePage() {
     selectedDateRef.current = date;
     const cachedDay = dayCache.current.get(date);
     if (cachedDay) {
+      setDetails(cachedDay.details);
       setChildren([...cachedDay.children]);
       setAttendance({ ...cachedDay.attendance });
       setSavedAttendance(cachedDay.savedAttendance);
@@ -254,6 +263,7 @@ export default function TeacherAttendancePage() {
 
       const result = await saveAttendance(formData);
       dayCache.current.set(selectedDate, {
+        details: dayCache.current.get(selectedDate)?.details ?? details,
         children: [...children],
         attendance: { ...attendance },
         savedAttendance: { ...attendance },
@@ -330,7 +340,7 @@ export default function TeacherAttendancePage() {
   const isLoading = loadedDate !== selectedDate;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto space-y-4">
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -338,7 +348,7 @@ export default function TeacherAttendancePage() {
               <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
-              Docházka
+              Den
             </CardTitle>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <Button
@@ -399,8 +409,29 @@ export default function TeacherAttendancePage() {
           <p className="text-charcoal-light">
             {formatDateWithWeekday(new Date(selectedDate))}
           </p>
+          {!isLoading && details.name && <p className="whitespace-pre-wrap break-words text-lg font-semibold text-charcoal">{details.name}</p>}
         </CardHeader>
+      </Card>
 
+      {!isLoading && canManageLunch && (
+        <Card className="p-0">
+          <details key={selectedDate} className="group">
+            <summary className="cursor-pointer rounded-xl px-6 py-4 font-bold text-charcoal focus-visible:outline-2 focus-visible:outline-gold">Podrobnosti</summary>
+            <div className="border-t border-cream-dark p-6">
+              <DayDetailsForm key={`${selectedDate}-${loadedDate}`} dateKey={selectedDate} initialDetails={details} showReport onSaved={next => {
+                const cachedDay = dayCache.current.get(selectedDate);
+                if (cachedDay) dayCache.current.set(selectedDate, { ...cachedDay, details: next });
+                if (selectedDateRef.current === selectedDate) setDetails(next);
+              }}>
+                <Toggle aria-label="Tento den nebyl oběd" label="Tento den nebyl oběd" checked={noLunch} disabled={isSavingNoLunch || isClosed} onChange={handleNoLunchChange}
+                  description="Den se v přehledu obědů označí šedě a žádnému dítěti se nezapočítá." />
+              </DayDetailsForm>
+            </div>
+          </details>
+        </Card>
+      )}
+
+      <Card>
         {isLoading ? (
           <AttendanceSkeleton />
         ) : isClosed ? (
@@ -453,26 +484,6 @@ export default function TeacherAttendancePage() {
                 </div>
               )}
 
-              {canManageLunch && (
-                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-cream-dark bg-cream/50 p-4">
-                  <input
-                    type="checkbox"
-                    aria-label="Tento den nebyl oběd"
-                    checked={noLunch}
-                    disabled={isSavingNoLunch}
-                    onChange={handleNoLunchChange}
-                    className="mt-0.5 size-5 shrink-0 accent-charcoal disabled:cursor-wait"
-                  />
-                  <span>
-                    <span className="block font-semibold text-charcoal">
-                      Tento den nebyl oběd
-                    </span>
-                    <span className="mt-0.5 block text-sm text-charcoal-light">
-                      Den se v přehledu obědů označí šedě a žádnému dítěti se nezapočítá.
-                    </span>
-                  </span>
-                </label>
-              )}
 
               <section
                 aria-label="Plánovaná účast"

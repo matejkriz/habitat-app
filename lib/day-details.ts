@@ -38,3 +38,6 @@ export function parseDayDate(dateKey: string): Date {
   }
   return date;
 }
+
+export type DaySummary = { date: number; name: string | null; expense: number | null };
+export type TripFund = { childId: string; fundSent: number | null; fundSpent: number; fundBalance: number };
