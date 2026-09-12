@@ -181,7 +181,7 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
           {Array.from({ length: leadingEmptyDays }, (_, index) => (
             <div
               key={`empty-${index}`}
-              className={cn("min-h-16 sm:min-h-24", leadingEmptyDays >= 4 && "hidden sm:block")}
+              className={cn("h-24 sm:h-28", leadingEmptyDays >= 4 && "hidden sm:block")}
               aria-hidden="true"
             />
           ))}
@@ -217,20 +217,21 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
                 onContextMenu={(event) => event.preventDefault()}
                 aria-label={`${fullDateLabel(day.date)}${day.name ? `, ${day.name}` : ""}, ${details.label}${disabled ? "" : ", zadat omluvenku"}`}
                 className={cn(
-                  "relative flex min-w-0 min-h-16 touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:min-h-24 sm:items-stretch sm:p-2.5",
+                  "relative flex h-24 min-w-0 overflow-hidden touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:h-28 sm:items-stretch sm:p-2.5",
                   details.className,
                   weekdayIndex >= 4 && "hidden sm:flex",
                   disabled && "cursor-default active:scale-100",
                   day.isToday && "ring-2 ring-gold ring-offset-2",
                 )}
               >
-                <span className="text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
-                {day.name && (
-                  <span className="my-1 w-full break-words text-center text-[10px] font-semibold leading-tight sm:text-left sm:text-xs">
-                    {day.name}
-                  </span>
-                )}
-                <span className="flex flex-col items-center gap-1 sm:items-start">
+                <span className="shrink-0 text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
+                <span
+                  title={day.name ?? undefined}
+                  className="my-1 line-clamp-2 h-8 w-full shrink-0 break-words text-center text-[11px] font-semibold leading-4 sm:text-left sm:text-xs sm:leading-4"
+                >
+                  {day.name}
+                </span>
+                <span className="flex shrink-0 flex-col items-center gap-1 sm:items-start">
                   <span className={cn("size-2 rounded-full sm:hidden", details.dotClassName)} />
                   <span className="hidden text-[11px] font-bold leading-tight sm:block">
                     {details.shortLabel}
