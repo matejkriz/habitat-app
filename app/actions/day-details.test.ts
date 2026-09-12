@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ user: vi.fn(), reports: vi.fn(), createExpense
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.user }));
 vi.mock("@/lib/db", () => ({ db: { tripFunds: { createExpense: mocks.createExpense }, dayDetails: { reports: mocks.reports, get: mocks.get, save: mocks.save }, childTripExpenses: { list: mocks.listExpenses, set: mocks.setExpense } } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-import { getDayReports, createTripExpense, getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense } from "./day-details";
+import { getDayReport, saveDayReport, getDayReports, createTripExpense, getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense } from "./day-details";
 
 describe("day detail access", () => {
   beforeEach(() => {
@@ -63,14 +63,41 @@ describe("day detail access", () => {
 });
 
 describe("report feed access", () => {
-  it.each(["PARENT", "DIRECTOR"])("allows %s to read reports", async role => {
+  it.each(["PARENT", "DIRECTOR", "TEACHER"])("allows %s to read reports", async role => {
     mocks.user.mockResolvedValue({ role });
     mocks.reports.mockResolvedValue({ reports: [], nextBefore: null });
     expect(await getDayReports(123)).toEqual({ reports: [], nextBefore: null });
     expect(mocks.reports).toHaveBeenCalledWith(123);
   });
-  it.each(["TEACHER", null])("rejects %s", async role => {
+  it.each(["OTHER", null])("rejects %s", async role => {
     mocks.user.mockResolvedValue(role ? { role } : null);
     await expect(getDayReports()).rejects.toThrow("Unauthorized");
+  });
+});
+
+describe("report editing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.user.mockResolvedValue({ id: "teacher", role: "TEACHER" });
+    mocks.get.mockResolvedValue({ name: "Výlet", expense: 100, report: "Stávající report" });
+  });
+  it.each(["TEACHER", "DIRECTOR"])("allows %s to read and save only the report", async role => {
+    mocks.user.mockResolvedValue({ id: "author", role });
+    expect(await getDayReport("2026-09-10")).toBe("Stávající report");
+    await saveDayReport("2026-09-10", "Nový text");
+    expect(mocks.save).toHaveBeenCalledWith(new Date(2026, 8, 10), { report: "Nový text" }, "author");
+  });
+  it.each(["PARENT", null])("rejects report edits by %s", async role => {
+    mocks.user.mockResolvedValue(role ? { role } : null);
+    await expect(getDayReport("2026-09-10")).rejects.toThrow("Unauthorized");
+    await expect(saveDayReport("2026-09-10", "Text")).rejects.toThrow("Unauthorized");
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.get).not.toHaveBeenCalled();
+  });
+  it("rejects invalid dates, empty text and oversized reports", async () => {
+    await expect(saveDayReport("2026-02-30", "Text")).rejects.toThrow();
+    await expect(saveDayReport("2026-09-10", "  ")).rejects.toThrow();
+    await expect(saveDayReport("2026-09-10", "ž".repeat(470000))).rejects.toThrow();
+    expect(mocks.save).not.toHaveBeenCalled();
   });
 });
