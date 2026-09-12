@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { validateDayDetails } from "../lib/day-details";
 import { requireServerSecret } from "./serverSecret";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
@@ -328,5 +329,86 @@ export const deleteById = mutation({
 
     await db.delete(current._id);
     return true;
+  },
+});
+
+export const saveDayDetails = mutation({
+  args: {
+    secret: v.string(), date: v.number(), recordedById: v.string(),
+    name: v.optional(v.union(v.string(), v.null())),
+    expense: v.optional(v.union(v.number(), v.null())),
+    report: v.optional(v.union(v.string(), v.null())),
+  },
+  returns: v.null(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (!Number.isFinite(args.date) || !Number.isFinite(new Date(args.date).getTime())) throw new Error("Neplatné datum");
+    validateDayDetails(args);
+    const current = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique();
+    const patch = {
+      ...(args.name === undefined ? {} : { name: args.name?.trim() || null }),
+      ...(args.expense === undefined ? {} : { expense: args.expense }),
+      recordedById: args.recordedById, updatedAt: Date.now(),
+    };
+    if (current) await db.patch(current._id, patch);
+    else await db.insert("dayDetails", { date: args.date, ...patch });
+    if (args.report !== undefined) {
+      const report = await db.query("dayReports").withIndex("by_date", q => q.eq("date", args.date)).unique();
+      if (!args.report) {
+        if (report) await db.delete(report._id);
+      } else {
+        const value = { date: args.date, report: args.report, recordedById: args.recordedById, updatedAt: Date.now() };
+        if (report) await db.patch(report._id, value);
+        else await db.insert("dayReports", value);
+      }
+    }
+    await db.insert("auditLogs", {
+      id: `day_${args.date}_${Date.now()}`, userId: args.recordedById, action: "UPDATE",
+      entityType: "DayDetails", entityId: String(args.date),
+      previousValue: { name: current?.name ?? null, expense: current?.expense ?? null },
+      newValue: { ...patch, reportChanged: args.report !== undefined }, createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+export const getDayDetails = query({
+  args: { secret: v.string(), date: v.number(), includeReport: v.boolean() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const day = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique();
+    const report = args.includeReport
+      ? await db.query("dayReports").withIndex("by_date", q => q.eq("date", args.date)).unique()
+      : null;
+    return { name: day?.name ?? null, expense: day?.expense ?? null,
+      ...(args.includeReport ? { report: report?.report ?? null } : {}) };
+  },
+});
+
+export const listDayDetails = query({
+  args: { secret: v.string(), from: v.number(), to: v.number() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const days = await db.query("dayDetails").withIndex("by_date", q => q.gte("date", args.from).lte("date", args.to)).collect();
+    return days.map(day => ({ date: day.date, name: day.name ?? null, expense: day.expense ?? null }));
+  },
+});
+
+export const getTripFunds = query({
+  args: { secret: v.string() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const [children, days, attendance] = await Promise.all([
+      db.query("children").collect(), db.query("dayDetails").collect(), db.query("attendance").collect(),
+    ]);
+    const expenses = new Map(days.map(day => [day.date, day.expense ?? 0]));
+    const spent = new Map<string, number>();
+    for (const record of attendance) {
+      if (record.presence === "PRESENT") {
+        spent.set(record.childId, (spent.get(record.childId) ?? 0) + (expenses.get(record.date) ?? 0));
+      }
+    }
+    return children.map(child => ({ childId: child.id, fundSent: child.fundSent ?? null,
+      fundSpent: spent.get(child.id) ?? 0, fundBalance: (child.fundSent ?? 0) - (spent.get(child.id) ?? 0) }));
   },
 });

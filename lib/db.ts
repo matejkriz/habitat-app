@@ -17,6 +17,7 @@ import type {
   User,
   UserRole,
 } from "./types";
+import type { DayDetailsPatch } from "./day-details";
 import type { AuditAction } from "./types";
 
 type TableName =
@@ -1157,6 +1158,21 @@ export const db: any = {
       await deleteById("closedDays", id);
       return fromRawClosedDay(existing);
     },
+  },
+
+  dayDetails: {
+    get: (date: Date, includeReport = false) => convexQuery(api.db.getDayDetails, {
+      secret: getServerSecret(), date: date.getTime(), includeReport,
+    }),
+    list: (from: Date, to: Date) => convexQuery(api.db.listDayDetails, {
+      secret: getServerSecret(), from: from.getTime(), to: to.getTime(),
+    }),
+    save: (date: Date, details: DayDetailsPatch, recordedById: string) => convexMutation(api.db.saveDayDetails, {
+      secret: getServerSecret(), date: date.getTime(), ...details, recordedById,
+    }),
+  },
+  tripFunds: {
+    list: () => convexQuery(api.db.getTripFunds, { secret: getServerSecret() }),
   },
 
   noLunchDays: {

@@ -40,6 +40,7 @@ export default defineSchema({
     gender: v.optional(childGender),
     // Optional during rollout; existing children continue to receive lunches.
     doesNotTakeLunch: v.optional(v.boolean()),
+    fundSent: v.optional(v.union(v.number(), v.null())),
     active: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -113,6 +114,21 @@ export default defineSchema({
   })
     .index("by_app_id", { fields: ["id"] })
     .index("by_date", { fields: ["date"] }),
+
+  dayDetails: defineTable({
+    date: v.number(),
+    name: v.optional(v.union(v.string(), v.null())),
+    expense: v.optional(v.union(v.number(), v.null())),
+    recordedById: v.string(),
+    updatedAt: v.number(),
+  }).index("by_date", { fields: ["date"] }),
+
+  dayReports: defineTable({
+    date: v.number(),
+    report: v.string(),
+    recordedById: v.string(),
+    updatedAt: v.number(),
+  }).index("by_date", { fields: ["date"] }),
 
   noLunchDays: defineTable({
     id: v.string(),
