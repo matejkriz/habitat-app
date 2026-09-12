@@ -50,6 +50,17 @@ describe("lunch overview", () => {
     expect(isPayableLunch(status)).toBe(true);
   });
 
+  it("honors a cancelled lunch when a morning-only child arrives later", () => {
+    expect(
+      getLunchStatus(
+        { presence: Presence.PRESENT },
+        coverage(true, true),
+        false,
+        true,
+      ),
+    ).toBe(LunchStatus.EXCUSED);
+  });
+
   it("marks a day without lunch gray and never charges it", () => {
     const status = getLunchStatus(
       { presence: Presence.PRESENT },

@@ -8,6 +8,12 @@ describe("WorkOS unauthenticated routes", () => {
 
   it("keeps the service worker precache manifest public", () => {
     expect(UNAUTHENTICATED_PATHS).toContain("/manifest.json");
+    expect(UNAUTHENTICATED_PATHS).toContain("/sw.js");
+    expect(UNAUTHENTICATED_PATHS).toContain("/offline.html");
+  });
+
+  it("keeps the application version signal public", () => {
+    expect(UNAUTHENTICATED_PATHS).toContain("/api/version");
   });
 
   it("uses Next.js matcher syntax for nested webhook routes", () => {

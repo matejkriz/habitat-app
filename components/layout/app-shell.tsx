@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/workos-client";
 import { Avatar, Button } from "@/components/ui";
 import { DevPersonaSwitcher } from "./dev-persona-switcher";
+import { AppUpdateBanner } from "./app-update-banner";
 import { PushNotificationToggle } from "./push-notification-toggle";
 import type { DevPersonaId } from "@/lib/dev-persona";
 import type { UserRole } from "@/lib/types";
@@ -200,9 +201,14 @@ const roleLabels: Record<UserRole, string> = {
   DIRECTOR: "Ředitel",
 };
 
+const GITHUB_REPOSITORY_URL = "https://github.com/matejkriz/habitat-app";
+
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const navItems = roleNavItems[user.role];
+  const visiblePathname = pathname === "/" ? navItems[0].href : pathname;
+  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "vývoj";
+  const appCommitSha = process.env.NEXT_PUBLIC_APP_COMMIT_SHA;
   const { signOut } = useAuth();
   const [navigationState, setNavigationState] = useState<NavigationState>({
     pathname,
@@ -212,7 +218,7 @@ export function AppShell({ children, user }: AppShellProps) {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const pendingHref =
     navigationState.pathname === pathname ? navigationState.pendingHref : null;
-  const selectedHref = pendingHref ?? pathname;
+  const selectedHref = pendingHref ?? visiblePathname;
 
   if (navigationState.pathname !== pathname) {
     setNavigationState({ pathname, pendingHref: null });
@@ -254,7 +260,7 @@ export function AppShell({ children, user }: AppShellProps) {
   return (
     <div className="min-h-screen bg-cream">
       {/* Header */}
-      <header className="bg-white border-b border-cream-dark sticky top-0 z-40">
+      <header className="bg-white border-b border-cream-dark sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
@@ -275,7 +281,7 @@ export function AppShell({ children, user }: AppShellProps) {
                   key={item.href}
                   href={item.href}
                   prefetch
-                  aria-current={pathname === item.href ? "page" : undefined}
+                  aria-current={visiblePathname === item.href ? "page" : undefined}
                   aria-busy={pendingHref === item.href || undefined}
                   onNavigate={() => startNavigation(item.href)}
                   className={cn(
@@ -359,23 +365,44 @@ export function AppShell({ children, user }: AppShellProps) {
                       </svg>
                       Odhlásit
                     </Button>
+                    <div
+                      role="none"
+                      className="mt-1 border-t border-cream-dark px-3 pb-1 pt-2 text-center font-mono text-[11px] tabular-nums text-charcoal-light/70"
+                    >
+                      Verze {appVersion}
+                      {appCommitSha && (
+                        <>
+                          {" ("}
+                          <a
+                            href={`${GITHUB_REPOSITORY_URL}/commit/${appCommitSha}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline decoration-charcoal-light/30 underline-offset-2 transition-colors hover:text-charcoal"
+                          >
+                            {appCommitSha.slice(0, 7)}
+                          </a>
+                          )
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           </div>
         </div>
+        <AppUpdateBanner />
       </header>
 
       {/* Mobile Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cream-dark z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cream-dark z-40 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around h-16">
           {navItems.slice(0, 5).map((item) => (
             <Link
               key={item.href}
               href={item.href}
               prefetch
-              aria-current={pathname === item.href ? "page" : undefined}
+              aria-current={visiblePathname === item.href ? "page" : undefined}
               aria-busy={pendingHref === item.href || undefined}
               onNavigate={() => startNavigation(item.href)}
               className={cn(
@@ -393,7 +420,7 @@ export function AppShell({ children, user }: AppShellProps) {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-6">
         {children}
       </main>
     </div>

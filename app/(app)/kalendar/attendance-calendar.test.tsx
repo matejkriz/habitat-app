@@ -1,6 +1,15 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildAttendanceCalendar } from "@/lib/attendance-calendar";
+import {
+  buildAttendanceCalendar,
+  type CalendarExcuse,
+} from "@/lib/attendance-calendar";
 
 vi.mock("@/app/actions/calendar", () => ({
   getAttendanceCalendarMonth: vi.fn(),
@@ -16,6 +25,19 @@ const children = [
   { id: "ada", firstName: "Ada", lastName: "Nováková" },
   { id: "bo", firstName: "Bo", lastName: "Svoboda" },
 ];
+
+function calendarExcuse(
+  overrides: Pick<CalendarExcuse, "id" | "childId"> & Partial<CalendarExcuse>,
+): CalendarExcuse {
+  return {
+    fromDate: new Date(2026, 7, 4),
+    toDate: new Date(2026, 7, 4),
+    reason: null,
+    submittedAt: new Date(2026, 7, 1, 8),
+    lateApprovedAt: null,
+    ...overrides,
+  };
+}
 
 function renderCalendar(startMonthKey: string | null = null) {
   render(
@@ -44,6 +66,41 @@ function renderCalendar(startMonthKey: string | null = null) {
   );
 }
 
+function renderExcuseCalendar(
+  excuses: ReadonlyArray<CalendarExcuse>,
+  today = new Date(2026, 7, 3),
+) {
+  render(
+    <AttendanceCalendar
+      startMonthKey={null}
+      initialMonth={{
+        monthKey: "2026-08",
+        totalChildren: children.length,
+        days: buildAttendanceCalendar({
+          month: new Date(2026, 7, 1),
+          today,
+          children,
+          attendance: [],
+          excuses,
+          closedDays: [],
+          noLunchDays: [],
+        }),
+      }}
+    />,
+  );
+}
+
+function renderPartialDayCalendar() {
+  renderExcuseCalendar([
+    calendarExcuse({
+      id: "excuse-afternoon",
+      childId: "bo",
+      dayPart: "AFTERNOON",
+      reason: "Lékař",
+    }),
+  ]);
+}
+
 function getTodayButton(): HTMLElement {
   return screen.getAllByRole("button", { name: /pondělí 3\. srpna 2026, 2 očekáváno/i })[0];
 }
@@ -54,7 +111,106 @@ function getTomorrowButton(): HTMLElement {
 
 afterEach(() => cleanup());
 
+describe("AttendanceCalendar planning count", () => {
+  it("shows one count when every excuse covers the whole day", () => {
+    renderExcuseCalendar([
+      calendarExcuse({
+        id: "excuse-full-day",
+        childId: "bo",
+        dayPart: "FULL_DAY",
+      }),
+    ]);
+
+    const day = screen.getAllByRole("button", {
+      name: /úterý 4\. srpna 2026/i,
+    })[0];
+
+    expect(day.textContent).not.toMatch(/dop\.|odp\.|\//i);
+    expect(within(day).getByText("1", { exact: true })).toBeTruthy();
+    expect(day.getAttribute("aria-label")).toBe(
+      "úterý 4. srpna 2026, 1 očekáváno",
+    );
+  });
+
+  it("shows a compact morning/afternoon pair for a partial-day excuse", () => {
+    renderPartialDayCalendar();
+
+    const day = screen.getAllByRole("button", {
+      name: /úterý 4\. srpna 2026/i,
+    })[0];
+
+    expect(day.textContent).toContain("2/1");
+    expect(day.textContent).toContain("dop. / odp.");
+    expect(day.textContent).not.toContain("Dop. 2");
+    expect(day.textContent).not.toContain("Odp. 1");
+    expect(day.textContent).not.toContain("očekáváno");
+  });
+
+  it("keeps the pair when opposite partial-day excuses have equal counts", () => {
+    renderExcuseCalendar([
+      calendarExcuse({
+        id: "excuse-morning",
+        childId: "ada",
+        dayPart: "MORNING",
+      }),
+      calendarExcuse({
+        id: "excuse-afternoon",
+        childId: "bo",
+        dayPart: "AFTERNOON",
+      }),
+    ]);
+
+    const day = screen.getAllByRole("button", {
+      name: /úterý 4\. srpna 2026/i,
+    })[0];
+
+    expect(day.textContent).toContain("1/1");
+    expect(day.textContent).toContain("dop. / odp.");
+    expect(day.getAttribute("aria-label")).toMatch(
+      /dopoledne 1.*odpoledne 1/i,
+    );
+  });
+
+  it("keeps one actual attendance count for a past partial-day excuse", () => {
+    renderExcuseCalendar(
+      [
+        calendarExcuse({
+          id: "excuse-afternoon",
+          childId: "bo",
+          dayPart: "AFTERNOON",
+        }),
+      ],
+      new Date(2026, 7, 5),
+    );
+
+    const day = screen.getAllByRole("button", {
+      name: /úterý 4\. srpna 2026/i,
+    })[0];
+
+    expect(day.textContent).not.toMatch(/dop\.|odp\.|\//i);
+    expect(within(day).getByText("0", { exact: true })).toBeTruthy();
+    expect(day.getAttribute("aria-label")).toBe(
+      "úterý 4. srpna 2026, 0 přítomno",
+    );
+  });
+});
+
 describe("AttendanceCalendar day preview", () => {
+  it("shows separate morning and afternoon planning counts", () => {
+    renderPartialDayCalendar();
+
+    const day = screen.getAllByRole("button", {
+      name: /úterý 4\. srpna 2026.*dopoledne 2.*odpoledne 1/i,
+    })[0];
+    fireEvent.click(day);
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("Dopoledne");
+    expect(dialog.textContent).toContain("Odpoledne");
+    expect(dialog.textContent).toContain("Jen odpoledne nepřijde");
+    expect(dialog.textContent).toContain("Bo Svoboda");
+  });
+
   it("shows a lightweight preview on mouse hover and hides it on leave", () => {
     renderCalendar();
     const day = getTodayButton();
@@ -102,6 +258,47 @@ describe("AttendanceCalendar day preview", () => {
     fireEvent.pointerEnter(getTodayButton(), { pointerType: "touch", clientX: 180, clientY: 220 });
 
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("shows a late excuse that is waiting for approval", () => {
+    render(
+      <AttendanceCalendar
+        startMonthKey={null}
+        initialMonth={{
+          monthKey: "2026-09",
+          totalChildren: children.length,
+          days: buildAttendanceCalendar({
+            month: new Date(2026, 8, 1),
+            today: new Date(2026, 8, 9, 20),
+            children,
+            attendance: [],
+            excuses: [
+              {
+                id: "excuse-bo",
+                childId: "bo",
+                fromDate: new Date(2026, 8, 10),
+                toDate: new Date(2026, 8, 10),
+                reason: "Nemoc",
+                submittedAt: new Date(2026, 8, 9, 20),
+                lateApprovedAt: null,
+              },
+            ],
+            closedDays: [],
+            noLunchDays: [],
+          }),
+        }}
+      />,
+    );
+
+    const day = screen.getAllByRole("button", {
+      name: /čtvrtek 10\. září 2026/i,
+    })[0];
+    expect(day.textContent).toContain("1 omluveno pozdě");
+
+    fireEvent.click(day);
+
+    expect(screen.getByText("Pozdní omluvenky")).toBeTruthy();
+    expect(screen.getByText("Bo Svoboda")).toBeTruthy();
   });
 });
 

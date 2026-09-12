@@ -1,15 +1,19 @@
 /**
  * Slack Notification Service for Habitat
- * Sends notifications to #omluvenky channel when new excuses are submitted
+ * Sends notifications to #omluvenky when excuses are submitted or edited
  */
 
+import type { ExcuseDayPart } from "./types";
+
 export interface ExcuseNotificationData {
+  change?: "UPDATED";
   childName: string;
   parentName: string;
   fromDate: Date;
   toDate: Date;
   reason: string | null;
   cancelLunch?: boolean;
+  dayPart?: ExcuseDayPart;
   isOnTime: boolean; // true = "včas", false = "pozdní"
   automaticallyApproved?: boolean;
 }
@@ -36,6 +40,7 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
     toDate,
     reason,
     cancelLunch = true,
+    dayPart = "FULL_DAY",
     isOnTime,
     automaticallyApproved,
   } = data;
@@ -53,13 +58,20 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
   const toDateStr = formatDateCzech(toDate);
   const dateRange =
     fromDateStr === toDateStr ? fromDateStr : `${fromDateStr} – ${toDateStr}`;
+  const dayPartText =
+    dayPart === "MORNING"
+      ? "Jen dopoledne"
+      : dayPart === "AFTERNOON"
+        ? "Jen odpoledne"
+        : "Celý den";
+  const title = data.change === "UPDATED" ? "Změna omluvenky" : "Nová omluvenka";
 
   const blocks = [
     {
       type: "header",
       text: {
         type: "plain_text",
-        text: "📝 Nová omluvenka",
+        text: `📝 ${title}`,
         emoji: true,
       },
     },
@@ -77,6 +89,10 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
         {
           type: "mrkdwn",
           text: `*Období:*\n${dateRange}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Část dne:*\n${dayPartText}`,
         },
         {
           type: "mrkdwn",
@@ -100,7 +116,7 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
   }
 
   // Simple text fallback for notifications
-  const text = `Nová omluvenka: ${childName} (${dateRange}) - ${statusText}`;
+  const text = `${title}: ${childName} (${dateRange}, ${dayPartText.toLocaleLowerCase("cs-CZ")}) - ${statusText}`;
 
   return { blocks, text };
 }

@@ -26,6 +26,7 @@ const lateExcuse = {
   toDate: new Date(2026, 7, 20),
   reason: "Nemoc",
   cancelLunch: true,
+  dayPart: "FULL_DAY" as const,
   rangeState: "LATE" as const,
   submittedAt: new Date(2026, 7, 18, 10),
   child: {
@@ -50,7 +51,7 @@ describe("ExcuseManagementPage", () => {
     mocks.getExcuses
       .mockResolvedValueOnce([lateExcuse])
       .mockResolvedValueOnce([{ ...lateExcuse, fromDate: new Date(2026, 7, 20), rangeState: "ON_TIME" }]);
-    mocks.editExcuse.mockResolvedValue(undefined);
+    mocks.editExcuse.mockResolvedValue({ success: true, excuse: lateExcuse });
     render(<ExcuseManagementPage />);
 
     expect(await screen.findByText("Pozdě")).toBeTruthy();
@@ -91,9 +92,80 @@ describe("ExcuseManagementPage", () => {
       fromDate: "2026-08-19",
       toDate: "2026-08-20",
       reason: "Nemoc",
+      dayPart: "FULL_DAY",
       cancelLunch: "true",
     });
     await waitFor(() => expect(mocks.getExcuses).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows an edit validation error without discarding the form or reloading", async () => {
+    const error = "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.";
+    mocks.getExcuses.mockResolvedValue([lateExcuse]);
+    mocks.editExcuse.mockResolvedValue({ success: false, error });
+    render(<ExcuseManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upravit" }));
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-08-21" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(error);
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("2026-08-21");
+    expect(mocks.getExcuses).toHaveBeenCalledOnce();
+  });
+
+  it("lets the director choose an afternoon absence and choose what happens to lunch", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    mocks.createDirectorExcuse.mockResolvedValue({ success: true });
+    render(<ExcuseManagementPage />);
+
+    await screen.findByText("Žádné omluvenky");
+    fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
+    fireEvent.change(screen.getByLabelText("Dítě"), {
+      target: { value: "child-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-08-19" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: "Odpoledne" }));
+
+    const lunchToggle = screen.getByRole("switch");
+    const reason = screen.getByLabelText("Důvod (volitelné)");
+    expect(lunchToggle.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect((lunchToggle as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(lunchToggle);
+    fireEvent.click(screen.getByRole("button", { name: "Uložit omluvenku" }));
+
+    await waitFor(() => expect(mocks.createDirectorExcuse).toHaveBeenCalledOnce());
+    const formData = mocks.createDirectorExcuse.mock.calls[0][0] as FormData;
+    expect(formData.get("dayPart")).toBe("AFTERNOON");
+    expect(formData.get("cancelLunch")).toBe("false");
+  });
+
+  it("shows the day-part choice without dates and for one day, then hides and resets it for a range", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    mocks.createDirectorExcuse.mockResolvedValue({ success: true });
+    render(<ExcuseManagementPage />);
+
+    await screen.findByText("Žádné omluvenky");
+    fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
+    expect(screen.getByRole("group", { name: "Dítě bude chybět" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Dítě"), {
+      target: { value: "child-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2026-08-19" },
+    });
+    expect(screen.getByRole("group", { name: "Dítě bude chybět" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Dopoledne" }));
+    fireEvent.change(screen.getByLabelText("Do"), {
+      target: { value: "2026-08-20" },
+    });
+
+    expect(screen.queryByRole("group", { name: "Dítě bude chybět" })).toBeNull();
+    expect(screen.getByRole("switch")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Uložit omluvenku" }));
+
+    await waitFor(() => expect(mocks.createDirectorExcuse).toHaveBeenCalledOnce());
+    const formData = mocks.createDirectorExcuse.mock.calls[0][0] as FormData;
+    expect(formData.get("dayPart")).toBe("FULL_DAY");
   });
 
   it("passes the choice to keep lunch to the server action", async () => {

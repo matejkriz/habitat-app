@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   updateExcuse: vi.fn(),
   createAuditLog: vi.fn(),
   getParentLink: vi.fn(),
+  getChild: vi.fn(),
+  getUser: vi.fn(),
+  sendSlack: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -22,11 +25,17 @@ vi.mock("./db", () => ({
     parentLinks: {
       get: mocks.getParentLink,
     },
+    children: { get: mocks.getChild },
+    users: { get: mocks.getUser },
   },
 }));
 
 vi.mock("./slack", () => ({
-  sendExcuseNotification: vi.fn(),
+  sendExcuseNotification: mocks.sendSlack,
+}));
+
+vi.mock("./school-days", () => ({
+  getSchoolDaysInRange: vi.fn().mockResolvedValue([]),
 }));
 
 import {
@@ -42,6 +51,7 @@ const currentExcuse: Excuse = {
   fromDate: new Date("2024-01-01T00:00:00"),
   toDate: new Date("2024-01-03T00:00:00"),
   reason: "Nemoc",
+  dayPart: "FULL_DAY",
   cancelLunch: true,
   submittedById: "parent-1",
   submittedAt: new Date("2023-12-30T08:00:00"),
@@ -72,9 +82,45 @@ describe("updateExcuse", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getExcuse.mockResolvedValue(currentExcuse);
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá" });
+    mocks.getUser.mockResolvedValue({ name: "Petr Malý" });
+    mocks.sendSlack.mockResolvedValue(true);
     mocks.updateExcuse.mockImplementation((args: { data: unknown }) =>
       Promise.resolve({ ...currentExcuse, ...(args.data as object) }),
     );
+  });
+
+  it("sends updated excuse details to Slack after saving", async () => {
+    const updated = await updateExcuse(currentExcuse.id, {
+      fromDate: new Date(2024, 0, 3),
+      reason: "Kontrola",
+      dayPart: "MORNING",
+    }, "director-1");
+
+    expect(mocks.sendSlack).toHaveBeenCalledWith(expect.objectContaining({
+      change: "UPDATED",
+      childName: "Anna Malá",
+      parentName: "Petr Malý",
+      fromDate: updated.fromDate,
+      toDate: updated.toDate,
+      reason: "Kontrola",
+      dayPart: "MORNING",
+    }));
+    expect(mocks.getUser).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "parent-1" },
+    }));
+  });
+
+  it("does not notify when saving unchanged values", async () => {
+    await updateExcuse(currentExcuse.id, { reason: "Nemoc" }, "parent-1");
+    expect(mocks.sendSlack).not.toHaveBeenCalled();
+  });
+
+  it("does not notify if saving fails", async () => {
+    mocks.updateExcuse.mockRejectedValueOnce(new Error("Database unavailable"));
+    await expect(updateExcuse(currentExcuse.id, { reason: "Kontrola" }, "parent-1"))
+      .rejects.toThrow("Database unavailable");
+    expect(mocks.sendSlack).not.toHaveBeenCalled();
   });
 
   it("narrows the range without touching attendance", async () => {
@@ -93,7 +139,49 @@ describe("updateExcuse", () => {
         fromDate: new Date(2024, 0, 2),
         toDate: new Date(2024, 0, 3),
         reason: currentExcuse.reason,
+        dayPart: "FULL_DAY",
+        cancelLunch: true,
       },
+    });
+  });
+
+  it("preserves lunch cancellation when a single-day excuse changes to afternoon-only", async () => {
+    mocks.getExcuse.mockResolvedValue({
+      ...currentExcuse,
+      fromDate: new Date(2024, 0, 2),
+      toDate: new Date(2024, 0, 2),
+    });
+    await updateExcuse(
+      currentExcuse.id,
+      { dayPart: "AFTERNOON" },
+      "parent-1",
+    );
+
+    expect(mocks.updateExcuse).toHaveBeenCalledWith({
+      where: { id: currentExcuse.id },
+      data: expect.objectContaining({
+        dayPart: "AFTERNOON",
+        cancelLunch: true,
+      }),
+    });
+    expect(mocks.updateExcuse.mock.calls[0][0].data).not.toHaveProperty(
+      "lateApprovedAt",
+    );
+  });
+
+  it("forces whole day when an edited excuse still spans multiple dates", async () => {
+    await updateExcuse(
+      currentExcuse.id,
+      { dayPart: "AFTERNOON" },
+      "parent-1",
+    );
+
+    expect(mocks.updateExcuse).toHaveBeenCalledWith({
+      where: { id: currentExcuse.id },
+      data: expect.objectContaining({
+        dayPart: "FULL_DAY",
+        cancelLunch: true,
+      }),
     });
   });
 

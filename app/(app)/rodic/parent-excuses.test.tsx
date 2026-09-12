@@ -13,6 +13,7 @@ const excuse = {
   id: "excuse-1",
   fromDate: new Date(2024, 0, 2),
   toDate: new Date(2024, 0, 3),
+  dayPart: "FULL_DAY" as const,
   reason: "Nemoc",
   cancelLunch: true,
   submittedAt: new Date(2024, 0, 1),
@@ -55,10 +56,18 @@ describe("ParentExcuses", () => {
     expect(screen.getByText("Oběd zůstává přihlášený")).toBeTruthy();
   });
 
+  it("shows an afternoon-only excuse", () => {
+    render(
+      <ParentExcuses excuses={[{ ...excuse, dayPart: "AFTERNOON" }]} />,
+    );
+
+    expect(screen.getByText("Jen odpoledne")).toBeTruthy();
+  });
+
   it("saves changes through the parent action", async () => {
     actions.editParentExcuse.mockResolvedValue({
-      ...excuse,
-      reason: "Rodinné důvody",
+      success: true,
+      excuse: { ...excuse, reason: "Rodinné důvody" },
     });
 
     render(<ParentExcuses excuses={[excuse]} />);
@@ -72,6 +81,7 @@ describe("ParentExcuses", () => {
       expect(actions.editParentExcuse).toHaveBeenCalledWith("excuse-1", {
         fromDate: "2024-01-02",
         toDate: "2024-01-03",
+        dayPart: "FULL_DAY",
         reason: "Rodinné důvody",
       });
     });
@@ -87,5 +97,17 @@ describe("ParentExcuses", () => {
 
     await waitFor(() => expect(actions.deleteParentExcuse).toHaveBeenCalledWith("excuse-1"));
     expect(screen.getByText("Zatím nemáte žádné omluvenky.")).toBeTruthy();
+  });
+
+  it("shows validation errors and keeps the unsaved edit open", async () => {
+    const error = "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.";
+    actions.editParentExcuse.mockResolvedValue({ success: false, error });
+    render(<ParentExcuses excuses={[excuse]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-04" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(error);
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("2024-01-04");
+    expect(screen.getByText("2. 1. – 3. 1.")).toBeTruthy();
   });
 });

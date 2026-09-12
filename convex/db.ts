@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireServerSecret } from "./serverSecret";
+import type { Doc } from "./_generated/dataModel";
+import { enqueueExcuseEvent } from "./pushNotifications";
 
 const tableName = v.union(
   v.literal("users"),
@@ -14,12 +16,18 @@ const tableName = v.union(
 );
 
 const documentValue = v.any();
+const excuseDayPart = v.union(
+  v.literal("FULL_DAY"),
+  v.literal("MORNING"),
+  v.literal("AFTERNOON"),
+);
 const excuseValue = v.object({
   id: v.string(),
   childId: v.string(),
   fromDate: v.number(),
   toDate: v.number(),
   reason: v.union(v.string(), v.null()),
+  dayPart: v.optional(excuseDayPart),
   cancelLunch: v.boolean(),
   submittedById: v.string(),
   submittedAt: v.number(),
@@ -35,6 +43,107 @@ export const list = query({
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
     return await db.query(args.table).collect();
+  },
+});
+
+export const findUser = query({
+  args: {
+    secret: v.string(),
+    id: v.optional(v.string()),
+    workosId: v.optional(v.string()),
+    email: v.optional(v.string()),
+  },
+  returns: v.union(v.null(), v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+
+    if (args.id) {
+      return await db
+        .query("users")
+        .withIndex("by_app_id", (query) => query.eq("id", args.id!))
+        .first();
+    }
+    if (args.workosId) {
+      return await db
+        .query("users")
+        .withIndex("by_workos_id", (query) =>
+          query.eq("workosId", args.workosId!),
+        )
+        .first();
+    }
+    if (args.email) {
+      return await db
+        .query("users")
+        .withIndex("by_email", (query) => query.eq("email", args.email!))
+        .first();
+    }
+
+    return null;
+  },
+});
+
+export const listChildren = query({
+  args: {
+    secret: v.string(),
+    active: v.optional(v.boolean()),
+  },
+  returns: v.array(v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (args.active !== undefined) {
+      return await db
+        .query("children")
+        .withIndex("by_active", (query) => query.eq("active", args.active!))
+        .collect();
+    }
+    return await db.query("children").collect();
+  },
+});
+
+export const listParentChildren = query({
+  args: {
+    secret: v.string(),
+    parentId: v.string(),
+  },
+  returns: v.array(v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const relations = await db
+      .query("parentChildren")
+      .withIndex("by_parent_id", (query) =>
+        query.eq("parentId", args.parentId),
+      )
+      .collect();
+
+    return await Promise.all(
+      relations.map(async (relation) => ({
+        ...relation,
+        child: await db
+          .query("children")
+          .withIndex("by_app_id", (query) =>
+            query.eq("id", relation.childId),
+          )
+          .first(),
+      })),
+    );
+  },
+});
+
+export const getParentChild = query({
+  args: {
+    secret: v.string(),
+    parentId: v.string(),
+    childId: v.string(),
+  },
+  returns: v.union(v.null(), v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    return await db
+      .query("parentChildren")
+      .withIndex("by_parent_child", (query) =>
+        query.eq("parentId", args.parentId).eq("childId", args.childId),
+      )
+      .first();
   },
 });
 
@@ -141,8 +250,11 @@ export const createExcuse = mutation({
     if (!child) throw new Error("Child not found");
 
     const cancelLunch = child.doesNotTakeLunch ? true : value.cancelLunch;
+    const dayPart =
+      value.fromDate === value.toDate ? (value.dayPart ?? "FULL_DAY") : "FULL_DAY";
     const excuse = {
       ...value,
+      dayPart,
       cancelLunch,
       lateApprovedAt:
         value.lateApprovedAt == null &&
@@ -163,7 +275,8 @@ export const patchById = mutation({
     patch: documentValue,
   },
   returns: v.boolean(),
-  handler: async ({ db }, args) => {
+  handler: async (ctx, args) => {
+    const { db } = ctx;
     requireServerSecret(args.secret);
     const current = await db
       .query(args.table)
@@ -174,7 +287,27 @@ export const patchById = mutation({
       throw new Error(`Document not found in ${args.table} for id ${args.id}`);
     }
 
-    await db.patch(current._id, args.patch);
+    if (args.table === "excuses") {
+      const previous = current as Doc<"excuses">;
+      // Give each saved revision a distinct key, including concurrent edits.
+      await db.patch(previous._id, {
+        ...args.patch,
+        updatedAt: Math.max(Date.now(), previous.updatedAt + 1),
+      });
+      const updated = await db.get(previous._id);
+      if (updated && (
+        previous.fromDate !== updated.fromDate ||
+        previous.toDate !== updated.toDate ||
+        (previous.reason ?? null) !== (updated.reason ?? null) ||
+        (previous.dayPart ?? "FULL_DAY") !== (updated.dayPart ?? "FULL_DAY") ||
+        (previous.cancelLunch ?? true) !== (updated.cancelLunch ?? true)
+      )) {
+        // The edit and its delivery records commit together or both roll back.
+        await enqueueExcuseEvent(ctx, updated, "EXCUSE_UPDATED");
+      }
+    } else {
+      await db.patch(current._id, args.patch);
+    }
     return true;
   },
 });

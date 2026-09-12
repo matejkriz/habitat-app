@@ -2,6 +2,8 @@
 
 /* Habitat Design System */
 :root {
+  color-scheme: light;
+
   /* Primary Colors */
   --habitat-gold: #D4A84B;
   --habitat-gold-light: #E8C77A;

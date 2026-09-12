@@ -19,8 +19,10 @@ import { isAutoApproved } from "./excuse-rules";
 import { isDefaultClosedDay, toLocalDateKey } from "./school-calendar";
 import {
   ExcuseStatus,
+  ExcuseDayPart,
   Presence,
   type ExcuseStatus as ExcuseStatusValue,
+  type ExcuseDayPart as ExcuseDayPartValue,
   type Presence as PresenceValue,
 } from "./types";
 
@@ -30,6 +32,8 @@ export type CoveringExcuse = {
   readonly fromDate: Date;
   readonly toDate: Date;
   readonly reason?: string | null;
+  /** Missing on legacy records means that the whole day is covered. */
+  readonly dayPart?: ExcuseDayPartValue;
   /** Missing on legacy records means that lunch cancellation was requested. */
   readonly cancelLunch?: boolean;
   readonly submittedAt: Date;
@@ -97,7 +101,44 @@ export function getDayCoverage(
   excuses: ReadonlyArray<CoveringExcuse>,
   day: Date,
 ): DayCoverage {
+  const morning = getDayPartCoverage(excuses, day, ExcuseDayPart.MORNING);
+  const afternoon = getDayPartCoverage(excuses, day, ExcuseDayPart.AFTERNOON);
+  if (!morning.covered || !afternoon.covered) return NO_COVERAGE;
+
   const covering = excuses.filter((excuse) => coversDay(excuse, day));
+  const excusing = covering.filter((excuse) => excusesDay(excuse, day));
+  const lunchCancelling = excusing.filter((excuse) => excuse.cancelLunch !== false);
+  const fullyExcused = morning.excused && afternoon.excused;
+  const nonExcusing = covering.filter((excuse) => !excusesDay(excuse, day));
+  const relevant = fullyExcused ? excusing : nonExcusing;
+
+  return {
+    covered: true,
+    excused: fullyExcused,
+    lunchCancelled: lunchCancelling.length > 0,
+    excuse: [...relevant].sort(bySubmission)[0],
+  };
+}
+
+function coversDayPart(
+  excuse: CoveringExcuse,
+  dayPart: Exclude<ExcuseDayPartValue, "FULL_DAY">,
+): boolean {
+  return (
+    excuse.dayPart === undefined ||
+    excuse.dayPart === ExcuseDayPart.FULL_DAY ||
+    excuse.dayPart === dayPart
+  );
+}
+
+export function getDayPartCoverage(
+  excuses: ReadonlyArray<CoveringExcuse>,
+  day: Date,
+  dayPart: Exclude<ExcuseDayPartValue, "FULL_DAY">,
+): DayCoverage {
+  const covering = excuses.filter(
+    (excuse) => coversDay(excuse, day) && coversDayPart(excuse, dayPart),
+  );
   if (covering.length === 0) return NO_COVERAGE;
 
   const excusing = covering.filter((excuse) => excusesDay(excuse, day));
@@ -112,6 +153,17 @@ export function getDayCoverage(
     lunchCancelled: lunchCancelling.length > 0,
     excuse: [...relevant].sort(bySubmission)[0],
   };
+}
+
+export function getExcuseDayPartState(
+  excuses: ReadonlyArray<CoveringExcuse>,
+  day: Date,
+  dayPart: Exclude<ExcuseDayPartValue, "FULL_DAY">,
+): ExcuseDayState | null {
+  return getExcuseDayState(
+    excuses.filter((excuse) => coversDayPart(excuse, dayPart)),
+    day,
+  );
 }
 
 export function groupExcusesByChild(

@@ -4,6 +4,7 @@ type ExcuseNotificationInput = {
   readonly fromTimestamp: number;
   readonly toTimestamp: number;
   readonly reason?: string | null;
+  readonly dayPart?: "FULL_DAY" | "MORNING" | "AFTERNOON";
 };
 
 export function formatCzechDateRange(
@@ -27,10 +28,17 @@ export function buildExcuseNotificationBody(
   const reason = input.reason?.trim() || "";
   const notificationReason =
     reason.length > 280 ? `${reason.slice(0, 279).trimEnd()}…` : reason || null;
+  const dayPart =
+    input.dayPart === "MORNING"
+      ? "jen dopoledne"
+      : input.dayPart === "AFTERNOON"
+        ? "jen odpoledne"
+        : null;
 
   return [
     `${input.childFirstName} ${input.childLastName}`,
     formatCzechDateRange(input.fromTimestamp, input.toTimestamp),
+    dayPart,
     notificationReason,
   ]
     .filter(Boolean)

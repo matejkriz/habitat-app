@@ -1,5 +1,6 @@
 import {
   getDayCoverage,
+  getDayPartCoverage,
   groupExcusesByChild,
   type CoveringExcuse,
 } from "./excuse-coverage";
@@ -49,8 +50,11 @@ export type AttendanceCalendarDay = {
   readonly isResolved: boolean;
   readonly counts: {
     readonly expected: number;
+    readonly expectedMorning: number;
+    readonly expectedAfternoon: number;
     readonly present: number;
     readonly excused: number;
+    readonly pending: number;
     readonly unexcused: number;
     readonly waiting: number;
     readonly unknown: number;
@@ -58,10 +62,13 @@ export type AttendanceCalendarDay = {
   readonly children: {
     readonly present: ReadonlyArray<CalendarChildDetail>;
     readonly excused: ReadonlyArray<CalendarChildDetail>;
+    readonly pending: ReadonlyArray<CalendarChildDetail>;
     readonly unexcused: ReadonlyArray<CalendarChildDetail>;
     readonly waiting: ReadonlyArray<CalendarChildDetail>;
     readonly expected: ReadonlyArray<CalendarChildDetail>;
     readonly unknown: ReadonlyArray<CalendarChildDetail>;
+    readonly morningAbsent: ReadonlyArray<CalendarChildDetail>;
+    readonly afternoonAbsent: ReadonlyArray<CalendarChildDetail>;
   };
 };
 
@@ -118,21 +125,41 @@ function buildOpenDay(
   const isFuture = dateKey > todayKey;
   const present: CalendarChildDetail[] = [];
   const excused: CalendarChildDetail[] = [];
+  const pending: CalendarChildDetail[] = [];
   const unexcused: CalendarChildDetail[] = [];
   const waiting: CalendarChildDetail[] = [];
   const expected: CalendarChildDetail[] = [];
   const unknown: CalendarChildDetail[] = [];
+  const morningAbsent: CalendarChildDetail[] = [];
+  const afternoonAbsent: CalendarChildDetail[] = [];
+  let expectedMorning = 0;
+  let expectedAfternoon = 0;
 
   for (const child of children) {
     const record = attendance.find(
       (item) => item.childId === child.id && toLocalDateKey(item.date) === dateKey,
     );
-    const coverage = getDayCoverage(excusesByChild.get(child.id) ?? [], date);
+    const childExcuses = excusesByChild.get(child.id) ?? [];
+    const coverage = getDayCoverage(childExcuses, date);
+    const morning = getDayPartCoverage(childExcuses, date, "MORNING");
+    const afternoon = getDayPartCoverage(childExcuses, date, "AFTERNOON");
+
+    if (record?.presence !== "ABSENT" && !morning.covered) expectedMorning += 1;
+    if (record?.presence !== "ABSENT" && !afternoon.covered) expectedAfternoon += 1;
+
+    if (morning.covered && !afternoon.covered) {
+      morningAbsent.push(getChildDetail(child, morning.excuse?.reason));
+    }
+    if (afternoon.covered && !morning.covered) {
+      afternoonAbsent.push(getChildDetail(child, afternoon.excuse?.reason));
+    }
 
     if (record?.presence === "PRESENT") {
       present.push(getChildDetail(child));
     } else if (coverage.excused) {
       excused.push(getChildDetail(child, coverage.excuse?.reason));
+    } else if (coverage.covered) {
+      pending.push(getChildDetail(child, coverage.excuse?.reason));
     } else if (record?.presence === "ABSENT") {
       unexcused.push(getChildDetail(child));
     } else if (isPast) {
@@ -160,13 +187,26 @@ function buildOpenDay(
     isResolved: isFuture || (waiting.length === 0 && unknown.length === 0),
     counts: {
       expected: expectedCount,
+      expectedMorning,
+      expectedAfternoon,
       present: present.length,
       excused: excused.length,
+      pending: pending.length,
       unexcused: unexcused.length,
       waiting: waiting.length,
       unknown: unknown.length,
     },
-    children: { present, excused, unexcused, waiting, expected, unknown },
+    children: {
+      present,
+      excused,
+      pending,
+      unexcused,
+      waiting,
+      expected,
+      unknown,
+      morningAbsent,
+      afternoonAbsent,
+    },
   };
 }
 
@@ -186,8 +226,28 @@ function buildClosedDay(
     isLunchCancelled: false,
     closedReason,
     isResolved: true,
-    counts: { expected: 0, present: 0, excused: 0, unexcused: 0, waiting: 0, unknown: 0 },
-    children: { present: [], excused: [], unexcused: [], waiting: [], expected: [], unknown: [] },
+    counts: {
+      expected: 0,
+      expectedMorning: 0,
+      expectedAfternoon: 0,
+      present: 0,
+      excused: 0,
+      pending: 0,
+      unexcused: 0,
+      waiting: 0,
+      unknown: 0,
+    },
+    children: {
+      present: [],
+      excused: [],
+      pending: [],
+      unexcused: [],
+      waiting: [],
+      expected: [],
+      unknown: [],
+      morningAbsent: [],
+      afternoonAbsent: [],
+    },
   };
 }
 

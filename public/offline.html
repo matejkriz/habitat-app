@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#D4A84B" />
+    <title>Habitat Docházka – offline</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Nunito, ui-rounded, system-ui, -apple-system, sans-serif;
+        background: #fdf8f3;
+        color: #2f2a26;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: #fdf8f3;
+      }
+      main {
+        width: min(100%, 420px);
+        padding: 32px 24px;
+        text-align: center;
+        border: 1px solid #eee2d6;
+        border-radius: 24px;
+        background: #fff;
+        box-shadow: 0 12px 40px rgb(47 42 38 / 8%);
+      }
+      img { width: min(220px, 70%); height: auto; }
+      h1 { margin: 28px 0 8px; font-size: 1.5rem; }
+      p { margin: 0 auto 24px; max-width: 32ch; line-height: 1.55; color: #716861; }
+      button {
+        min-height: 44px;
+        padding: 10px 20px;
+        border: 0;
+        border-radius: 12px;
+        background: #d4a84b;
+        color: #2f2a26;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/habitat-logo.webp" alt="Habitat" width="1232" height="400" />
+      <h1>Jste offline</h1>
+      <p>Aplikaci se nepodařilo připojit. Po obnovení internetu to zkuste znovu.</p>
+      <button id="retry" type="button">Zkusit znovu</button>
+    </main>
+    <script>
+      const reload = () => window.location.reload();
+      document.getElementById("retry").addEventListener("click", reload);
+      window.addEventListener("online", reload, { once: true });
+    </script>
+  </body>
+</html>

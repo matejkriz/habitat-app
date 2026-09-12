@@ -1,7 +1,9 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import type { User as WorkOSUser } from "@workos-inc/node";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { db } from "./db";
+import { measureServerOperation } from "./server-timing";
 import {
   DEV_PERSONA_COOKIE,
   isDevPersonaEmail,
@@ -37,12 +39,11 @@ const toSessionUser = (user: SessionUser): SessionUser => ({
   ...(user.devPersonaId ? { devPersonaId: user.devPersonaId } : {}),
 });
 
-/**
- * Returns the current application user, creating or linking it on first WorkOS sign-in.
- * Prefilled users are linked by their verified WorkOS email address.
- */
-export async function getDbUser(): Promise<SessionUser | null> {
-  const { user: workosUser } = await withAuth();
+const loadDbUser = async (): Promise<SessionUser | null> => {
+  const { user: workosUser } = await measureServerOperation(
+    "authkit.withAuth",
+    async () => await withAuth(),
+  );
 
   if (!workosUser) {
     return null;
@@ -105,4 +106,13 @@ export async function getDbUser(): Promise<SessionUser | null> {
   }
 
   return toSessionUser(user);
-}
+};
+
+/**
+ * Returns the current application user, creating or linking it on first WorkOS sign-in.
+ * Prefilled users are linked by their verified WorkOS email address.
+ */
+export const getDbUser = cache(
+  async (): Promise<SessionUser | null> =>
+    await measureServerOperation("auth.getDbUser", loadDbUser),
+);

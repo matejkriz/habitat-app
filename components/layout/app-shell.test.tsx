@@ -3,9 +3,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AppShell } from "./app-shell";
 
 const signOut = vi.fn();
+const navigation = vi.hoisted(() => ({ pathname: "/reditel" }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/reditel",
+  usePathname: () => navigation.pathname,
 }));
 
 vi.mock("@/lib/workos-client", () => ({
@@ -60,6 +61,10 @@ const director = {
 afterEach(() => {
   cleanup();
   signOut.mockClear();
+  navigation.pathname = "/reditel";
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  Reflect.deleteProperty(navigator, "standalone");
 });
 
 describe("AppShell", () => {
@@ -100,6 +105,31 @@ describe("AppShell", () => {
     expect(excusesLabel.className).not.toContain("max-w-");
     expect(excusesLink?.className).toContain("min-w-0");
     expect(excusesLink?.className).toContain("flex-1");
+  });
+
+  it("keeps the mobile navigation and content clear of the device safe area", () => {
+    const { container } = render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    const mobileNavigation = Array.from(
+      container.querySelectorAll("nav")
+    ).find((navigationElement) =>
+      navigationElement.className.includes("md:hidden")
+    );
+    const main = container.querySelector("main");
+
+    expect(mobileNavigation?.className).toContain(
+      "pb-[env(safe-area-inset-bottom)]"
+    );
+    expect(container.querySelector("header")?.className).toContain(
+      "pt-[env(safe-area-inset-top)]"
+    );
+    expect(main?.className).toContain(
+      "pb-[calc(6rem+env(safe-area-inset-bottom))]"
+    );
   });
 
   it("reveals sign out only after opening the user menu", () => {
@@ -147,6 +177,33 @@ describe("AppShell", () => {
     ).toBeNull();
   });
 
+  it.each(["PARENT", "TEACHER", "DIRECTOR"] as const)(
+    "shows the calendar version to %s users",
+    (role) => {
+      vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "2026.09.06");
+      vi.stubEnv(
+        "NEXT_PUBLIC_APP_COMMIT_SHA",
+        "0123456789abcdef0123456789abcdef01234567",
+      );
+      render(
+        <AppShell user={{ ...director, role }}>
+          <div>Obsah</div>
+        </AppShell>,
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Otevřít uživatelské menu" }),
+      );
+
+      expect(screen.getByText(/Verze 2026\.09\.06/)).toBeTruthy();
+      expect(
+        screen.getByRole("link", { name: "0123456" }).getAttribute("href"),
+      ).toBe(
+        "https://github.com/matejkriz/habitat-app/commit/0123456789abcdef0123456789abcdef01234567",
+      );
+    },
+  );
+
   it("highlights a mobile destination as soon as its navigation starts", () => {
     render(
       <AppShell user={director}>
@@ -180,5 +237,52 @@ describe("AppShell", () => {
     fireEvent.click(overviewLink);
 
     expect(overviewLink.getAttribute("aria-busy")).toBeNull();
+  });
+
+  it("marks the role's primary destination active while the URL is root", () => {
+    navigation.pathname = "/";
+    render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>
+    );
+
+    const overviewLink = screen.getAllByRole("link", { name: "Přehled" }).at(-1);
+    if (!overviewLink) throw new Error("Chybí odkaz na přehled");
+
+    expect(overviewLink.getAttribute("aria-current")).toBe("page");
+    expect(overviewLink.className).toContain("text-gold");
+  });
+
+  it("attaches an available update below the top bar in the installed PWA", async () => {
+    vi.stubEnv(
+      "NEXT_PUBLIC_APP_COMMIT_SHA",
+      "1111111111111111111111111111111111111111",
+    );
+    Object.defineProperty(navigator, "standalone", {
+      configurable: true,
+      value: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          version: "2026.09.06",
+          commitSha: "2222222222222222222222222222222222222222",
+        }),
+      ),
+    );
+
+    render(
+      <AppShell user={director}>
+        <div>Obsah</div>
+      </AppShell>,
+    );
+
+    const message = await screen.findByText("Je dostupná nová verze.");
+    const header = message.closest("header");
+
+    expect(header).not.toBeNull();
+    expect(header?.firstElementChild?.contains(message)).toBe(false);
   });
 });

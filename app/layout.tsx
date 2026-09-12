@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito, Geist_Mono } from "next/font/google";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
+import { IOS_STARTUP_IMAGES } from "@/app/pwa-startup-images";
+import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -26,6 +28,7 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Habitat Docházka",
+    startupImage: IOS_STARTUP_IMAGES,
   },
   formatDetection: {
     telephone: false,
@@ -36,6 +39,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
+  colorScheme: "light",
   themeColor: "#D4A84B",
 };
 
@@ -45,11 +50,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="cs">
+    <html lang="cs" style={{ backgroundColor: "#FDF8F3" }}>
       <body
+        style={{ backgroundColor: "#FDF8F3" }}
         className={`${nunito.variable} ${geistMono.variable} antialiased min-h-screen bg-cream`}
       >
         <AuthKitProvider>
+          <ServiceWorkerRegistration />
           {children}
         </AuthKitProvider>
       </body>

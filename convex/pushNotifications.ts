@@ -21,11 +21,14 @@ async function isDirector(ctx: MutationCtx, userId: string): Promise<boolean> {
   return user?.role === "DIRECTOR";
 }
 
-async function enqueueExcuseEvent(
+export async function enqueueExcuseEvent(
   ctx: MutationCtx,
   excuse: Doc<"excuses">,
+  type: "EXCUSE_CREATED" | "EXCUSE_UPDATED" = "EXCUSE_CREATED",
 ): Promise<Id<"notificationEvents"> | null> {
-  const dedupeKey = `EXCUSE_CREATED:${excuse.id}`;
+  const dedupeKey = type === "EXCUSE_UPDATED"
+    ? `${type}:${excuse.id}:${excuse.updatedAt}`
+    : `${type}:${excuse.id}`;
   const existing = await ctx.db
     .query("notificationEvents")
     .withIndex("by_dedupe_key", (query) => query.eq("dedupeKey", dedupeKey))
@@ -41,14 +44,15 @@ async function enqueueExcuseEvent(
   const now = Date.now();
   const eventId = await ctx.db.insert("notificationEvents", {
     dedupeKey,
-    type: "EXCUSE_CREATED",
-    title: "Nová omluvenka",
+    type,
+    title: type === "EXCUSE_UPDATED" ? "Změna omluvenky" : "Nová omluvenka",
     body: buildExcuseNotificationBody({
       childFirstName: child.firstName,
       childLastName: child.lastName,
       fromTimestamp: excuse.fromDate,
       toTimestamp: excuse.toDate,
       reason: excuse.reason,
+      dayPart: excuse.dayPart,
     }),
     url: "/reditel/omluvenky",
     createdAt: now,

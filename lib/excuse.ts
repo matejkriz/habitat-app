@@ -3,8 +3,15 @@
  */
 
 import { db } from "./db";
-import { UserRole, type Excuse, type UserRole as UserRoleType } from "./types";
-import { validateExcuseDates } from "./excuse-rules";
+import {
+  ExcuseDayPart,
+  UserRole,
+  type Excuse,
+  type ExcuseDayPart as ExcuseDayPartValue,
+  type UserRole as UserRoleType,
+} from "./types";
+import { ExcuseValidationError, validateExcuseDates } from "./excuse-rules";
+import { getExcuseDayPartForRange } from "./excuse-input";
 import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
@@ -59,6 +66,7 @@ export async function createExcuse(
   options?: {
     readonly approvedById?: string;
     readonly cancelLunch?: boolean;
+    readonly dayPart?: ExcuseDayPartValue;
   },
 ): Promise<Excuse> {
   // Validate dates
@@ -86,6 +94,11 @@ export async function createExcuse(
     select: { name: true },
   });
   const lateApprovedAt = options?.approvedById ? new Date() : null;
+  const dayPart = getExcuseDayPartForRange(
+    options?.dayPart ?? ExcuseDayPart.FULL_DAY,
+    normalizedFrom,
+    normalizedTo,
+  );
   const cancelLunch = options?.cancelLunch ?? true;
 
   // Director-created, no-lunch, and lunch-preserving excuses are approved in
@@ -97,6 +110,7 @@ export async function createExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason,
+      dayPart,
       cancelLunch,
       submittedById,
       lateApprovedAt,
@@ -124,6 +138,7 @@ export async function createExcuse(
         fromDate: normalizedFrom.toISOString(),
         toDate: normalizedTo.toISOString(),
         reason,
+        dayPart: excuse.dayPart,
         cancelLunch: excuse.cancelLunch,
         isOnTime,
         automaticallyApproved,
@@ -152,6 +167,7 @@ export async function createExcuse(
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason,
+      dayPart: excuse.dayPart,
       cancelLunch: excuse.cancelLunch,
       isOnTime,
       automaticallyApproved,
@@ -231,6 +247,7 @@ export async function updateExcuse(
     fromDate?: Date;
     toDate?: Date;
     reason?: string | null;
+    dayPart?: ExcuseDayPartValue;
   },
   userId: string
 ): Promise<Excuse> {
@@ -247,8 +264,14 @@ export async function updateExcuse(
   const newToDate = updates.toDate || current.toDate;
   const validation = validateExcuseDates(newFromDate, newToDate);
   if (!validation.valid) {
-    throw new Error(validation.error);
+    throw new ExcuseValidationError(validation.error);
   }
+  const newDayPart = getExcuseDayPartForRange(
+    updates.dayPart ?? current.dayPart,
+    newFromDate,
+    newToDate,
+  );
+  const newCancelLunch = current.cancelLunch;
 
   // Growing the range would carry the original submission time onto days whose
   // deadline has since passed, which is how a stale excuse could be edited into
@@ -258,7 +281,7 @@ export async function updateExcuse(
     startOfDay(newFromDate) < startOfDay(current.fromDate) ||
     startOfDay(newToDate) > startOfDay(current.toDate)
   ) {
-    throw new Error(
+    throw new ExcuseValidationError(
       "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.",
     );
   }
@@ -274,11 +297,17 @@ export async function updateExcuse(
         fromDate: current.fromDate.toISOString(),
         toDate: current.toDate.toISOString(),
         reason: current.reason,
+        dayPart: current.dayPart,
+        cancelLunch: current.cancelLunch,
+        lateApprovedAt: current.lateApprovedAt?.toISOString() ?? null,
       },
       newValue: {
         fromDate: newFromDate.toISOString(),
         toDate: newToDate.toISOString(),
         reason: updates.reason !== undefined ? updates.reason : current.reason,
+        dayPart: newDayPart,
+        cancelLunch: newCancelLunch,
+        lateApprovedAt: current.lateApprovedAt?.toISOString() ?? null,
       },
     },
   });
@@ -290,14 +319,58 @@ export async function updateExcuse(
   const normalizedTo = new Date(newToDate);
   normalizedTo.setHours(0, 0, 0, 0);
 
-  return db.excuses.update({
+  const updated = await db.excuses.update({
     where: { id: excuseId },
     data: {
       fromDate: normalizedFrom,
       toDate: normalizedTo,
       reason: updates.reason !== undefined ? updates.reason : current.reason,
+      dayPart: newDayPart,
+      cancelLunch: newCancelLunch,
     },
   });
+
+  const changed =
+    current.fromDate.getTime() !== updated.fromDate.getTime() ||
+    current.toDate.getTime() !== updated.toDate.getTime() ||
+    current.reason !== updated.reason ||
+    current.dayPart !== updated.dayPart;
+
+  if (changed) {
+    try {
+      const [child, parent, schoolDays] = await Promise.all([
+        db.children.get({
+          where: { id: updated.childId },
+          select: { firstName: true, lastName: true },
+        }),
+        db.users.get({
+          where: { id: updated.submittedById },
+          select: { name: true },
+        }),
+        getSchoolDaysInRange(updated.fromDate, updated.toDate),
+      ]);
+      if (child && parent) {
+        // Await the webhook so the server does not stop before sending the edit.
+        await sendExcuseNotification({
+          change: "UPDATED",
+          childName: `${child.firstName} ${child.lastName}`,
+          parentName: parent.name || "Neznámý rodič",
+          fromDate: updated.fromDate,
+          toDate: updated.toDate,
+          reason: updated.reason,
+          dayPart: updated.dayPart,
+          cancelLunch: updated.cancelLunch,
+          isOnTime: getLateDays(updated, schoolDays).length === 0,
+          automaticallyApproved:
+            updated.lateApprovedAt !== null && updated.lateApprovedById === null,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to send updated excuse to Slack:", error);
+    }
+  }
+
+  return updated;
 }
 
 /**
@@ -324,6 +397,8 @@ export async function deleteExcuse(excuseId: string, userId: string): Promise<vo
         fromDate: excuse.fromDate.toISOString(),
         toDate: excuse.toDate.toISOString(),
         reason: excuse.reason,
+        dayPart: excuse.dayPart,
+        cancelLunch: excuse.cancelLunch,
         lateApprovedAt: excuse.lateApprovedAt?.toISOString() ?? null,
       },
     },
