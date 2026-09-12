@@ -1,3 +1,4 @@
+import { ParentLunchSection, ParentTripFundSection } from "@/components/overview/parent-overviews";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getDbUser } from "@/lib/auth";
@@ -268,7 +269,7 @@ async function CalendarCard({
 export default async function ParentDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ child?: string; month?: string }>;
+  searchParams: Promise<{ child?: string; month?: string; lunchMonth?: string }>;
 }) {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
@@ -363,6 +364,13 @@ export default async function ParentDashboard({
 
       <Suspense fallback={<LoadingCard />}>
         <ExcusesCard childId={selectedChildId} />
+      </Suspense>
+
+      <Suspense fallback={<LoadingCard />}>
+        <ParentLunchSection month={params.lunchMonth ?? selectedMonth} childId={selectedChild.id} calendarMonth={selectedMonth} />
+      </Suspense>
+      <Suspense fallback={<LoadingCard />}>
+        <ParentTripFundSection />
       </Suspense>
     </div>
   );
