@@ -41,7 +41,13 @@ import {
   NO_COVERAGE,
   type ExcuseRangeState,
 } from "@/lib/excuse-coverage";
-import { ExcuseValidationError, parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
+import {
+  areExcuseEndpointsOpen,
+  CLOSED_EXCUSE_ENDPOINT_ERROR,
+  ExcuseValidationError,
+  parseExcuseDate,
+  validateExcuseDates,
+} from "@/lib/excuse-rules";
 import {
   getExcuseDayPartForRange,
   parseCancelLunchChoice,
@@ -532,6 +538,9 @@ export async function createDirectorExcuse(
   const reason =
     typeof reasonValue === "string" ? reasonValue.trim() || null : null;
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
+  if (!areExcuseEndpointsOpen(fromDate, toDate, schoolDays)) {
+    return { success: false, error: CLOSED_EXCUSE_ENDPOINT_ERROR };
+  }
   await createExcuse(
     childId,
     fromDate,

@@ -5,8 +5,25 @@
  * the absence is automatically EXCUSED. Otherwise, it's UNEXCUSED (late excuse).
  */
 
+import { toLocalDateKey } from "./school-calendar";
+
 /** Expected input errors may be returned to the user by Server Actions. */
 export class ExcuseValidationError extends Error {}
+
+export const CLOSED_EXCUSE_ENDPOINT_ERROR =
+  "Začátek i konec omluvenky musí být v den, kdy je Habitat otevřený.";
+
+export function areExcuseEndpointsOpen(
+  fromDate: Date,
+  toDate: Date,
+  schoolDays: ReadonlyArray<Date>,
+): boolean {
+  const schoolDateKeys = new Set(schoolDays.map(toLocalDateKey));
+  return (
+    schoolDateKeys.has(toLocalDateKey(fromDate)) &&
+    schoolDateKeys.has(toLocalDateKey(toDate))
+  );
+}
 
 export function parseExcuseDate(value: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);

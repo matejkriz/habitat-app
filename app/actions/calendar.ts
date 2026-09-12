@@ -11,6 +11,7 @@ import {
   type ClosedDay,
   type NoLunchDay,
 } from "@/lib/types";
+import { toLocalDateKey } from "@/lib/school-calendar";
 
 export type AttendanceCalendarMonth = {
   readonly monthKey: string;
@@ -28,6 +29,33 @@ function parseMonthKey(monthKey: string): { year: number; monthIndex: number } {
   }
 
   return { year, monthIndex };
+}
+
+export type ExcuseCalendarMonth = {
+  readonly monthKey: string;
+  readonly closedDateKeys: ReadonlyArray<string>;
+};
+
+export async function getExcuseCalendarMonth(
+  monthKey: string,
+): Promise<ExcuseCalendarMonth> {
+  const user = await getDbUser();
+  if (!user || (user.role !== UserRole.PARENT && user.role !== UserRole.DIRECTOR)) {
+    throw new Error("Unauthorized");
+  }
+
+  const { year, monthIndex } = parseMonthKey(monthKey);
+  const startDate = new Date(year, monthIndex, 1);
+  const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+  const closedDays = await db.closedDays.list({
+    where: { date: { gte: startDate, lte: endDate } },
+    select: { date: true },
+  }) as ReadonlyArray<{ readonly date: Date }>;
+
+  return {
+    monthKey,
+    closedDateKeys: closedDays.map((day) => toLocalDateKey(day.date)),
+  };
 }
 
 export async function getAttendanceCalendarMonth(

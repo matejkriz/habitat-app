@@ -9,11 +9,11 @@ import {
   CardContent,
   CardFooter,
   Button,
-  Input,
   Toggle,
   Textarea,
 } from "@/components/ui";
 import { DayPartSelector } from "@/components/excuses/day-part-selector";
+import { ExcuseDatePicker } from "@/components/excuses/excuse-date-picker";
 import {
   getParentChildren,
   submitExcuse,
@@ -307,12 +307,11 @@ export default function NewExcusePage() {
               </fieldset>
             )}
 
-            <Input
+            <ExcuseDatePicker
               label="Od"
-              type="date"
+              name="fromDate"
               value={fromDate}
-              onChange={(e) => {
-                const nextFromDate = e.target.value;
+              onChange={(nextFromDate) => {
                 const nextToDate =
                   !toDate || nextFromDate > toDate ? nextFromDate : toDate;
                 setFromDate(nextFromDate);
@@ -330,12 +329,11 @@ export default function NewExcusePage() {
               required
             />
 
-            <Input
+            <ExcuseDatePicker
               label="Do"
-              type="date"
+              name="toDate"
               value={toDate}
-              onChange={(e) => {
-                const nextToDate = e.target.value;
+              onChange={(nextToDate) => {
                 setToDate(nextToDate);
                 if (fromDate && nextToDate && fromDate !== nextToDate) {
                   setDayPart(ExcuseDayPart.FULL_DAY);
