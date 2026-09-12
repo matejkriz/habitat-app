@@ -20,6 +20,7 @@ import {
   saveAttendance,
   setNoLunchForDate,
 } from "@/app/actions/teacher";
+import { TripExpenses } from "@/components/days/trip-expenses";
 import { DayDetailsForm } from "@/components/days/day-details-form";
 import type { DayDetails } from "@/lib/day-details";
 import { formatDateWithWeekday } from "@/lib/utils";
@@ -114,6 +115,8 @@ export default function TeacherAttendancePage() {
   const [excuses, setExcuses] = useState<Record<string, DailyExcuse>>({});
   const [isClosed, setIsClosed] = useState(false);
   const [noLunch, setNoLunch] = useState(false);
+  const [detailsRevision, setDetailsRevision] = useState(0);
+  const [tripRevision, setTripRevision] = useState(0);
   const [details, setDetails] = useState<DayDetails>({ name: null });
   const [canManageLunch, setCanManageLunch] = useState(false);
   const [loadedDate, setLoadedDate] = useState<string | null>(null);
@@ -190,6 +193,7 @@ export default function TeacherAttendancePage() {
           noLunch: attendanceData.noLunch,
           canManageLunch: attendanceData.canManageLunch,
         });
+        setDetailsRevision(value => value + 1);
         setDetails(attendanceData.details ?? { name: null });
         setChildren(nextChildren);
         setIsClosed(attendanceData.isClosed);
@@ -202,6 +206,8 @@ export default function TeacherAttendancePage() {
       } catch {
         if (!isCurrentDate) return;
 
+        setDetails({ name: null });
+        setCanManageLunch(false);
         setError("Nepodařilo se načíst data.");
         setLoadedDate(selectedDate);
       }
@@ -273,6 +279,7 @@ export default function TeacherAttendancePage() {
         canManageLunch,
       });
       if (selectedDateRef.current === selectedDate) {
+        setTripRevision(value => value + 1);
         setSavedAttendance({ ...attendance });
         setSuccess(`Docházka uložena (${result.recordCount} záznamů)`);
       }
@@ -418,7 +425,7 @@ export default function TeacherAttendancePage() {
           <details key={selectedDate} className="group">
             <summary className="cursor-pointer rounded-xl px-6 py-4 font-bold text-charcoal focus-visible:outline-2 focus-visible:outline-gold">Podrobnosti</summary>
             <div className="border-t border-cream-dark p-6">
-              <DayDetailsForm key={`${selectedDate}-${loadedDate}`} dateKey={selectedDate} initialDetails={details} showReport onSaved={next => {
+              <DayDetailsForm key={`${selectedDate}-${detailsRevision}`} dateKey={selectedDate} initialDetails={details} showReport onSaved={next => {
                 const cachedDay = dayCache.current.get(selectedDate);
                 if (cachedDay) dayCache.current.set(selectedDate, { ...cachedDay, details: next });
                 if (selectedDateRef.current === selectedDate) setDetails(next);
@@ -426,6 +433,7 @@ export default function TeacherAttendancePage() {
                 <Toggle aria-label="Tento den nebyl oběd" label="Tento den nebyl oběd" checked={noLunch} disabled={isSavingNoLunch || isClosed} onChange={handleNoLunchChange}
                   description="Den se v přehledu obědů označí šedě a žádnému dítěti se nezapočítá." />
               </DayDetailsForm>
+              <TripExpenses key={selectedDate} dateKey={selectedDate} defaultExpense={details.expense ?? null} revision={tripRevision} />
             </div>
           </details>
         </Card>

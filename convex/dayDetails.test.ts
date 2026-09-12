@@ -57,4 +57,23 @@ describe("day details and trip funds", () => {
     await t.run(({ db }) => db.patch(attendanceId, { presence: "ABSENT" }));
     expect((await t.query(api.db.getTripFunds, { secret }))[0].fundBalance).toBe(500);
   });
+  it("uses individual trip amounts, keeps overrides when the default changes, and restores the default", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async ({ db }) => {
+      await db.insert("children", { id: "child", firstName: "Anna", lastName: "Malá", active: true, fundSent: 500, createdAt: date, updatedAt: date });
+      await db.insert("attendance", { id: "a", childId: "child", date, presence: "PRESENT", createdAt: date, updatedAt: date });
+    });
+    await t.mutation(api.db.saveDayDetails, change);
+    expect((await t.query(api.db.getDayTripExpenses, { secret, date }))[0]).toMatchObject({ childId: "child", amount: 120, override: null });
+    await t.mutation(api.db.setChildTripExpense, { secret, date, childId: "child", amount: 0, recordedById: "director" });
+    await t.mutation(api.db.saveDayDetails, { ...change, expense: 200 });
+    expect((await t.query(api.db.getTripFunds, { secret }))[0].fundBalance).toBe(500);
+    expect((await t.query(api.db.getDayTripExpenses, { secret, date }))[0]).toMatchObject({ amount: 0, override: 0 });
+    await t.mutation(api.db.setChildTripExpense, { secret, date, childId: "child", amount: null, recordedById: "director" });
+    expect((await t.query(api.db.getTripFunds, { secret }))[0].fundBalance).toBe(300);
+    for (const amount of [-1, 1.2, Infinity]) {
+      await expect(t.mutation(api.db.setChildTripExpense, { secret, date, childId: "child", amount, recordedById: "director" })).rejects.toThrow();
+    }
+  });
+
 });

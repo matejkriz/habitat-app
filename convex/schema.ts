@@ -123,6 +123,15 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_date", { fields: ["date"] }),
 
+  childTripExpenses: defineTable({
+    date: v.number(),
+    childId: v.string(),
+    amount: v.number(),
+    recordedById: v.string(),
+    updatedAt: v.number(),
+  }).index("by_child_date", { fields: ["childId", "date"] })
+    .index("by_date", { fields: ["date"] }),
+
   dayReports: defineTable({
     date: v.number(),
     report: v.string(),

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { parseDayDate, validateDayDetails, type DayDetails, type DayDetailsPatch } from "@/lib/day-details";
+import { parseDayDate, validateDayDetails, validateCrowns, type ChildTripExpense, type DayDetails, type DayDetailsPatch } from "@/lib/day-details";
 
 export async function getDayDetailsForDate(dateKey: string): Promise<DayDetails> {
   const user = await getDbUser();
@@ -23,6 +23,22 @@ export async function saveDayDetails(dateKey: string, details: DayDetailsPatch):
     ...(details.expense === undefined ? {} : { expense: details.expense }),
     ...(details.report === undefined ? {} : { report: details.report }),
   }, user.id);
+  revalidatePath("/kalendar");
+  revalidatePath("/ucitel/dochazka");
+  revalidatePath("/reditel/deti");
+}
+
+export async function getDayTripExpenses(dateKey: string): Promise<ChildTripExpense[]> {
+  const user = await getDbUser();
+  if (!user || user.role !== "DIRECTOR") throw new Error("Unauthorized");
+  return db.childTripExpenses.list(parseDayDate(dateKey));
+}
+
+export async function setChildTripExpense(dateKey: string, childId: string, amount: number | null): Promise<void> {
+  const user = await getDbUser();
+  if (!user || user.role !== "DIRECTOR") throw new Error("Unauthorized");
+  if (amount !== null) validateCrowns(amount);
+  await db.childTripExpenses.set(parseDayDate(dateKey), childId, amount, user.id);
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/reditel/deti");

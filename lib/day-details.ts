@@ -41,3 +41,4 @@ export function parseDayDate(dateKey: string): Date {
 
 export type DaySummary = { date: number; name: string | null; expense: number | null };
 export type TripFund = { childId: string; fundSent: number | null; fundSpent: number; fundBalance: number };
+export type ChildTripExpense = { childId: string; name: string; amount: number; override: number | null };

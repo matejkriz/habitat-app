@@ -7,6 +7,7 @@ import {
   type AttendanceCalendarMonth,
 } from "@/app/actions/calendar";
 import type { AttendanceCalendarDay, CalendarChildDetail } from "@/lib/attendance-calendar";
+import { TripExpenses } from "@/components/days/trip-expenses";
 import { DayDetailsForm } from "@/components/days/day-details-form";
 import type { DayDetails } from "@/lib/day-details";
 import { cn } from "@/lib/utils";
@@ -425,6 +426,7 @@ function DayDetailModal({ day, onClose, canManageDetails, onSaved }: {
           {canManageDetails && (
             <div className="mb-5 rounded-xl border border-cream-dark bg-cream/30 p-4">
               <DayDetailsForm dateKey={day.dateKey} initialDetails={{ name: day.name ?? null, expense: day.expense ?? null }} onSaved={onSaved} />
+              <TripExpenses dateKey={day.dateKey} defaultExpense={day.expense ?? null} />
             </div>
           )}
           {day.isClosed ? (

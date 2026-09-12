@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   setNoLunchForDate: vi.fn(),
 }));
 
-vi.mock("@/app/actions/day-details", () => ({ saveDayDetails: vi.fn() }));
+vi.mock("@/app/actions/day-details", () => ({ saveDayDetails: vi.fn(), getDayTripExpenses: async () => [], setChildTripExpense: vi.fn() }));
 
 vi.mock("@/app/actions/teacher", () => mocks);
 

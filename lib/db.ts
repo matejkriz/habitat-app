@@ -1171,6 +1171,12 @@ export const db: any = {
       secret: getServerSecret(), date: date.getTime(), ...details, recordedById,
     }),
   },
+  childTripExpenses: {
+    list: (date: Date) => convexQuery(api.db.getDayTripExpenses, { secret: getServerSecret(), date: date.getTime() }),
+    set: (date: Date, childId: string, amount: number | null, recordedById: string) => convexMutation(api.db.setChildTripExpense, {
+      secret: getServerSecret(), date: date.getTime(), childId, amount, recordedById,
+    }),
+  },
   tripFunds: {
     list: () => convexQuery(api.db.getTripFunds, { secret: getServerSecret() }),
   },

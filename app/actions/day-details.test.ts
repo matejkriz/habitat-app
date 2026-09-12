@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), get: vi.fn(), save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), get: vi.fn(), save: vi.fn(), listExpenses: vi.fn(), setExpense: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.user }));
-vi.mock("@/lib/db", () => ({ db: { dayDetails: { get: mocks.get, save: mocks.save } } }));
+vi.mock("@/lib/db", () => ({ db: { dayDetails: { get: mocks.get, save: mocks.save }, childTripExpenses: { list: mocks.listExpenses, set: mocks.setExpense } } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-import { getDayDetailsForDate, saveDayDetails } from "./day-details";
+import { getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense } from "./day-details";
 
 describe("day detail access", () => {
   beforeEach(() => {
@@ -36,4 +36,17 @@ describe("day detail access", () => {
     await saveDayDetails("2026-09-10", { name: "Zoo", expense: null });
     expect(mocks.save).toHaveBeenCalledWith(new Date(2026, 8, 10), { name: "Zoo", expense: null }, "director");
   });
+  it.each(["TEACHER", "PARENT", null])("hides individual expenses from %s", async role => {
+    mocks.user.mockResolvedValue(role ? { role } : null);
+    await expect(getDayTripExpenses("2026-09-10")).rejects.toThrow("Unauthorized");
+    await expect(setChildTripExpense("2026-09-10", "child", 50)).rejects.toThrow("Unauthorized");
+    expect(mocks.setExpense).not.toHaveBeenCalled();
+    expect(mocks.listExpenses).not.toHaveBeenCalled();
+  });
+  it("validates and stores individual expenses for directors", async () => {
+    await expect(setChildTripExpense("2026-09-10", "child", -5)).rejects.toThrow();
+    await setChildTripExpense("2026-09-10", "child", 0);
+    expect(mocks.setExpense).toHaveBeenCalledWith(new Date(2026, 8, 10), "child", 0, "director");
+  });
+
 });
