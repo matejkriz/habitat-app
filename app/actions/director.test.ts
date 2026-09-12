@@ -435,6 +435,7 @@ describe("createDirectorExcuse", () => {
     formData.set("fromDate", "2026-08-19");
     formData.set("toDate", "2026-08-20");
     formData.set("dayPart", "MORNING");
+    mocks.getSchoolDaysInRange.mockResolvedValue([AUG(19), AUG(20)]);
 
     await expect(createDirectorExcuse(formData)).resolves.toEqual({
       success: true,
@@ -442,6 +443,20 @@ describe("createDirectorExcuse", () => {
     expect(mocks.excusesCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({ dayPart: "FULL_DAY" }),
     });
+  });
+
+  it("rejects an excuse whose endpoint is a closed day", async () => {
+    const formData = new FormData();
+    formData.set("childId", "tobias");
+    formData.set("fromDate", "2026-08-21");
+    formData.set("toDate", "2026-08-21");
+    mocks.getSchoolDaysInRange.mockResolvedValue([]);
+
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: false,
+      error: "Začátek i konec omluvenky musí být v den, kdy je Habitat otevřený.",
+    });
+    expect(mocks.excusesCreate).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid day part safely", async () => {

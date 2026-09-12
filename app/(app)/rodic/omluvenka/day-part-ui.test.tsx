@@ -5,6 +5,7 @@ import NewExcusePage from "./page";
 const mocks = vi.hoisted(() => ({
   getParentChildren: vi.fn(),
   submitExcuse: vi.fn(),
+  getExcuseCalendarMonth: vi.fn(),
   push: vi.fn(),
   back: vi.fn(),
 }));
@@ -17,6 +18,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/actions/parent", () => ({
   getParentChildren: mocks.getParentChildren,
   submitExcuse: mocks.submitExcuse,
+}));
+
+vi.mock("@/app/actions/calendar", () => ({
+  getExcuseCalendarMonth: mocks.getExcuseCalendarMonth,
 }));
 
 const children = [
@@ -37,6 +42,10 @@ const children = [
 describe("day-part choice in the parent excuse form", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getExcuseCalendarMonth.mockResolvedValue({
+      monthKey: "2026-09",
+      closedDateKeys: [],
+    });
     mocks.getParentChildren.mockResolvedValue(children);
     mocks.submitExcuse.mockResolvedValue({
       success: true,

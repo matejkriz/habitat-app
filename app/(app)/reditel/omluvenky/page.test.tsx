@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   editExcuse: vi.fn(),
   updateExcuse: vi.fn(),
   deleteExcuse: vi.fn(),
+  getExcuseCalendarMonth: vi.fn(),
 }));
 
 vi.mock("@/app/actions/director", () => ({
@@ -18,6 +19,10 @@ vi.mock("@/app/actions/director", () => ({
   editExcuse: mocks.editExcuse,
   updateExcuse: mocks.updateExcuse,
   deleteExcuse: mocks.deleteExcuse,
+}));
+
+vi.mock("@/app/actions/calendar", () => ({
+  getExcuseCalendarMonth: mocks.getExcuseCalendarMonth,
 }));
 
 const lateExcuse = {
@@ -41,6 +46,10 @@ const lateExcuse = {
 describe("ExcuseManagementPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getExcuseCalendarMonth.mockResolvedValue({
+      monthKey: "2026-08",
+      closedDateKeys: [],
+    });
     mocks.getExcuseChildren.mockResolvedValue([
       { id: "child-1", firstName: "Tobiáš", lastName: "Tornádo" },
       { id: "child-2", firstName: "Anna", lastName: "Malá" },
@@ -220,14 +229,14 @@ describe("ExcuseManagementPage", () => {
     const toDate = screen.getByLabelText("Do");
     fireEvent.change(fromDate, { target: { value: "2026-09-10" } });
 
-    expect((toDate as HTMLInputElement).value).toBe("2026-09-10");
+    expect((toDate as HTMLInputElement).value).toBe("10. 9. 2026");
 
     fireEvent.change(toDate, { target: { value: "2026-09-12" } });
     fireEvent.change(fromDate, { target: { value: "2026-09-11" } });
-    expect((toDate as HTMLInputElement).value).toBe("2026-09-12");
+    expect((toDate as HTMLInputElement).value).toBe("12. 9. 2026");
 
     fireEvent.change(fromDate, { target: { value: "2026-09-13" } });
-    expect((toDate as HTMLInputElement).value).toBe("2026-09-13");
+    expect((toDate as HTMLInputElement).value).toBe("13. 9. 2026");
   });
 
   it("shows a safe validation error returned by the server action", async () => {

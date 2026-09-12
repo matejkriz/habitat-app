@@ -33,7 +33,13 @@ import {
   getExcuseStatusForDay,
   getLateDays,
 } from "@/lib/excuse-coverage";
-import { ExcuseValidationError, parseExcuseDate, resolveExcuseChildIds } from "@/lib/excuse-rules";
+import {
+  areExcuseEndpointsOpen,
+  CLOSED_EXCUSE_ENDPOINT_ERROR,
+  ExcuseValidationError,
+  parseExcuseDate,
+  resolveExcuseChildIds,
+} from "@/lib/excuse-rules";
 import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
 
@@ -341,6 +347,9 @@ export const submitExcuse = async (formData: FormData) => {
   );
   const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
+  if (!areExcuseEndpointsOpen(fromDate, toDate, schoolDays)) {
+    throw new ExcuseValidationError(CLOSED_EXCUSE_ENDPOINT_ERROR);
+  }
 
   const excuses = await Promise.all(
     childIds.map((childId) =>

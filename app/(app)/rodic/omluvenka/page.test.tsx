@@ -5,18 +5,24 @@ import NewExcusePage from "./page";
 const mocks = vi.hoisted(() => ({
   getParentChildren: vi.fn(),
   submitExcuse: vi.fn(),
+  getExcuseCalendarMonth: vi.fn(),
   push: vi.fn(),
   back: vi.fn(),
+  searchParams: "child=child-1",
 }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, back: mocks.back }),
-  useSearchParams: () => new URLSearchParams("child=child-1"),
+  useSearchParams: () => new URLSearchParams(mocks.searchParams),
 }));
 
 vi.mock("@/app/actions/parent", () => ({
   getParentChildren: mocks.getParentChildren,
   submitExcuse: mocks.submitExcuse,
+}));
+
+vi.mock("@/app/actions/calendar", () => ({
+  getExcuseCalendarMonth: mocks.getExcuseCalendarMonth,
 }));
 
 const children = [
@@ -37,7 +43,12 @@ const children = [
 describe("NewExcusePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.searchParams = "child=child-1";
     mocks.getParentChildren.mockResolvedValue(children);
+    mocks.getExcuseCalendarMonth.mockResolvedValue({
+      monthKey: "2026-09",
+      closedDateKeys: ["2026-09-14"],
+    });
     mocks.submitExcuse.mockResolvedValue({
       success: true,
       excuses: [
@@ -57,6 +68,40 @@ describe("NewExcusePage", () => {
         automaticallyApprovedDayCount: 0,
       },
     });
+  });
+
+  it("disables closed endpoints but allows a range to span across them", async () => {
+    mocks.searchParams = "child=child-1&date=2026-09-10";
+    render(<NewExcusePage />);
+
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.click(screen.getByLabelText("Od"));
+
+    const friday = await screen.findByRole("button", {
+      name: /pátek 11\. září 2026, habitat je zavřený/i,
+    });
+    const customClosure = screen.getByRole("button", {
+      name: /pondělí 14\. září 2026, habitat je zavřený/i,
+    });
+    expect((friday as HTMLButtonElement).disabled).toBe(true);
+    expect((customClosure as HTMLButtonElement).disabled).toBe(true);
+    expect(friday.className).toContain("line-through");
+    expect(customClosure.className).toContain("line-through");
+    expect(
+      (screen.getByRole("button", {
+        name: /čtvrtek 10\. září 2026/i,
+      }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /čtvrtek 10\. září 2026/i }),
+    );
+    fireEvent.click(screen.getByLabelText("Do"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /úterý 15\. září 2026/i }),
+    );
+
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("15. 9. 2026");
   });
 
   it("preselects the current child and lets the parent select both children", async () => {

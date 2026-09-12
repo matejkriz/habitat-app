@@ -105,10 +105,11 @@ describe("TeacherAttendancePage", () => {
     expect(await screen.findByText("Tento den byl označený jako den bez oběda.")).toBeTruthy();
   });
 
-  it("shows whether each excused child was excused on time", async () => {
+  it("does not show excuse timeliness in attendance", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
       { id: "child-2", firstName: "Oskar", lastName: "Okurka", gender: "MALE" },
+      { id: "child-3", firstName: "Pavel", lastName: "Pampeliška", gender: "MALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
@@ -116,6 +117,7 @@ describe("TeacherAttendancePage", () => {
       excuses: [
         { childId: "child-1", state: "ON_TIME" },
         { childId: "child-2", state: "LATE" },
+        { childId: "child-3", state: "LATE_APPROVED", lunchCancelled: false },
       ],
     });
 
@@ -124,46 +126,57 @@ describe("TeacherAttendancePage", () => {
     await waitFor(() => {
       expect(screen.getByText("Žofie Žížalka")).toBeTruthy();
     });
-    expect(screen.getByText("Omluveno včas")).toBeTruthy();
-    expect(screen.getByText("Omluveno pozdě")).toBeTruthy();
-  });
-
-  it("shows director-approved late excuses without calling them on time", async () => {
-    mocks.getAllChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
-    ]);
-    mocks.getAttendanceForDate.mockResolvedValue({
-      isClosed: false,
-      attendance: [],
-      excuses: [{ childId: "child-1", state: "LATE_APPROVED" }],
-    });
-
-    render(<TeacherAttendancePage />);
-
-    expect(await screen.findByText("Pozdě – schváleno")).toBeTruthy();
     expect(screen.queryByText("Omluveno včas")).toBeNull();
+    expect(screen.queryByText("Omluveno pozdě")).toBeNull();
+    expect(screen.queryByText("Pozdě – schváleno")).toBeNull();
+    expect(screen.queryByText("Pozdě – oběd ponechán")).toBeNull();
   });
 
-  it("shows that a late excuse needed no approval when lunch was kept", async () => {
+  it("keeps child details and attendance controls separated on narrow screens", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      {
+        id: "child-1",
+        firstName: "Amália",
+        lastName: "Procházková",
+        gender: "FEMALE",
+      },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false,
+      attendance: [],
+      excuses: [{ childId: "child-1", state: "LATE" }],
+    });
+
+    render(<TeacherAttendancePage />);
+
+    const attendanceToggle = await screen.findByRole<HTMLInputElement>(
+      "checkbox",
+      { name: "Docházka: Amália Procházková" },
+    );
+    const row = attendanceToggle.closest("label");
+    const controls = attendanceToggle.parentElement?.parentElement;
+
+    expect(row?.className).toContain("grid");
+    expect(row?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(controls?.className).toContain("shrink-0");
+    expect(controls?.className).toContain("flex-col");
+    expect(controls?.className).toContain("sm:flex-row");
+  });
+
+  it("keeps partial-day information without showing excuse timeliness", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "child-1", firstName: "Žofie", lastName: "Žížalka", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
       isClosed: false,
       attendance: [],
-      excuses: [
-        {
-          childId: "child-1",
-          state: "LATE_APPROVED",
-          lunchCancelled: false,
-        },
-      ],
+      excuses: [{ childId: "child-1", state: "ON_TIME", dayPart: "MORNING" }],
     });
 
     render(<TeacherAttendancePage />);
 
-    expect(await screen.findByText("Pozdě – oběd ponechán")).toBeTruthy();
-    expect(screen.queryByText("Pozdě – schváleno")).toBeNull();
+    expect(await screen.findByText("Jen odpoledne")).toBeTruthy();
+    expect(screen.queryByText("Omluveno včas")).toBeNull();
   });
 
   it("prefills excused children as absent unless attendance was already saved", async () => {
@@ -209,33 +222,111 @@ describe("TeacherAttendancePage", () => {
 
     await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
     expect(screen.getAllByRole<HTMLInputElement>("checkbox")[0].checked).toBe(true);
-    expect(screen.getByText("Odpoledne nepřijde")).toBeTruthy();
+    expect(screen.getByText("Jen dopoledne")).toBeTruthy();
     const plan = screen.getByRole("region", { name: "Plánovaná účast" });
     expect(within(plan).getByText("2", { selector: "p" })).toBeTruthy();
     expect(within(plan).getByText("1", { selector: "p" })).toBeTruthy();
   });
 
-  it("stacks the all-present action below the totals on narrow screens", async () => {
+  it("confirms attendance, disables the saved button and saves subsequent changes", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
     ]);
     mocks.getAttendanceForDate.mockResolvedValue({
-      isClosed: false,
-      attendance: [],
-      excuses: [],
+      isClosed: false, attendance: [], excuses: [], noLunch: false, canManageLunch: false,
     });
+    mocks.saveAttendance.mockResolvedValue({ success: true, recordCount: 1 });
 
     render(<TeacherAttendancePage />);
 
-    const allPresentButton = await screen.findByRole("button", {
-      name: "Všechny děti přítomné",
-    });
-    const summary = allPresentButton.parentElement;
+    const confirm = await screen.findByRole<HTMLButtonElement>("button", { name: "Potvrdit docházku" });
+    expect(confirm.disabled).toBe(false);
+    expect(screen.queryByText("Všechny děti přítomné")).toBeNull();
+    expect(screen.queryByText("Přítomné děti")).toBeNull();
+    expect(screen.queryByText("Nepřítomné děti")).toBeNull();
+    fireEvent.click(confirm);
 
-    expect(summary?.className).toContain("flex-col");
-    expect(summary?.className).toContain("sm:flex-row");
-    expect(allPresentButton.className).toContain("w-full");
-    expect(allPresentButton.className).toContain("sm:w-auto");
+    expect((await screen.findByRole<HTMLButtonElement>("button", { name: "Uloženo" })).disabled).toBe(true);
+    expect(mocks.saveAttendance.mock.calls[0][0].get("child-child-1")).toBe("present");
+    fireEvent.click(screen.getByRole("checkbox"));
+    const saveChanges = screen.getByRole<HTMLButtonElement>("button", { name: "Uložit změny" });
+    expect(saveChanges.disabled).toBe(false);
+    fireEvent.click(saveChanges);
+
+    expect((await screen.findByRole<HTMLButtonElement>("button", { name: "Uloženo" })).disabled).toBe(true);
+    expect(mocks.saveAttendance.mock.calls[1][0].get("child-child-1")).toBe("absent");
+  });
+
+  it("recognizes stored attendance and returning toggles to their saved values", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false, attendance: [{ childId: "child-1", presence: "PRESENT" }],
+      excuses: [], noLunch: false, canManageLunch: false,
+    });
+    render(<TeacherAttendancePage />);
+
+    expect((await screen.findByRole<HTMLButtonElement>("button", { name: "Uloženo" })).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(screen.getByRole("button", { name: "Uložit změny" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Uloženo" }).disabled).toBe(true);
+  });
+
+  it("keeps failed confirmation available for retry", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false, attendance: [], excuses: [], noLunch: false, canManageLunch: false,
+    });
+    mocks.saveAttendance.mockRejectedValue(new Error("Uložení selhalo"));
+    render(<TeacherAttendancePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Potvrdit docházku" }));
+    expect(await screen.findByText("Uložení selhalo")).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Potvrdit docházku" }).disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Uloženo" })).toBeNull();
+  });
+
+  it("keeps edits made during saving unsaved", async () => {
+    const saving = createDeferred<{ success: true; recordCount: number }>();
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false, attendance: [], excuses: [], noLunch: false, canManageLunch: false,
+    });
+    mocks.saveAttendance.mockReturnValue(saving.promise);
+    render(<TeacherAttendancePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Potvrdit docházku" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(async () => saving.resolve({ success: true, recordCount: 1 }));
+
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Uložit změny" }).disabled).toBe(false);
+    expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
+  });
+
+  it("does not mark another day saved when a pending save completes", async () => {
+    const saving = createDeferred<{ success: true; recordCount: number }>();
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Ada", lastName: "Lovelace", gender: "FEMALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({
+      isClosed: false, attendance: [], excuses: [], noLunch: false, canManageLunch: false,
+    });
+    mocks.saveAttendance.mockReturnValue(saving.promise);
+    render(<TeacherAttendancePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Potvrdit docházku" }));
+    fireEvent.click(screen.getByRole("button", { name: "Předchozí den" }));
+    await screen.findByRole("checkbox");
+    await act(async () => saving.resolve({ success: true, recordCount: 1 }));
+
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Potvrdit docházku" }).disabled).toBe(false);
+    expect(screen.queryByText("Docházka uložena (1 záznamů)")).toBeNull();
   });
 
   it("moves to the previous calendar day", () => {
@@ -321,7 +412,7 @@ describe("TeacherAttendancePage", () => {
     render(<TeacherAttendancePage />);
 
     expect(await screen.findByRole("checkbox")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Uložit docházku" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Potvrdit docházku" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Následující den" }));
 
@@ -331,7 +422,7 @@ describe("TeacherAttendancePage", () => {
     expect(
       screen.queryByRole("button", { name: "Všechny děti přítomné" }),
     ).toBeNull();
-    expect(screen.queryByRole("button", { name: "Uložit docházku" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Potvrdit docházku" })).toBeNull();
   });
 
   it("keeps showing a skeleton when an older date finishes loading", async () => {
@@ -486,7 +577,7 @@ describe("TeacherAttendancePage", () => {
     fireEvent.click(toggle);
     expect(toggle.checked).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Uložit docházku" }));
+    fireEvent.click(screen.getByRole("button", { name: "Potvrdit docházku" }));
     expect(await screen.findByText("Docházka uložena (1 záznamů)")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Následující den" }));
@@ -499,6 +590,7 @@ describe("TeacherAttendancePage", () => {
       screen.queryByRole("status", { name: "Načítání docházky" }),
     ).toBeNull();
     expect(screen.getByText("Nepřítomna", { selector: "span" })).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Uloženo" }).disabled).toBe(true);
   });
 
   it("toggles a child's attendance and gives haptic feedback when the card is tapped", async () => {

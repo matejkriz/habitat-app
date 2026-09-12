@@ -138,7 +138,7 @@ function CalendarDayButton({
             day.isToday ? "bg-gold text-charcoal" : "text-charcoal",
           )}
         >
-          {day.dayNumber}
+          {day.dayNumber}.
         </span>
         <span className="flex items-center gap-1">
           {day.isLunchCancelled && (

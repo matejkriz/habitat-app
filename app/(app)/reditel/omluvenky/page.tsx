@@ -15,6 +15,7 @@ import {
   type ExcuseEditValues,
 } from "@/components/excuses/excuse-editor";
 import { DayPartSelector } from "@/components/excuses/day-part-selector";
+import { ExcuseDatePicker } from "@/components/excuses/excuse-date-picker";
 import {
   Card,
   CardFooter,
@@ -23,7 +24,6 @@ import {
   CardContent,
   Button,
   Badge,
-  Input,
   Select,
   Toggle,
   Textarea,
@@ -262,13 +262,11 @@ export default function ExcuseManagementPage() {
                 ]}
               />
               <div className="grid gap-4 sm:grid-cols-2">
-                <Input
+                <ExcuseDatePicker
                   label="Od"
                   name="fromDate"
-                  type="date"
                   value={createFromDate}
-                  onChange={(event) => {
-                    const nextFromDate = event.target.value;
+                  onChange={(nextFromDate) => {
                     const nextToDate =
                       nextFromDate &&
                       (!createToDate || createToDate < nextFromDate)
@@ -286,14 +284,12 @@ export default function ExcuseManagementPage() {
                   }}
                   required
                 />
-                <Input
+                <ExcuseDatePicker
                   label="Do"
                   name="toDate"
-                  type="date"
                   value={createToDate}
                   min={createFromDate || undefined}
-                  onChange={(event) => {
-                    const nextToDate = event.target.value;
+                  onChange={(nextToDate) => {
                     setCreateToDate(nextToDate);
                     if (
                       createFromDate &&
@@ -364,7 +360,12 @@ export default function ExcuseManagementPage() {
               <Button
                 type="submit"
                 isLoading={isCreating}
-                disabled={isChildrenLoading || children.length === 0}
+                disabled={
+                  isChildrenLoading ||
+                  children.length === 0 ||
+                  !createFromDate ||
+                  !createToDate
+                }
               >
                 Uložit omluvenku
               </Button>

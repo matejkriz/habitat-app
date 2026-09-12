@@ -248,6 +248,34 @@ describe("submitExcuse", () => {
     );
   });
 
+  it("rejects an excuse whose endpoint is a closed day", async () => {
+    const formData = makeFormData();
+    formData.set("fromDate", "2026-09-11");
+    formData.set("toDate", "2026-09-11");
+    mocks.getSchoolDaysInRange.mockResolvedValue([]);
+
+    await expect(submitExcuse(formData)).rejects.toThrow(
+      "Začátek i konec omluvenky musí být v den, kdy je Habitat otevřený.",
+    );
+    expect(mocks.createExcuse).not.toHaveBeenCalled();
+  });
+
+  it("allows open endpoints with closed days inside the range", async () => {
+    const formData = makeFormData();
+    formData.set("fromDate", "2026-09-10");
+    formData.set("toDate", "2026-09-15");
+    mocks.getSchoolDaysInRange.mockResolvedValue([
+      new Date(2026, 8, 10),
+      new Date(2026, 8, 14),
+      new Date(2026, 8, 15),
+    ]);
+
+    await expect(submitExcuse(formData)).resolves.toMatchObject({
+      success: true,
+    });
+    expect(mocks.createExcuse).toHaveBeenCalled();
+  });
+
   it("rejects an invalid day part before creating anything", async () => {
     const formData = makeFormData();
     formData.set("dayPart", "EVENING");
