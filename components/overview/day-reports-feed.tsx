@@ -1,20 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getDayReports } from "@/app/actions/day-details";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { formatDateWithWeekday } from "@/lib/utils";
 
 type ReportsPage = Awaited<ReturnType<typeof getDayReports>>;
 
-export function DayReportsFeed({ initialPage }: { initialPage: ReportsPage }) {
+export function DayReportsFeed({ initialPage, children }: { initialPage: ReportsPage; children?: ReactNode }) {
   const [pages, setPages] = useState<ReportsPage[]>([]);
+  const [previousPage, setPreviousPage] = useState(initialPage);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const inFlight = useRef(false);
   const viewport = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const reports = [initialPage, ...pages].flatMap(page => page.reports);
+  if (initialPage !== previousPage) {
+    setPreviousPage(initialPage);
+    setPages([]);
+  }
   const nextBefore = pages.length ? pages[pages.length - 1].nextBefore : initialPage.nextBefore;
 
   const loadMore = useCallback(async () => {
@@ -45,7 +50,10 @@ export function DayReportsFeed({ initialPage }: { initialPage: ReportsPage }) {
   return (
     <Card aria-labelledby="day-reports-title">
       <CardHeader>
-        <CardTitle id="day-reports-title">Reporty</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle id="day-reports-title">Reporty</CardTitle>
+          {children}
+        </div>
         <p className="text-sm text-charcoal-light">Zprávy z jednotlivých dní, od nejnovějších.</p>
       </CardHeader>
       <CardContent>

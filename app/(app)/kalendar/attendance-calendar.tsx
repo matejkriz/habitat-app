@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/calendar";
 import type { AttendanceCalendarDay, CalendarChildDetail } from "@/lib/attendance-calendar";
 import { TripExpenses } from "@/components/days/trip-expenses";
+import { ReportDialog } from "@/components/days/report-dialog";
 import { DayDetailsForm } from "@/components/days/day-details-form";
 import type { DayDetails } from "@/lib/day-details";
 import { cn } from "@/lib/utils";
@@ -369,8 +370,8 @@ function ChildList({
   );
 }
 
-function DayDetailModal({ day, onClose, canManageDetails, onSaved }: {
-  day: AttendanceCalendarDay; onClose: () => void; canManageDetails: boolean; onSaved: (details: DayDetails) => void;
+function DayDetailModal({ day, onClose, canManageDetails, onSaved, onAddReport }: {
+  onAddReport: () => void; day: AttendanceCalendarDay; onClose: () => void; canManageDetails: boolean; onSaved: (details: DayDetails) => void;
 }) {
   const router = useRouter();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -481,9 +482,10 @@ function DayDetailModal({ day, onClose, canManageDetails, onSaved }: {
           )}
         </div>
 
-        <footer className="border-t border-cream-dark p-4 sm:flex sm:justify-end sm:px-6">
+        <footer className="flex items-center justify-end gap-3 border-t border-cream-dark p-4 sm:px-6">
+          <Button variant="outline" className="h-12 flex-1 sm:flex-none" onClick={onAddReport}>Přidat report</Button>
           <Button
-            className="h-12 w-full sm:w-auto"
+            className="h-12 flex-1 sm:flex-none"
             onClick={() => router.push(`/ucitel/dochazka?date=${day.dateKey}`)}
           >
             Otevřít den
@@ -505,6 +507,7 @@ export function AttendanceCalendar({
   readonly startMonthKey: string | null;
 }) {
   const [calendar, setCalendar] = useState(initialMonth);
+  const [reportDate, setReportDate] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<AttendanceCalendarDay | null>(null);
   const [hoverPreview, setHoverPreview] = useState<{
     day: AttendanceCalendarDay;
@@ -717,10 +720,15 @@ export function AttendanceCalendar({
         />
       )}
       {selectedDay && <DayDetailModal key={selectedDay.dateKey} day={selectedDay} canManageDetails={calendar.canManageDetails ?? false}
+        onAddReport={() => {
+          setReportDate(selectedDay.dateKey);
+          setSelectedDay(null);
+        }}
         onClose={() => setSelectedDay(null)} onSaved={details => {
           setSelectedDay({ ...selectedDay, ...details });
           setCalendar(current => ({ ...current, days: current.days.map(day => day.dateKey === selectedDay.dateKey ? { ...day, ...details } : day) }));
         }} />}
+      {reportDate && <ReportDialog initialDate={reportDate} onClose={() => setReportDate(null)} />}
     </div>
   );
 }

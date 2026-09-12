@@ -11,7 +11,7 @@ import {
   type CalendarExcuse,
 } from "@/lib/attendance-calendar";
 
-vi.mock("@/app/actions/day-details", () => ({ saveDayDetails: vi.fn(), getDayTripExpenses: async () => [], setChildTripExpense: vi.fn() }));
+vi.mock("@/app/actions/day-details", () => ({ getDayReport: async () => null, saveDayReport: vi.fn(), saveDayDetails: vi.fn(), getDayTripExpenses: async () => [], setChildTripExpense: vi.fn() }));
 
 vi.mock("@/app/actions/calendar", () => ({
   getAttendanceCalendarMonth: vi.fn(),
@@ -365,4 +365,17 @@ describe("AttendanceCalendar month limit", () => {
   expect(within(screen.getByRole("dialog")).getByText(name)).toBeTruthy();
   expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Otevřít den" })).toBeTruthy();
   expect(screen.queryByLabelText("Útrata na dítě (Kč)")).toBeNull();
+});
+
+it("opens a report form with the selected calendar date", async () => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+  renderCalendar();
+  fireEvent.click(screen.getAllByRole("button", { name: /pondělí 3\. srpna 2026, 2 očekáváno/i })[0]);
+  const dayDialog = screen.getByRole("dialog");
+  expect(within(dayDialog).getByRole("button", { name: "Otevřít den" })).toBeTruthy();
+  fireEvent.click(within(dayDialog).getByRole("button", { name: "Přidat report" }));
+  const reportDialog = await screen.findByRole("dialog", { name: "Přidat report" });
+  expect((within(reportDialog).getByLabelText("Datum") as HTMLInputElement).value).toBe("2026-08-03");
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
 });

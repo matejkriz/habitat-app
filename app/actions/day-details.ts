@@ -67,7 +67,28 @@ export async function createTripExpense(dateKey: string, expense: number, overri
 
 export async function getDayReports(before?: number) {
   const user = await getDbUser();
-  if (!user || (user.role !== "DIRECTOR" && user.role !== "PARENT")) throw new Error("Unauthorized");
+  if (!user || (user.role !== "DIRECTOR" && user.role !== "PARENT" && user.role !== "TEACHER")) throw new Error("Unauthorized");
   if (before !== undefined && !Number.isFinite(before)) throw new Error("Neplatné datum");
   return db.dayDetails.reports(before);
+}
+
+export async function getDayReport(dateKey: string): Promise<string | null> {
+  const user = await getDbUser();
+  if (!user || (user.role !== "DIRECTOR" && user.role !== "TEACHER")) throw new Error("Unauthorized");
+  const details = await db.dayDetails.get(parseDayDate(dateKey), true);
+  return details.report ?? null;
+}
+
+export async function saveDayReport(dateKey: string, report: string): Promise<void> {
+  const user = await getDbUser();
+  if (!user || (user.role !== "DIRECTOR" && user.role !== "TEACHER")) throw new Error("Unauthorized");
+  const date = parseDayDate(dateKey);
+  if (typeof report !== "string" || !report.trim()) throw new Error("Vyplňte text reportu.");
+  validateDayDetails({ report });
+  await db.dayDetails.save(date, { report }, user.id);
+  revalidatePath("/kalendar");
+  revalidatePath("/ucitel/dochazka");
+  revalidatePath("/reditel");
+  revalidatePath("/rodic");
+  revalidatePath("/");
 }

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { DayReportsSection } from "@/components/overview/day-reports";
 import { redirect } from "next/navigation";
 import { getAttendanceCalendarMonth } from "@/app/actions/calendar";
 import { getAttendanceCalendarStartMonthKey } from "@/lib/attendance-calendar";
@@ -28,5 +30,12 @@ export default async function AttendanceCalendarPage() {
     startMonthKey && currentMonthKey < startMonthKey ? startMonthKey : currentMonthKey;
   const initialMonth = await getAttendanceCalendarMonth(initialMonthKey);
 
-  return <AttendanceCalendar initialMonth={initialMonth} startMonthKey={startMonthKey} />;
+  return (
+    <div className="space-y-6">
+      <AttendanceCalendar initialMonth={initialMonth} startMonthKey={startMonthKey} />
+      <Suspense fallback={<p className="text-charcoal-light">Načítání reportů…</p>}>
+        <DayReportsSection />
+      </Suspense>
+    </div>
+  );
 }
