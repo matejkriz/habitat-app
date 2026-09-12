@@ -47,3 +47,17 @@ export async function setChildTripExpense(dateKey: string, childId: string, amou
   revalidatePath("/reditel");
   revalidatePath("/");
 }
+
+export async function createTripExpense(dateKey: string, expense: number, overrides: { childId: string; amount: number }[]): Promise<void> {
+  const user = await getDbUser();
+  if (!user || user.role !== "DIRECTOR") throw new Error("Unauthorized");
+  const date = parseDayDate(dateKey);
+  validateCrowns(expense);
+  for (const row of overrides) validateCrowns(row.amount);
+  await db.tripFunds.createExpense(date, expense, overrides.map(({ childId, amount }) => ({ childId, amount })), user.id);
+  revalidatePath("/kalendar");
+  revalidatePath("/ucitel/dochazka");
+  revalidatePath("/reditel/deti");
+  revalidatePath("/reditel");
+  revalidatePath("/");
+}

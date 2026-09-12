@@ -494,3 +494,47 @@ export const setChildTripExpense = mutation({
     return null;
   },
 });
+
+export const createTripExpense = mutation({
+  args: {
+    secret: v.string(), date: v.number(), expense: v.number(), recordedById: v.string(),
+    overrides: v.array(v.object({ childId: v.string(), amount: v.number() })),
+  },
+  returns: v.null(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (!Number.isFinite(args.date) || !Number.isFinite(new Date(args.date).getTime())) throw new Error("Neplatné datum");
+    validateCrowns(args.expense);
+    const ids = new Set<string>();
+    for (const row of args.overrides) {
+      validateCrowns(row.amount);
+      if (ids.has(row.childId)) throw new Error("Dítě je uvedené vícekrát");
+      ids.add(row.childId);
+    }
+    const [day, existing, attendance] = await Promise.all([
+      db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique(),
+      db.query("childTripExpenses").withIndex("by_date", q => q.eq("date", args.date)).first(),
+      db.query("attendance").withIndex("by_date", q => q.eq("date", args.date)).collect(),
+    ]);
+    if (day?.expense != null || existing) throw new Error("Pro tento den už je útrata zadaná. Upravte ji v tabulce nebo v detailu dne.");
+    const present = new Set(attendance.filter(row => row.presence === "PRESENT").map(row => row.childId));
+    for (const row of args.overrides) {
+      const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", row.childId)).unique();
+      if (!child) throw new Error("Dítě nebylo nalezeno");
+      if (!present.has(row.childId)) throw new Error("Individuální útratu lze uložit jen přítomnému dítěti. Zkontrolujte docházku.");
+    }
+    const updatedAt = Date.now();
+    const patch = { expense: args.expense, recordedById: args.recordedById, updatedAt };
+    if (day) await db.patch(day._id, patch);
+    else await db.insert("dayDetails", { date: args.date, ...patch });
+    for (const row of args.overrides) {
+      await db.insert("childTripExpenses", { ...row, date: args.date, recordedById: args.recordedById, updatedAt });
+    }
+    await db.insert("auditLogs", {
+      id: `trip_create_${args.date}_${updatedAt}`, userId: args.recordedById,
+      action: "CREATE", entityType: "TripExpense", entityId: String(args.date),
+      previousValue: null, newValue: { expense: args.expense, overrides: args.overrides }, createdAt: updatedAt,
+    });
+    return null;
+  },
+});

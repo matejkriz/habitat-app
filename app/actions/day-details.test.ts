@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), get: vi.fn(), save: vi.fn(), listExpenses: vi.fn(), setExpense: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), createExpense: vi.fn(), get: vi.fn(), save: vi.fn(), listExpenses: vi.fn(), setExpense: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.user }));
-vi.mock("@/lib/db", () => ({ db: { dayDetails: { get: mocks.get, save: mocks.save }, childTripExpenses: { list: mocks.listExpenses, set: mocks.setExpense } } }));
+vi.mock("@/lib/db", () => ({ db: { tripFunds: { createExpense: mocks.createExpense }, dayDetails: { get: mocks.get, save: mocks.save }, childTripExpenses: { list: mocks.listExpenses, set: mocks.setExpense } } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-import { getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense } from "./day-details";
+import { createTripExpense, getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense } from "./day-details";
 
 describe("day detail access", () => {
   beforeEach(() => {
@@ -22,6 +22,8 @@ describe("day detail access", () => {
   it.each(["TEACHER", "PARENT", null])("rejects writes by %s", async role => {
     mocks.user.mockResolvedValue(role ? { role } : null);
     await expect(saveDayDetails("2026-09-10", { name: "Změna" })).rejects.toThrow("Unauthorized");
+    await expect(createTripExpense("2026-09-10", 100, [])).rejects.toThrow("Unauthorized");
+    expect(mocks.createExpense).not.toHaveBeenCalled();
     expect(mocks.save).not.toHaveBeenCalled();
   });
   it("rejects parents reading details and invalid dates before database access", async () => {
@@ -47,6 +49,15 @@ describe("day detail access", () => {
     await expect(setChildTripExpense("2026-09-10", "child", -5)).rejects.toThrow();
     await setChildTripExpense("2026-09-10", "child", 0);
     expect(mocks.setExpense).toHaveBeenCalledWith(new Date(2026, 8, 10), "child", 0, "director");
+  });
+
+  it("validates trip creation before making one database write", async () => {
+    await expect(createTripExpense("2026-02-30", 100, [])).rejects.toThrow();
+    await expect(createTripExpense("2026-09-10", -1, [])).rejects.toThrow();
+    await expect(createTripExpense("2026-09-10", 100, [{ childId: "child", amount: 0.5 }])).rejects.toThrow();
+    expect(mocks.createExpense).not.toHaveBeenCalled();
+    await createTripExpense("2026-09-10", 100, [{ childId: "child", amount: 0 }]);
+    expect(mocks.createExpense).toHaveBeenCalledWith(new Date(2026, 8, 10), 100, [{ childId: "child", amount: 0 }], "director");
   });
 
 });
