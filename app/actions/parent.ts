@@ -376,7 +376,8 @@ export const submitExcuse = async (formData: FormData) => {
   revalidatePath("/rodic/omluvenka");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return {
     success: true,
@@ -447,7 +448,8 @@ export const editParentExcuse = async (
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   return { success: true as const, excuse: updated };
 };
 
@@ -470,7 +472,8 @@ export const deleteParentExcuse = async (excuseId: string): Promise<void> => {
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 };
 
 /**

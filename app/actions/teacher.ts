@@ -210,7 +210,8 @@ export const setNoLunchForDate = async (
 
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return { noLunch: savedNoLunch };
 };
@@ -277,7 +278,8 @@ export const saveAttendance = async (
 
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/rodic");
 
   return { success: true, recordCount: records.length };

@@ -22,6 +22,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     case UserRole.TEACHER:
       return <TeacherAttendancePage />;
     case UserRole.DIRECTOR:
-      return <DirectorDashboard />;
+      return <DirectorDashboard searchParams={searchParams} />;
   }
 }

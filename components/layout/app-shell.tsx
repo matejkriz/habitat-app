@@ -155,25 +155,6 @@ const roleNavItems: Record<UserRole, NavItem[]> = {
       ),
     },
     {
-      href: "/reditel/obedy",
-      label: "Obědy",
-      icon: (
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 3v7a2 2 0 002 2h1m0-9v18m9-18v18m0-18c2.21 0 4 2.239 4 5s-1.79 5-4 5"
-          />
-        </svg>
-      ),
-    },
-    {
       href: "/reditel/omluvenky",
       label: "Omluvenky",
       icon: (

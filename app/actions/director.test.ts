@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getDbUser: vi.fn(),
+  tripFundOverview: vi.fn(),
   childrenList: vi.fn(),
   childrenGet: vi.fn(),
   childrenUpdate: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
 vi.mock("@/lib/db", () => ({
   db: {
+    tripFunds: { overview: mocks.tripFundOverview },
     children: {
       list: mocks.childrenList,
       get: mocks.childrenGet,
@@ -54,6 +56,7 @@ import {
   getExcuseChildren,
   getExcuses,
   getLunchOverview,
+  getTripFundOverview,
   updateChild,
   updateExcuse,
 } from "./director";
@@ -539,5 +542,27 @@ describe("createDirectorExcuse", () => {
     await expect(createDirectorExcuse(formData)).rejects.toThrow("Unauthorized");
     expect(mocks.childrenGet).not.toHaveBeenCalled();
     expect(mocks.excusesCreate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("getTripFundOverview", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([null, { role: "PARENT" }, { role: "TEACHER" }])("hides fund data from non-directors (%j)", async user => {
+    mocks.getDbUser.mockResolvedValue(user);
+    await expect(getTripFundOverview()).rejects.toThrow();
+    expect(mocks.tripFundOverview).not.toHaveBeenCalled();
+  });
+
+  it("returns the complete ledger sorted by child surname", async () => {
+    mocks.getDbUser.mockResolvedValue({ id: "director", role: "DIRECTOR" });
+    mocks.tripFundOverview.mockResolvedValue({ days: [], children: [
+      { childId: "z", firstName: "Adam", lastName: "Zelený", fundSent: 500, fundSpent: 80, fundBalance: 420, amounts: [] },
+      { childId: "a", firstName: "Petr", lastName: "Adam", fundSent: null, fundSpent: 0, fundBalance: 0, amounts: [] },
+    ] });
+    const overview = await getTripFundOverview();
+    expect(overview.children.map(child => child.childId)).toEqual(["a", "z"]);
+    expect(overview.children[1].fundBalance).toBe(420);
   });
 });

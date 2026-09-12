@@ -1,6 +1,6 @@
 "use server";
 
-import { validateCrowns, type TripFund } from "@/lib/day-details";
+import { validateCrowns, type TripFund, type TripFundOverview } from "@/lib/day-details";
 
 import { getDbUser, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -187,6 +187,16 @@ async function getSchoolDaysCoveringExcuses(
     { from: Number.POSITIVE_INFINITY, to: Number.NEGATIVE_INFINITY },
   );
   return getSchoolDaysInRange(new Date(from), new Date(to));
+}
+
+export async function getTripFundOverview(): Promise<TripFundOverview> {
+  await requireDirector();
+  const overview: TripFundOverview = await db.tripFunds.overview();
+  return {
+    ...overview,
+    children: overview.children.sort((a, b) =>
+      a.lastName.localeCompare(b.lastName, "cs") || a.firstName.localeCompare(b.firstName, "cs")),
+  };
 }
 
 /**
@@ -556,7 +566,8 @@ export async function createDirectorExcuse(
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/ucitel/dochazka");
 
   return { success: true };
@@ -614,7 +625,8 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/ucitel/dochazka");
 
   return updated;
@@ -654,7 +666,8 @@ export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
   return { success: true as const, excuse: updated };
@@ -665,7 +678,8 @@ export async function deleteExcuse(excuseId: string): Promise<void> {
   await deleteExcuseRecord(excuseId, user.id);
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
 }
@@ -722,7 +736,8 @@ export async function addClosedDay(dateStr: string, description?: string) {
 
   revalidatePath("/reditel/volne-dny");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return closedDay;
 }
@@ -761,7 +776,8 @@ export async function removeClosedDay(id: string) {
 
   revalidatePath("/reditel/volne-dny");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 }
 
 /**
@@ -1006,7 +1022,8 @@ export async function createChild(
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return child;
 }
@@ -1114,12 +1131,12 @@ export async function updateChild(
   }
 
   revalidatePath("/reditel/deti");
-  revalidatePath("/reditel");
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/rodic");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return updated;
 }
@@ -1158,7 +1175,8 @@ export async function toggleChildActive(childId: string, active: boolean) {
   revalidatePath("/reditel/deti");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return updated;
 }
@@ -1227,7 +1245,8 @@ export async function assignParentToChild(parentId: string, childId: string) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 
   return parentChild;
 }
@@ -1287,5 +1306,6 @@ export async function removeParentFromChild(parentId: string, childId: string) {
 
   revalidatePath("/reditel/deti");
   revalidatePath("/rodic");
-  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel");
+  revalidatePath("/");
 }
