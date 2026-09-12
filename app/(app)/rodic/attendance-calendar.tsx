@@ -204,15 +204,20 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
                 onPointerLeave={cancelLongPress}
                 onPointerCancel={cancelLongPress}
                 onContextMenu={(event) => event.preventDefault()}
-                aria-label={`${fullDateLabel(day.date)}, ${details.label}${disabled ? "" : ", zadat omluvenku"}`}
+                aria-label={`${fullDateLabel(day.date)}${day.name ? `, ${day.name}` : ""}, ${details.label}${disabled ? "" : ", zadat omluvenku"}`}
                 className={cn(
-                  "relative flex min-h-16 touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:min-h-24 sm:items-stretch sm:p-2.5",
+                  "relative flex min-w-0 min-h-16 touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:min-h-24 sm:items-stretch sm:p-2.5",
                   details.className,
                   disabled && "cursor-default active:scale-100",
                   day.isToday && "ring-2 ring-gold ring-offset-2",
                 )}
               >
                 <span className="text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
+                {day.name && (
+                  <span className="my-1 w-full break-words text-center text-[10px] font-semibold leading-tight sm:text-left sm:text-xs">
+                    {day.name}
+                  </span>
+                )}
                 <span className="flex flex-col items-center gap-1 sm:items-start">
                   <span className={cn("size-2 rounded-full sm:hidden", details.dotClassName)} />
                   <span className="hidden text-[11px] font-bold leading-tight sm:block">

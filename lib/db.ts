@@ -1161,6 +1161,9 @@ export const db: any = {
   },
 
   dayDetails: {
+    reports: (before?: number) => convexQuery(api.db.listDayReports, {
+      secret: getServerSecret(), ...(before === undefined ? {} : { before }),
+    }),
     get: (date: Date, includeReport = false) => convexQuery(api.db.getDayDetails, {
       secret: getServerSecret(), date: date.getTime(), includeReport,
     }),

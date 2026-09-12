@@ -385,6 +385,21 @@ export const getDayDetails = query({
   },
 });
 
+export const listDayReports = query({
+  args: { secret: v.string(), before: v.optional(v.number()) },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const rows = await db.query("dayReports")
+      .withIndex("by_date", q => args.before === undefined ? q : q.lt("date", args.before))
+      .order("desc").take(5);
+    const reports = await Promise.all(rows.map(async row => {
+      const day = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", row.date)).unique();
+      return { date: row.date, name: day?.name ?? null, report: row.report };
+    }));
+    return { reports, nextBefore: rows.length === 5 ? rows[rows.length - 1].date : null };
+  },
+});
+
 export const listDayDetails = query({
   args: { secret: v.string(), from: v.number(), to: v.number() },
   handler: async ({ db }, args) => {

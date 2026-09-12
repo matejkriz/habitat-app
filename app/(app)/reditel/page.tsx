@@ -1,3 +1,4 @@
+import { DayReportsSection } from "@/components/overview/day-reports";
 import { Suspense } from "react";
 import Link from "next/link";
 import { getDashboardStats } from "@/app/actions/director";
@@ -152,6 +153,10 @@ async function DashboardContent({ searchParams }: { searchParams: SearchParams }
           </CardContent>
         </Card>
       </div>
+
+      <Suspense fallback={<p className="text-charcoal-light">Načítání reportů…</p>}>
+        <DayReportsSection />
+      </Suspense>
 
       {/* Recent Excuses */}
       <Card>

@@ -12,6 +12,20 @@ describe("day details and trip funds", () => {
   beforeEach(() => vi.stubEnv("PUSH_INTERNAL_SECRET", secret));
   afterEach(() => vi.unstubAllEnvs());
 
+  it("pages reports newest first, including days without a name", async () => {
+    const t = convexTest(schema, modules);
+    for (let index = 0; index < 7; index++) {
+      await t.mutation(api.db.saveDayDetails, { ...change, date: date + index * 86400000, name: index === 6 ? null : "Výlet" });
+    }
+    const first = await t.query(api.db.listDayReports, { secret });
+    expect(first.reports).toHaveLength(5);
+    expect(first.reports[0]).toEqual({ date: date + 6 * 86400000, name: null, report: change.report });
+    const second = await t.query(api.db.listDayReports, { secret, before: first.nextBefore! });
+    expect(second.reports.map(item => item.date)).toEqual([date + 86400000, date]);
+    expect(second.nextBefore).toBeNull();
+    await expect(t.query(api.db.listDayReports, { secret: "wrong" })).rejects.toThrow();
+  });
+
   it("updates one day without losing its report and allows clearing optional fields", async () => {
     const t = convexTest(schema, modules);
     await t.mutation(api.db.saveDayDetails, change);
