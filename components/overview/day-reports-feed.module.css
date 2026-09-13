@@ -1,0 +1,14 @@
+.report { animation: report-older 240ms ease-out both; }
+.report[data-direction="newer"] { animation-name: report-newer; }
+
+@keyframes report-older {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes report-newer {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .report { animation: none; }
+}
