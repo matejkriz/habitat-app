@@ -105,7 +105,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
     ]),
   );
   const noLunchDateKeys = new Set(noLunchDays.map((day) => getLocalDateKey(day.date)));
-  const days = schoolDays.map((date) => ({
+  const days = schoolDays.filter((date) => !noLunchDateKeys.has(getLocalDateKey(date))).map((date) => ({
     date,
     key: getLocalDateKey(date),
     day: date.getDate(),

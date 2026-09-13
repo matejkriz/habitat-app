@@ -77,7 +77,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
           </Link>
           <div className="min-w-40 px-2 text-center">
             <p className="font-bold text-charcoal">{monthLabel}</p>
-            <p className="text-xs text-charcoal-light">{overview.days.length} školních dnů</p>
+            <p className="text-xs text-charcoal-light">{overview.days.length} dnů s obědem</p>
           </div>
           <Link
             href={monthHref(adjacentMonth(month, 1))}
@@ -96,7 +96,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-charcoal">{monthLabel}</h3>
-              <p className="text-sm text-charcoal-light">Volné dny jsou automaticky vynechané</p>
+              <p className="text-sm text-charcoal-light">Volné dny a dny bez oběda jsou automaticky vynechané</p>
             </div>
             {month !== currentMonth() && (
               <Link
@@ -117,7 +117,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
           </div>
         ) : overview.days.length === 0 ? (
           <div className="px-6 py-20 text-center text-charcoal-light">
-            Tento měsíc nemá žádné školní dny.
+            Tento měsíc nemá žádné dny s obědem.
           </div>
         ) : (
           <div className="overflow-x-auto overscroll-x-contain max-md:max-h-[calc(100dvh-8rem)] max-md:overflow-y-auto max-md:overscroll-y-contain">

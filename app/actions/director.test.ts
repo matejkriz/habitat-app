@@ -176,13 +176,14 @@ describe("getLunchOverview", () => {
     expect(overview.children[0].payableLunches).toBe(1);
   });
 
-  it("marks every child gray and charges nobody on a day without lunch", async () => {
+  it("omits days without lunch and keeps the remaining statuses and totals aligned", async () => {
     mocks.excusesList.mockResolvedValue([]);
     mocks.noLunchDaysList.mockResolvedValue([{ date: AUG(19) }]);
 
     const overview = await getLunchOverview("2026-08");
 
-    expect(overview.children[0].statuses).toEqual(["no-lunch", "unexcused"]);
+    expect(overview.days.map(day => day.key)).toEqual(["2026-08-20"]);
+    expect(overview.children[0].statuses).toEqual(["unexcused"]);
     expect(overview.children[0].payableLunches).toBe(1);
   });
 
