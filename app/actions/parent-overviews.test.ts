@@ -42,6 +42,28 @@ describe("parent overview actions", () => {
     expect(JSON.stringify(data)).not.toContain("stranger");
   });
 
+  it("omits days without lunch while retaining the other days and totals", async () => {
+    const nextDay = new Date(2026, 8, 11);
+    mocks.schoolDays.mockResolvedValue([date, nextDay]);
+    mocks.noLunchDays.mockResolvedValue([{ date: nextDay }]);
+
+    const data = await getParentLunchOverview("2026-09");
+
+    expect(data.days.map(day => day.key)).toEqual(["2026-09-10"]);
+    expect(data.children[0].statuses).toEqual(["present"]);
+    expect(data.children[0].payableLunches).toBe(1);
+  });
+
+  it("returns no columns or charges when the whole month has no lunches", async () => {
+    mocks.noLunchDays.mockResolvedValue([{ date }]);
+
+    const data = await getParentLunchOverview("2026-09");
+
+    expect(data.days).toEqual([]);
+    expect(data.children[0].statuses).toEqual([]);
+    expect(data.children[0].payableLunches).toBe(0);
+  });
+
   it("derives fund ownership from the session and never accepts a requested parent id", async () => {
     await getParentTripFundOverview();
     expect(mocks.parentFunds).toHaveBeenCalledWith("parent");

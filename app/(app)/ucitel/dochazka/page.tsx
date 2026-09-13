@@ -441,7 +441,7 @@ export default function TeacherAttendancePage() {
                   />
                   <span className="flex flex-col">
                     <span id="no-lunch-label" className="text-sm font-medium text-charcoal">Tento den nebyl oběd</span>
-                    <span id="no-lunch-description" className="text-xs text-charcoal-light">Den se v přehledu obědů označí šedě a žádnému dítěti se nezapočítá.</span>
+                    <span id="no-lunch-description" className="text-xs text-charcoal-light">Den se v přehledu obědů vynechá a žádnému dítěti se nezapočítá.</span>
                   </span>
                 </label>
               </DayDetailsForm>
