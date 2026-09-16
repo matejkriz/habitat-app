@@ -1,14 +1,16 @@
-.report { animation: report-older 240ms ease-out both; }
-.report[data-direction="newer"] { animation-name: report-newer; }
+.viewport {
+  position: relative;
+  overflow-anchor: none;
+}
 
-@keyframes report-older {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+.outgoing {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
 }
-@keyframes report-newer {
-  from { opacity: 0; transform: translateY(-12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .report { animation: none; }
+
+/* The date receives reading focus after navigation; it is not an interactive control. */
+.date:focus,
+.date:focus-visible {
+  outline: none;
 }

@@ -105,3 +105,81 @@ it("shows previously imported photo album lines as a descriptive Markdown link",
   expect(link.getAttribute('href')).toBe('https://photos.app.goo.gl/example?album=1&view=2');
   expect(screen.getByText('Výlet byl moc hezký.')).toBeTruthy();
 });
+
+function mockAnimations(oldHeight = 400, newHeight = 800) {
+  const animations: { element: Element; frames: Keyframe[]; finish: () => void; cancel: ReturnType<typeof vi.fn> }[] = [];
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "animate");
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: function (this: HTMLElement, frames: Keyframe[]) {
+    let finish!: () => void;
+    const finished = new Promise<void>(resolve => { finish = resolve; });
+    const cancel = vi.fn();
+    animations.push({ element: this, frames, finish, cancel });
+    return { finished, cancel };
+  } });
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    return { height: this.dataset.reportPanel === "current" ? newHeight : oldHeight } as DOMRect;
+  });
+  return { animations, restore: () => {
+    if (original) Object.defineProperty(HTMLElement.prototype, "animate", original);
+    else delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  } };
+}
+
+it.each([[400, 800], [800, 400]])("slides at %ipx before resizing to %ipx and blocks repeated clicks", async (oldHeight, newHeight) => {
+  const { animations, restore } = mockAnimations(oldHeight, newHeight);
+  try {
+    render(<DayReportsFeed initialPage={{ reports: days, nextBefore: null }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Starší report/ }));
+    expect(animations).toHaveLength(2);
+    const viewport = screen.getByRole("region", { name: "Denní reporty" });
+    expect(viewport.style.height).toBe(`${oldHeight}px`);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    const next = screen.getByRole("button", { name: /Starší report.*3\. 9/ });
+    expect((next as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(next);
+    await act(async () => { animations[0].finish(); animations[1].finish(); });
+    expect(animations).toHaveLength(3);
+    expect(animations[2].frames).toEqual([{ height: `${oldHeight}px` }, { height: `${newHeight}px` }]);
+    expect(viewport.style.height).toBe(`${oldHeight}px`);
+    expect((next as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => animations[2].finish());
+    expect(viewport.style.height).toBe("");
+    expect(screen.getAllByRole("article", { hidden: true })).toHaveLength(1);
+    expect((next as HTMLButtonElement).disabled).toBe(false);
+    expect(document.activeElement?.textContent).toContain("8. 9. 2026");
+    fireEvent.click(screen.getByRole("button", { name: /Novější report/ }));
+    expect(animations[3].frames[1].transform).toBe(`translateY(${newHeight}px)`);
+    expect(animations[4].frames[0].transform).toBe(`translateY(${-newHeight}px)`);
+    await act(async () => { animations[3].finish(); animations[4].finish(); });
+    await act(async () => animations[5].finish());
+    expect(screen.queryByRole("button", { name: /Novější report/ })).toBeNull();
+  } finally { cleanup(); restore(); }
+});
+
+it("skips movement and height animation when reduced motion is requested", () => {
+  const { animations, restore } = mockAnimations();
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+  try {
+    render(<DayReportsFeed initialPage={{ reports: days, nextBefore: null }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Starší report/ }));
+    expect(animations).toHaveLength(0);
+    expect(screen.getByText("Zážitky ze dne 8.")).toBeTruthy();
+    expect(screen.getAllByRole("article", { hidden: true })).toHaveLength(1);
+  } finally { cleanup(); restore(); }
+});
+
+it("cancels a transition when refreshed reports replace the reader", async () => {
+  const { animations, restore } = mockAnimations();
+  try {
+    const { rerender } = render(<DayReportsFeed initialPage={{ reports: days, nextBefore: null }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Starší report/ }));
+    expect(animations).toHaveLength(2);
+    rerender(<DayReportsFeed initialPage={{ reports: [{ ...days[0], report: "Čerstvý report" }], nextBefore: null }} />);
+    expect(animations.every(animation => animation.cancel.mock.calls.length > 0)).toBe(true);
+    await act(async () => { animations[0].finish(); animations[1].finish(); });
+    expect(animations).toHaveLength(2);
+    expect(screen.getByText("Čerstvý report")).toBeTruthy();
+  } finally { cleanup(); restore(); }
+});
