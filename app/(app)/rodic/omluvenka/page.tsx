@@ -470,7 +470,7 @@ export default function NewExcusePage() {
               <ul className="text-sm text-charcoal-light space-y-1">
                 <li className="flex items-start gap-2">
                   <span className="text-gold">•</span>
-                  Pro automatické odhlášení oběda odešlete omluvenku nejpozději do 9:00 den před absencí
+                  Pro automatické odhlášení oběda odešlete omluvenku do 9:00 předchozího všedního dne. Na pondělí tedy v pátek do 9:00
                 </li>
               </ul>
             </div>

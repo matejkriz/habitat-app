@@ -1,7 +1,7 @@
 /**
  * Excuse Rules for Habitat Attendance System
  *
- * Core rule: If the excuse is submitted before 9:00 AM the day before fromDate,
+ * Core rule: If the excuse is submitted before 9:00 AM on the preceding weekday,
  * the absence is automatically EXCUSED. Otherwise, it's UNEXCUSED (late excuse).
  */
 
@@ -66,12 +66,7 @@ export function resolveExcuseChildIds(
  * @returns true if the excuse should be auto-approved
  */
 export function isAutoApproved(submittedAt: Date, fromDate: Date): boolean {
-  // Calculate deadline: 9:00 AM the day before fromDate
-  const deadline = new Date(fromDate);
-  deadline.setDate(deadline.getDate() - 1);
-  deadline.setHours(9, 0, 0, 0);
-
-  return submittedAt < deadline;
+  return submittedAt < getAutoApprovalDeadline(fromDate);
 }
 
 /**
@@ -82,7 +77,9 @@ export function isAutoApproved(submittedAt: Date, fromDate: Date): boolean {
  */
 export function getAutoApprovalDeadline(fromDate: Date): Date {
   const deadline = new Date(fromDate);
-  deadline.setDate(deadline.getDate() - 1);
+  do {
+    deadline.setDate(deadline.getDate() - 1);
+  } while (deadline.getDay() === 0 || deadline.getDay() === 6);
   deadline.setHours(9, 0, 0, 0);
   return deadline;
 }

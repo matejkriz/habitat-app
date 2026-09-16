@@ -30,6 +30,24 @@ const excuse = (overrides: Partial<CoveringExcuse> = {}): CoveringExcuse => ({
 });
 
 describe("per-day lateness", () => {
+  it("keeps Monday lunch payable for a weekend excuse but cancels Tuesday lunch", () => {
+    const weekendExcuse = excuse({
+      fromDate: AUG(24),
+      toDate: AUG(25),
+      submittedAt: AUG(22, 8),
+    });
+
+    expect(getLateDays(weekendExcuse)).toEqual([AUG(24)]);
+    expect(getDayCoverage([weekendExcuse], AUG(24))).toMatchObject({
+      excused: false,
+      lunchCancelled: false,
+    });
+    expect(getDayCoverage([weekendExcuse], AUG(25))).toMatchObject({
+      excused: true,
+      lunchCancelled: true,
+    });
+  });
+
   it("applies the deadline to each day instead of the start of the range", () => {
     // Submitted after 9:00 on 18. 8., so only 19. 8. missed its deadline.
     const holiday = excuse({ submittedAt: AUG(18, 10) });
