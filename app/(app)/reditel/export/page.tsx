@@ -85,7 +85,7 @@ export default function ExportPage() {
     }
   };
 
-  const setDateRange = (range: "month" | "quarter" | "year") => {
+  const getDateRange = (range: "month" | "quarter" | "year") => {
     const now = new Date();
     let start: Date;
     let end: Date;
@@ -106,8 +106,16 @@ export default function ExportPage() {
         break;
     }
 
-    setStartDate(start.toISOString().split("T")[0]);
-    setEndDate(end.toISOString().split("T")[0]);
+    return [start.toISOString().split("T")[0], end.toISOString().split("T")[0]] as const;
+  };
+  const setDateRange = (range: "month" | "quarter" | "year") => {
+    const [start, end] = getDateRange(range);
+    setStartDate(start);
+    setEndDate(end);
+  };
+  const isRangeSelected = (range: "month" | "quarter" | "year") => {
+    const [start, end] = getDateRange(range);
+    return startDate === start && endDate === end;
   };
 
   return (
@@ -156,6 +164,8 @@ export default function ExportPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                aria-pressed={isRangeSelected("month")}
+                className={isRangeSelected("month") ? "bg-gold/15 ring-2 ring-gold" : undefined}
                 onClick={() => setDateRange("month")}
               >
                 Tento měsíc
@@ -164,6 +174,8 @@ export default function ExportPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                aria-pressed={isRangeSelected("quarter")}
+                className={isRangeSelected("quarter") ? "bg-gold/15 ring-2 ring-gold" : undefined}
                 onClick={() => setDateRange("quarter")}
               >
                 Tento kvartál
@@ -172,6 +184,8 @@ export default function ExportPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                aria-pressed={isRangeSelected("year")}
+                className={isRangeSelected("year") ? "bg-gold/15 ring-2 ring-gold" : undefined}
                 onClick={() => setDateRange("year")}
               >
                 Tento rok

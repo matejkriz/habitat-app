@@ -87,3 +87,11 @@ describe("ExcuseEditor", () => {
     expect(confirm).toHaveBeenCalledWith("Opravdu chcete tuto omluvenku smazat?");
   });
 });
+
+it("prevents reopening an editor while deleting its excuse", async () => {
+  vi.stubGlobal("confirm", vi.fn(() => true));
+  const onDelete = vi.fn(() => new Promise<void>(() => {}));
+  render(<ExcuseEditor excuse={{ id: "locked", fromDate: "2026-09-10", toDate: "2026-09-10", dayPart: "FULL_DAY", reason: null }} onDelete={onDelete} onSave={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Smazat" }));
+  expect((screen.getByRole("button", { name: "Upravit" }) as HTMLButtonElement).disabled).toBe(true);
+});

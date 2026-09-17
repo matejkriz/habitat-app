@@ -16,6 +16,7 @@ export function ReportDialog({ initialDate, onClose }: {
   const [date, setDate] = useState(() => initialDate ?? getLocalDateKey(new Date()));
   const [loaded, setLoaded] = useState<{ date: string; text?: string; original?: string; error?: string } | null>(null);
   const [retry, setRetry] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const savingRef = useRef(false);
@@ -33,7 +34,7 @@ export function ReportDialog({ initialDate, onClose }: {
         if (active) setLoaded({ date, error: "Report se nepodařilo načíst. Zkontrolujte datum a zkuste to znovu." });
       }
     }
-    void load();
+    void load().finally(() => { if (active) setRetrying(false); });
     return () => { active = false; };
   }, [date, retry]);
 
@@ -69,7 +70,7 @@ export function ReportDialog({ initialDate, onClose }: {
         {current?.error && (
           <div>
             <p role="alert" className="text-sm text-coral-dark">{current.error}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => setRetry(value => value + 1)}>Zkusit znovu</Button>
+            <Button type="button" variant="outline" size="sm" isLoading={retrying} onClick={() => { setRetrying(true); setRetry(value => value + 1); }}>Zkusit znovu</Button>
           </div>
         )}
         <Textarea

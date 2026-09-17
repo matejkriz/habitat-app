@@ -181,7 +181,7 @@ function ReportNavigation({ date, direction, disabled, onClick }: { date: number
       onClick={onClick}
       disabled={disabled}
       aria-label={`${older ? "Starší" : "Novější"} report: ${dateFormat.format(date)}`}
-      className={`group flex w-full touch-manipulation items-center justify-center gap-3 py-4 text-left ${older ? "border-t" : "border-b"} border-cream-dark`}
+      className={`group rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex w-full touch-manipulation items-center justify-center gap-3 py-4 text-left ${older ? "border-t" : "border-b"} border-cream-dark`}
     >
       <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-full border border-sage-light bg-cream transition-colors group-hover:border-sage-dark group-hover:bg-cream-dark">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">

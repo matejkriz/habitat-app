@@ -361,6 +361,7 @@ export default function TeacherAttendancePage() {
                 type="button"
                 variant="outline"
                 aria-label="Předchozí den"
+                aria-busy={isLoading || undefined}
                 onClick={() => handleDayChange(-1)}
                 className="h-11 w-11 shrink-0 p-0 sm:h-12 sm:w-12"
               >
@@ -392,6 +393,7 @@ export default function TeacherAttendancePage() {
                 type="button"
                 variant="outline"
                 aria-label="Následující den"
+                aria-busy={isLoading || undefined}
                 onClick={() => handleDayChange(1)}
                 className="h-11 w-11 shrink-0 p-0 sm:h-12 sm:w-12"
               >
@@ -429,7 +431,7 @@ export default function TeacherAttendancePage() {
                 if (cachedDay) dayCache.current.set(selectedDate, { ...cachedDay, details: next });
                 if (selectedDateRef.current === selectedDate) setDetails(next);
               }}>
-                <label className={`flex min-h-11 items-start gap-3 py-2 ${isSavingNoLunch || isClosed ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
+                <label className={`selection-control flex min-h-11 items-start gap-3 py-2 ${isSavingNoLunch || isClosed ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
                   <input
                     type="checkbox"
                     checked={noLunch}
@@ -441,6 +443,7 @@ export default function TeacherAttendancePage() {
                   />
                   <span className="flex flex-col">
                     <span id="no-lunch-label" className="text-sm font-medium text-charcoal">Tento den nebyl oběd</span>
+                    {isSavingNoLunch && <span role="status" className="text-xs text-charcoal-light">Ukládám…</span>}
                     <span id="no-lunch-description" className="text-xs text-charcoal-light">Den se v přehledu obědů vynechá a žádnému dítěti se nezapočítá.</span>
                   </span>
                 </label>
@@ -533,7 +536,7 @@ export default function TeacherAttendancePage() {
                 {children.map((child) => (
                   <label
                     key={child.id}
-                    className={`grid min-h-12 select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg border p-3 transition-[background-color,border-color,transform] ${
+                    className={`selection-control grid min-h-12 select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg border p-3 transition-[background-color,border-color,transform] ${
                       isInFuture
                         ? "cursor-default"
                         : "cursor-pointer active:scale-[0.99]"

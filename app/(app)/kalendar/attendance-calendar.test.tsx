@@ -21,6 +21,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+import { getAttendanceCalendarMonth } from "@/app/actions/calendar";
 import { AttendanceCalendar } from "./attendance-calendar";
 
 const children = [
@@ -378,4 +379,12 @@ it("opens a report form with the selected calendar date", async () => {
   const reportDialog = await screen.findByRole("dialog", { name: "Přidat report" });
   expect((within(reportDialog).getByLabelText("Datum") as HTMLInputElement).value).toBe("2026-08-03");
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
+});
+
+it("disables returning to today and opening stale days while a month loads", () => {
+  vi.mocked(getAttendanceCalendarMonth).mockImplementationOnce(() => new Promise(() => {}));
+  renderCalendar();
+  fireEvent.click(screen.getByRole("button", { name: "Další měsíc" }));
+  expect((screen.getByRole("button", { name: "Zpět na dnešek" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((getTodayButton() as HTMLButtonElement).disabled).toBe(true);
 });

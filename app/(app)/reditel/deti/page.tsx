@@ -58,11 +58,8 @@ export default function ChildrenManagementPage() {
   const [assignError, setAssignError] = useState("");
 
   // Loading states
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [removingParent, setRemovingParent] = useState<{
-    parentId: string;
-    childId: string;
-  } | null>(null);
+  const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(new Set());
+  const [removingParents, setRemovingParents] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -167,7 +164,8 @@ export default function ChildrenManagementPage() {
   };
 
   const handleToggleActive = async (childId: string, currentActive: boolean) => {
-    setTogglingId(childId);
+    if (togglingIds.has(childId)) return;
+    setTogglingIds(ids => new Set(ids).add(childId));
     try {
       await toggleChildActive(childId, !currentActive);
       setChildren((prev) =>
@@ -181,7 +179,11 @@ export default function ChildrenManagementPage() {
     } catch (err) {
       console.error("Failed to toggle child status:", err);
     } finally {
-      setTogglingId(null);
+      setTogglingIds(ids => {
+        const next = new Set(ids);
+        next.delete(childId);
+        return next;
+      });
     }
   };
 
@@ -225,7 +227,9 @@ export default function ChildrenManagementPage() {
   };
 
   const handleRemoveParent = async (parentId: string, childId: string) => {
-    setRemovingParent({ parentId, childId });
+    const key = `${childId}:${parentId}`;
+    if (removingParents.has(key)) return;
+    setRemovingParents(ids => new Set(ids).add(key));
     try {
       await removeParentFromChild(parentId, childId);
       setChildren((prev) =>
@@ -238,7 +242,11 @@ export default function ChildrenManagementPage() {
     } catch (err) {
       console.error("Failed to remove parent:", err);
     } finally {
-      setRemovingParent(null);
+      setRemovingParents(ids => {
+        const next = new Set(ids);
+        next.delete(key);
+        return next;
+      });
     }
   };
 
@@ -383,8 +391,8 @@ export default function ChildrenManagementPage() {
                   setEditGender={setEditGender}
                   setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
                   isSavingEdit={isSavingEdit}
-                  togglingId={togglingId}
-                  removingParent={removingParent}
+                  togglingIds={togglingIds}
+                  removingParents={removingParents}
                   onStartEdit={() => handleStartEdit(child)}
                   onCancelEdit={handleCancelEdit}
                   onSaveEdit={handleSaveEdit}
@@ -422,8 +430,8 @@ export default function ChildrenManagementPage() {
                   setEditGender={setEditGender}
                   setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
                   isSavingEdit={isSavingEdit}
-                  togglingId={togglingId}
-                  removingParent={removingParent}
+                  togglingIds={togglingIds}
+                  removingParents={removingParents}
                   onStartEdit={() => handleStartEdit(child)}
                   onCancelEdit={handleCancelEdit}
                   onSaveEdit={handleSaveEdit}
@@ -518,8 +526,8 @@ interface ChildRowProps {
   setEditGender: (value: ChildGender | "") => void;
   setEditDoesNotTakeLunch: (value: boolean) => void;
   isSavingEdit: boolean;
-  togglingId: string | null;
-  removingParent: { parentId: string; childId: string } | null;
+  togglingIds: ReadonlySet<string>;
+  removingParents: ReadonlySet<string>;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -541,8 +549,8 @@ function ChildRow({
   setEditGender,
   setEditDoesNotTakeLunch,
   isSavingEdit,
-  togglingId,
-  removingParent,
+  togglingIds,
+  removingParents,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -682,7 +690,7 @@ function ChildRow({
               size="sm"
               variant={child.active ? "ghost" : "outline"}
               onClick={onToggleActive}
-              isLoading={togglingId === child.id}
+              isLoading={togglingIds.has(child.id)}
               className={child.active ? "text-coral hover:bg-coral/10" : "text-sage"}
             >
               {child.active ? (
@@ -748,15 +756,12 @@ function ChildRow({
                 </span>
                 <button
                   onClick={() => onRemoveParent(parent.id)}
-                  disabled={
-                    removingParent?.parentId === parent.id &&
-                    removingParent?.childId === child.id
-                  }
-                  className="text-charcoal-light hover:text-coral transition-colors p-0.5"
+                  disabled={removingParents.has(`${child.id}:${parent.id}`)}
+                  aria-busy={removingParents.has(`${child.id}:${parent.id}`) || undefined}
+                  className="grid min-h-8 min-w-8 place-items-center rounded-md text-charcoal-light hover:bg-coral/10 hover:text-coral transition-colors disabled:opacity-50"
                   title="Odebrat rodiče"
                 >
-                  {removingParent?.parentId === parent.id &&
-                  removingParent?.childId === child.id ? (
+                  {removingParents.has(`${child.id}:${parent.id}`) ? (
                     <div className="w-3 h-3 border-2 border-coral border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <svg

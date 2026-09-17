@@ -50,6 +50,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (pendingAction) return;
     setError("");
     setPendingAction("save");
     try {
@@ -68,6 +69,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
   };
 
   const handleDelete = async () => {
+    if (pendingAction) return;
     if (!window.confirm("Opravdu chcete tuto omluvenku smazat?")) {
       return;
     }
@@ -88,7 +90,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
       <div className="space-y-2">
         {error ? <p className="text-sm text-coral" role="alert">{error}</p> : null}
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+          <Button type="button" variant="outline" size="sm" disabled={pendingAction !== null} onClick={() => setIsEditing(true)}>
             Upravit
           </Button>
           <Button
@@ -151,7 +153,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
         rows={3}
       />
       <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+        <Button type="button" variant="ghost" size="sm" disabled={pendingAction !== null} onClick={() => setIsEditing(false)}>
           Zrušit
         </Button>
         <Button type="submit" size="sm" isLoading={pendingAction === "save"}>

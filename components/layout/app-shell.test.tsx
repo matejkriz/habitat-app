@@ -291,3 +291,14 @@ describe("AppShell", () => {
     expect(header?.firstElementChild?.contains(message)).toBe(false);
   });
 });
+
+it("keeps logout busy and prevents another sign-out request", () => {
+  signOut.mockImplementationOnce(() => new Promise(() => {}));
+  render(<AppShell user={director}>Obsah</AppShell>);
+  fireEvent.click(screen.getByRole("button", { name: "Otevřít uživatelské menu" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Odhlásit" }));
+  const pending = screen.getByRole("menuitem", { name: "Odhlašuji…" });
+  expect((pending as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(pending);
+  expect(signOut).toHaveBeenCalledTimes(1);
+});

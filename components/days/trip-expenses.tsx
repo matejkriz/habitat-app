@@ -11,11 +11,13 @@ export function TripExpenses({ dateKey, defaultExpense, revision = 0 }: {
   const [rows, setRows] = useState<ChildTripExpense[] | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   useEffect(() => {
     let current = true;
     getDayTripExpenses(dateKey).then(data => {
       if (current) { setRows(data); setError(""); }
-    }).catch(() => { if (current) setError("Útraty dětí se nepodařilo načíst."); });
+    }).catch(() => { if (current) setError("Útraty dětí se nepodařilo načíst."); })
+      .finally(() => { if (current) setRetrying(false); });
     return () => { current = false; };
   }, [dateKey, defaultExpense, revision, retry]);
 
@@ -23,7 +25,7 @@ export function TripExpenses({ dateKey, defaultExpense, revision = 0 }: {
     <section className="mt-5 border-t border-cream-dark pt-4" aria-label="Útraty jednotlivých dětí">
       <h3 className="font-semibold text-charcoal">Útraty jednotlivých dětí</h3>
       <p className="mt-1 text-sm text-charcoal-light">Podle uložené docházky. Neupravené částky se řídí výchozí útratou dne.</p>
-      {error ? <div role="alert" className="mt-3 text-sm text-coral-dark">{error} <Button type="button" size="sm" variant="ghost" onClick={() => setRetry(value => value + 1)}>Zkusit znovu</Button></div>
+      {error ? <div role="alert" className="mt-3 text-sm text-coral-dark">{error} <Button type="button" size="sm" variant="ghost" isLoading={retrying} onClick={() => { setRetrying(true); setRetry(value => value + 1); }}>Zkusit znovu</Button></div>
         : rows === null ? <p role="status" className="mt-3 text-sm text-charcoal-light">Načítání útrat…</p>
         : rows.length === 0 ? <p className="mt-3 text-sm text-charcoal-light">Nejprve uložte docházku přítomných dětí.</p>
         : <table className="mt-3 w-full table-fixed text-left text-sm">
@@ -38,7 +40,8 @@ function ExpenseRow({ row, dateKey, defaultExpense }: { row: ChildTripExpense; d
   const [override, setOverride] = useState(row.override);
   const effectiveAmount = override ?? defaultExpense;
   const [amount, setAmount] = useState(String(row.override ?? defaultExpense));
-  const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"save" | "restore" | null>(null);
+  const saving = pendingAction !== null;
   const [error, setError] = useState("");
 
   async function save(value: number | null) {
@@ -46,14 +49,14 @@ function ExpenseRow({ row, dateKey, defaultExpense }: { row: ChildTripExpense; d
     setError("");
     try {
       if (value !== null) validateCrowns(value);
-      setSaving(true);
+      setPendingAction(value === null ? "restore" : "save");
       await setChildTripExpense(dateKey, row.childId, value);
       setOverride(value);
       setAmount(String(value ?? defaultExpense));
     } catch (error) {
       setError(error instanceof Error ? error.message : "Útratu se nepodařilo uložit.");
     } finally {
-      setSaving(false);
+      setPendingAction(null);
     }
   }
 
@@ -63,10 +66,10 @@ function ExpenseRow({ row, dateKey, defaultExpense }: { row: ChildTripExpense; d
       <form onSubmit={event => { event.preventDefault(); if (amount !== "") void save(Number(amount)); }}>
         <div className="flex items-center gap-1">
           <Input aria-label={`Útrata ${row.name} (Kč)`} type="number" inputMode="numeric" min={0} step={1} required value={amount} disabled={saving} onChange={event => setAmount(event.target.value)} className="min-w-0 px-2" />
-          <Button type="submit" size="sm" variant="outline" className="shrink-0 px-2" aria-label={`Uložit útratu ${row.name}`} isLoading={saving} disabled={amount === "" || Number(amount) === effectiveAmount}>Uložit</Button>
+          <Button type="submit" size="sm" variant="outline" className="shrink-0 px-2" aria-label={`Uložit útratu ${row.name}`} isLoading={pendingAction === "save"} disabled={saving || amount === "" || Number(amount) === effectiveAmount}>Uložit</Button>
         </div>
       </form>
-      {override !== null && <button type="button" disabled={saving} className="mt-2 text-left text-xs font-medium text-gold-dark underline disabled:opacity-50" aria-label={`Obnovit výchozí částku ${row.name}`} onClick={() => void save(null)}>Obnovit výchozí částku</button>}
+      {override !== null && <Button type="button" variant="ghost" size="sm" isLoading={pendingAction === "restore"} disabled={saving} className="mt-2 h-auto whitespace-normal px-1 py-2 text-left text-xs font-medium text-gold-dark underline" aria-label={`Obnovit výchozí částku ${row.name}`} onClick={() => void save(null)}>Obnovit výchozí částku</Button>}
       {error && <p role="alert" className="mt-1 text-xs text-coral-dark">{error}</p>}
     </td>
   </tr>;

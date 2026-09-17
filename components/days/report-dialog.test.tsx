@@ -49,3 +49,17 @@ it("does not use a stale report when the selected date changes", async () => {
   await act(async () => resolveFirst("První den"));
   expect((screen.getByLabelText("Report") as HTMLTextAreaElement).value).toBe("Druhý den");
 });
+
+it("locks a failed report retry until the request finishes", async () => {
+  mocks.get.mockRejectedValueOnce(new Error("offline"));
+  let finish!: (value: string) => void;
+  mocks.get.mockImplementationOnce(() => new Promise<string>(resolve => { finish = resolve; }));
+  render(<ReportDialog initialDate="2026-09-10" onClose={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Zkusit znovu" }));
+  const retry = screen.getByRole("button", { name: "Zkusit znovu" });
+  expect((retry as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(retry);
+  expect(mocks.get).toHaveBeenCalledTimes(2);
+  await act(async () => finish("Načtený report"));
+  expect((screen.getByLabelText("Report") as HTMLTextAreaElement).value).toBe("Načtený report");
+});

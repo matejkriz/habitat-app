@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChildrenManagementPage from "./page";
 
@@ -64,4 +64,25 @@ describe("ChildrenManagementPage", () => {
     expect(await screen.findByText(/Zůstatek:.*1\s*500/)).toBeTruthy();
   });
 
+});
+
+it("keeps each child's action locked while other rows finish", async () => {
+  const child = { firstName: "Anna", lastName: "Malá", gender: "FEMALE", active: true, doesNotTakeLunch: false, parents: [] };
+  mocks.getAllChildrenWithParents.mockResolvedValue([{ ...child, id: "a" }, { ...child, id: "b", firstName: "Eva" }]);
+  let finishA!: () => void;
+  let finishB!: () => void;
+  mocks.toggleChildActive.mockImplementation((id: string) => new Promise<void>(resolve => {
+    if (id === "a") finishA = resolve; else finishB = resolve;
+  }));
+  render(<ChildrenManagementPage />);
+  const buttons = await screen.findAllByRole("button", { name: /Deaktivovat/ });
+  fireEvent.click(buttons[0]);
+  fireEvent.click(buttons[1]);
+  expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
+  expect((buttons[1] as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => finishB());
+  expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(buttons[0]);
+  expect(mocks.toggleChildActive).toHaveBeenCalledTimes(2);
+  await act(async () => finishA());
 });

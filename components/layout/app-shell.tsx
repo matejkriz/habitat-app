@@ -196,6 +196,8 @@ export function AppShell({ children, user }: AppShellProps) {
     pendingHref: null,
   });
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   const userMenuRef = useRef<HTMLDivElement>(null);
   const pendingHref =
     navigationState.pathname === pathname ? navigationState.pendingHref : null;
@@ -226,11 +228,16 @@ export function AppShell({ children, user }: AppShellProps) {
     };
   }, [isUserMenuOpen]);
 
-  const handleSignOut = () => {
-    setIsUserMenuOpen(false);
-    void signOut({
-      returnTo: new URL("/login", window.location.origin).toString(),
-    });
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    setSignOutError("");
+    try {
+      await signOut({ returnTo: new URL("/login", window.location.origin).toString() });
+    } catch {
+      setIsSigningOut(false);
+      setSignOutError("Odhlášení se nezdařilo. Zkuste to znovu.");
+    }
   };
 
   const startNavigation = (href: string) => {
@@ -245,7 +252,7 @@ export function AppShell({ children, user }: AppShellProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2 rounded-lg">
               <Image
                 src="/habitat-logo.webp"
                 alt="Habitat"
@@ -299,7 +306,7 @@ export function AppShell({ children, user }: AppShellProps) {
                   aria-expanded={isUserMenuOpen}
                   aria-controls="user-menu"
                   onClick={() => setIsUserMenuOpen((isOpen) => !isOpen)}
-                  className="block rounded-full transition-shadow hover:ring-2 hover:ring-gold-light focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2"
+                  className={cn("block rounded-full transition-shadow hover:ring-2 hover:ring-gold-light focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2", isUserMenuOpen && "ring-2 ring-gold")}
                 >
                   <Avatar
                     name={user.name || user.email || "U"}
@@ -323,10 +330,12 @@ export function AppShell({ children, user }: AppShellProps) {
                       </p>
                     </div>
                     {user.role === "DIRECTOR" && <PushNotificationToggle />}
+                    {signOutError && <p role="alert" className="px-3 py-2 text-sm text-coral-dark">{signOutError}</p>}
                     <Button
                       role="menuitem"
                       variant="ghost"
                       size="sm"
+                      isLoading={isSigningOut}
                       onClick={handleSignOut}
                       className="mt-1 w-full justify-start sm:mt-0"
                     >
@@ -344,7 +353,7 @@ export function AppShell({ children, user }: AppShellProps) {
                           d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                         />
                       </svg>
-                      Odhlásit
+                      {isSigningOut ? "Odhlašuji…" : "Odhlásit"}
                     </Button>
                     <div
                       role="none"

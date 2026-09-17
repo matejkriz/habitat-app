@@ -273,7 +273,7 @@ export default function NewExcusePage() {
                     return (
                       <label
                         key={child.id}
-                        className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-cream"
+                        className="selection-control flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-cream has-checked:bg-gold/10 has-checked:ring-1 has-checked:ring-gold"
                       >
                         <input
                           type="checkbox"

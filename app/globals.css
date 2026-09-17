@@ -210,3 +210,52 @@ body {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
 }
+
+/* Shared feedback preserves each control's semantic colors, shadows and focus ring. */
+:where(button, a, summary, [role="combobox"]) {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button:enabled, summary) { cursor: pointer; }
+:where(button:disabled) { pointer-events: none; }
+
+@media (hover: hover) {
+  :where(button:enabled, a[href], summary, [role="combobox"]:enabled):hover,
+  .selection-control:not(:has(input:disabled)):hover {
+    box-shadow:
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      inset 0 0 0 999px rgb(61 61 61 / 5%),
+      var(--tw-shadow, 0 0 #0000);
+  }
+}
+
+:where(button:enabled, a[href], summary, [role="combobox"]:enabled):active,
+.selection-control:not(:has(input:disabled)):active {
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    inset 0 0 0 999px rgb(61 61 61 / 13%),
+    var(--tw-shadow, 0 0 #0000);
+  filter: brightness(.92);
+  transition-duration: 0s;
+}
+
+a:focus-visible > .card-hover {
+  outline: 2px solid var(--habitat-gold);
+  outline-offset: 3px;
+}
+
+details[open] > summary { background-color: var(--habitat-cream-dark); }
+.selection-control { border-radius: .5rem; }
+.selection-control:has(input:focus-visible) {
+  outline: 2px solid var(--habitat-gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a, summary, .selection-control, .card-hover) { transition: none; }
+  :where(button, a) .animate-spin { animation: none; }
+  .card-hover:hover { transform: none; }
+}

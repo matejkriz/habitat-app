@@ -16,7 +16,7 @@ const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
       <label
         htmlFor={toggleId}
         className={cn(
-          "flex items-center gap-3 cursor-pointer select-none",
+          "selection-control flex items-center gap-3 cursor-pointer select-none",
           props.disabled && "opacity-50 cursor-not-allowed",
           className
         )}

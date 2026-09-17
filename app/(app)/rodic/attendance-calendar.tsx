@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import type { ParentCalendarDay, ParentCalendarStatus } from "@/lib/parent-calendar";
@@ -99,6 +99,7 @@ function fullDateLabel(dateKey: string): string {
 
 export function AttendanceCalendar({ childId, childName, childGender, month, days }: AttendanceCalendarProps) {
   const router = useRouter();
+  const [isNavigating, startNavigation] = useTransition();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggered = useRef(false);
   const statusDetails = getStatusDetails(childGender);
@@ -114,7 +115,8 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
 
   const moveMonth = (offset: number) => {
     const nextMonth = new Date(firstDay.getFullYear(), firstDay.getMonth() + offset, 1);
-    router.push(`/rodic?child=${encodeURIComponent(childId)}&month=${monthKey(nextMonth)}`);
+    if (isNavigating) return;
+    startNavigation(() => router.push(`/rodic?child=${encodeURIComponent(childId)}&month=${monthKey(nextMonth)}`));
   };
 
   const startLongPress = (date: string) => {
@@ -145,16 +147,20 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
         <div className="flex items-center justify-between gap-2 sm:justify-end">
           <button
             type="button"
+            disabled={isNavigating}
+            aria-busy={isNavigating || undefined}
             onClick={() => moveMonth(-1)}
-            className="grid size-11 place-items-center rounded-full border border-cream-dark bg-white text-charcoal transition hover:border-gold hover:bg-gold/10"
+            className="grid size-11 place-items-center rounded-full border border-cream-dark bg-white text-charcoal disabled:opacity-50 transition hover:border-gold hover:bg-gold/10"
             aria-label="Předchozí měsíc"
           >
             <span aria-hidden="true">←</span>
           </button>
           <button
             type="button"
+            disabled={isNavigating}
+            aria-busy={isNavigating || undefined}
             onClick={() => moveMonth(1)}
-            className="grid size-11 place-items-center rounded-full border border-cream-dark bg-white text-charcoal transition hover:border-gold hover:bg-gold/10"
+            className="grid size-11 place-items-center rounded-full border border-cream-dark bg-white text-charcoal disabled:opacity-50 transition hover:border-gold hover:bg-gold/10"
             aria-label="Následující měsíc"
           >
             <span aria-hidden="true">→</span>
@@ -162,7 +168,8 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
         </div>
       </div>
 
-      <div className="px-2 py-3 sm:px-5 sm:py-5">
+      {isNavigating && <p role="status" className="px-4 pt-2 text-sm text-charcoal-light">Načítám kalendář…</p>}
+      <div aria-busy={isNavigating || undefined} className="px-2 py-3 sm:px-5 sm:py-5">
         <div className="mb-1 grid grid-cols-4 sm:grid-cols-7" aria-hidden="true">
           {WEEKDAYS.map((weekday, index) => (
             <div
@@ -202,7 +209,7 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
               <button
                 key={day.date}
                 type="button"
-                disabled={disabled}
+                disabled={disabled || isNavigating}
                 onClick={() => {
                   if (longPressTriggered.current) {
                     longPressTriggered.current = false;
