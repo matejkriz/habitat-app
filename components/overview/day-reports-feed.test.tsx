@@ -133,6 +133,7 @@ it.each([[400, 800], [800, 400]])("slides at %ipx before resizing to %ipx and bl
     render(<DayReportsFeed initialPage={{ reports: days, nextBefore: null }} />);
     fireEvent.click(screen.getByRole("button", { name: /Starší report/ }));
     expect(animations).toHaveLength(2);
+    expect(animations.every(animation => animation.element.querySelector("button") === null)).toBe(true);
     const viewport = screen.getByRole("region", { name: "Denní reporty" });
     expect(viewport.style.height).toBe(`${oldHeight}px`);
     expect(screen.getAllByRole("article")).toHaveLength(1);

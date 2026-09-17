@@ -14,3 +14,8 @@
 .date:focus-visible {
   outline: none;
 }
+
+/* Keep the controls in place even when an end of the list has no neighbor. */
+.navigation {
+  min-height: 77px;
+}

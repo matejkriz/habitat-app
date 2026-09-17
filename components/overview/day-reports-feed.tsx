@@ -128,11 +128,8 @@ function ReportReader({ initialPage }: { initialPage: ReportsPage }) {
 
   function renderDay(at: number, outgoing = false) {
     const selected = reports[at];
-    const newer = reports[at - 1];
-    const older = reports[at + 1];
     const headingId = outgoing ? "previous-report-date" : "current-report-date";
-    return <>
-      {newer && <ReportNavigation date={newer.date} direction="newer" disabled={Boolean(transition)} onClick={() => navigate(-1)} />}
+    return (
       <article aria-labelledby={headingId} className="py-7 sm:py-9">
         <header className="mb-6 space-y-2">
           <h4 ref={outgoing ? undefined : heading} tabIndex={-1} id={headingId} className={`${styles.date} text-sm font-bold text-charcoal-light`}>
@@ -142,26 +139,36 @@ function ReportReader({ initialPage }: { initialPage: ReportsPage }) {
         </header>
         <ReportContent content={selected.report} />
       </article>
-      {older && <ReportNavigation date={older.date} direction="older" disabled={Boolean(transition)} onClick={() => navigate(1)} />}
-      {!older && nextBefore !== null && (
-        <div className="border-t border-cream-dark py-5 text-center">
-          {error ? <>
-            <p role="alert" className="mb-3 text-sm text-charcoal-light">Starší reporty se nepodařilo načíst.</p>
-            <Button variant="outline" size="sm" disabled={Boolean(transition)} onClick={() => { setFailedCursor(null); setRetry(value => value + 1); }}>Zkusit znovu</Button>
-          </> : <p role="status" className="text-sm text-charcoal-light">Načítání starších reportů…</p>}
-        </div>
-      )}
-    </>;
+    );
   }
 
+  const newer = reports[index - 1];
+  const older = reports[index + 1];
+
   return (
-    <div ref={viewport} role="region" aria-label="Denní reporty" aria-busy={Boolean(transition)}
-      className={`${styles.viewport} mx-auto max-w-[65ch]`}
-      style={transition ? { height: transition.height, overflow: "clip" } : undefined}>
-      {transition && <div ref={previousPanel} aria-hidden="true" inert className={styles.outgoing}>
-        {renderDay(transition.from, true)}
-      </div>}
-      <div ref={currentPanel} data-report-panel="current">{renderDay(index)}</div>
+    <div className="mx-auto max-w-[65ch]">
+      <div className={styles.navigation}>
+        {newer && <ReportNavigation date={newer.date} direction="newer" disabled={Boolean(transition)} onClick={() => navigate(-1)} />}
+      </div>
+      <div ref={viewport} role="region" aria-label="Denní reporty" aria-busy={Boolean(transition)}
+        className={styles.viewport}
+        style={transition ? { height: transition.height, overflow: "clip" } : undefined}>
+        {transition && <div ref={previousPanel} aria-hidden="true" inert className={styles.outgoing}>
+          {renderDay(transition.from, true)}
+        </div>}
+        <div ref={currentPanel} data-report-panel="current">{renderDay(index)}</div>
+      </div>
+      <div className={styles.navigation}>
+        {older && <ReportNavigation date={older.date} direction="older" disabled={Boolean(transition)} onClick={() => navigate(1)} />}
+        {!older && nextBefore !== null && (
+          <div className="border-t border-cream-dark py-5 text-center">
+            {error ? <>
+              <p role="alert" className="mb-3 text-sm text-charcoal-light">Starší reporty se nepodařilo načíst.</p>
+              <Button variant="outline" size="sm" disabled={Boolean(transition)} onClick={() => { setFailedCursor(null); setRetry(value => value + 1); }}>Zkusit znovu</Button>
+            </> : <p role="status" className="text-sm text-charcoal-light">Načítání starších reportů…</p>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
