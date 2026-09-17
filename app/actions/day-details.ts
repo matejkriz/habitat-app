@@ -65,7 +65,10 @@ export async function createTripExpense(dateKey: string, expense: number, overri
   revalidatePath("/rodic");
 }
 
-export async function getDayReports(before?: number) {
+export async function getDayReports(before?: number): Promise<{
+  reports: { date: number; name: string | null; report: string }[];
+  nextBefore: number | null;
+}> {
   const user = await getDbUser();
   if (!user || (user.role !== "DIRECTOR" && user.role !== "PARENT" && user.role !== "TEACHER")) throw new Error("Unauthorized");
   if (before !== undefined && !Number.isFinite(before)) throw new Error("Neplatné datum");

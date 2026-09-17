@@ -68,7 +68,7 @@ export function coversDay(excuse: CoveringExcuse, day: Date): boolean {
   return toDayKey(excuse.fromDate) <= key && toDayKey(excuse.toDate) >= key;
 }
 
-/** The 9:00-the-day-before deadline is evaluated against the day itself. */
+/** The preceding-weekday 9:00 deadline is evaluated against the day itself. */
 export function isLateForDay(excuse: CoveringExcuse, day: Date): boolean {
   return !isAutoApproved(excuse.submittedAt, day);
 }

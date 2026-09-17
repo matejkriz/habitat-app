@@ -31,7 +31,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       secondary:
         "bg-sage text-white hover:bg-sage-dark active:bg-sage-dark shadow-sm hover:shadow-md",
       outline:
-        "border-2 border-gold text-gold hover:bg-gold hover:text-charcoal bg-transparent",
+        "border-2 border-gold text-gold hover:bg-gold hover:text-charcoal active:bg-gold-dark active:text-charcoal bg-transparent",
       ghost:
         "text-charcoal hover:bg-cream-dark active:bg-cream-dark bg-transparent",
       danger:
@@ -48,11 +48,13 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(baseStyles, variants[variant], sizes[size], className)}
+        aria-busy={isLoading || undefined}
         disabled={disabled || isLoading}
         {...props}
       >
         {isLoading && (
           <svg
+            aria-hidden="true"
             className="animate-spin h-4 w-4"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"

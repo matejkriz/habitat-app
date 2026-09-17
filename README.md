@@ -242,7 +242,7 @@ Uživatelé jsou při prvním přihlášení automaticky synchronizováni do dat
 
 ## Pravidla pro omluvenky
 
-- Při požadavku na odhlášení oběda je omluvenka odeslaná **do 9:00 den před absencí** automaticky schválena
+- Při požadavku na odhlášení oběda je omluvenka odeslaná **do 9:00 předchozího všedního dne (na pondělí v pátek)** automaticky schválena
 - Později odeslané omluvenky s odhlášením oběda čekají na schválení ředitelem
 - Rodič může oběd ponechat přihlášený; taková omluvenka schválení nepotřebuje a oběd zůstává k úhradě
 - Ředitel může kdykoliv změnit stav omluvenky

@@ -25,7 +25,7 @@ export default function ClosedDaysPage() {
   const [newDate, setNewDate] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [error, setError] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     async function loadData() {
@@ -66,14 +66,19 @@ export default function ClosedDaysPage() {
   };
 
   const handleDelete = async (id: string) => {
-    setDeletingId(id);
+    if (deletingIds.has(id)) return;
+    setDeletingIds(ids => new Set(ids).add(id));
     try {
       await removeClosedDay(id);
       setClosedDays((prev) => prev.filter((d) => d.id !== id));
     } catch (error) {
       console.error("Failed to delete closed day:", error);
     } finally {
-      setDeletingId(null);
+      setDeletingIds(ids => {
+        const next = new Set(ids);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -222,7 +227,7 @@ export default function ClosedDaysPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDelete(day.id)}
-                    isLoading={deletingId === day.id}
+                    isLoading={deletingIds.has(day.id)}
                   >
                     <svg
                       className="w-4 h-4 text-coral"

@@ -44,6 +44,11 @@
         font-weight: 700;
         cursor: pointer;
       }
+      button { touch-action: manipulation; }
+      @media (hover: hover) { button:enabled:hover { background: #c69b42; } }
+      button:enabled:active { background: #b8923f; box-shadow: inset 0 2px 4px #0003; }
+      button:focus-visible { outline: 2px solid #b8923f; outline-offset: 3px; }
+      button:disabled { opacity: .6; cursor: wait; }
     </style>
   </head>
   <body>
@@ -54,7 +59,16 @@
       <button id="retry" type="button">Zkusit znovu</button>
     </main>
     <script>
-      const reload = () => window.location.reload();
+      let reloading = false;
+      const reload = () => {
+        if (reloading) return;
+        reloading = true;
+        const button = document.getElementById("retry");
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+        button.textContent = "Načítám…";
+        window.location.reload();
+      };
       document.getElementById("retry").addEventListener("click", reload);
       window.addEventListener("online", reload, { once: true });
     </script>

@@ -88,12 +88,14 @@ function NoLunchIcon() {
 function CalendarDayButton({
   day,
   onOpen,
+  disabled,
   onHoverStart,
   onHoverMove,
   onHoverEnd,
 }: {
   readonly day: AttendanceCalendarDay;
   readonly onOpen: () => void;
+  readonly disabled: boolean;
   readonly onHoverStart: (event: PointerEvent<HTMLButtonElement>) => void;
   readonly onHoverMove: (event: PointerEvent<HTMLButtonElement>) => void;
   readonly onHoverEnd: () => void;
@@ -120,13 +122,14 @@ function CalendarDayButton({
     <button
       type="button"
       aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}${accessibleLunchStatus}${day.name ? `, ${day.name}` : ""}`}
+      disabled={disabled}
       onClick={onOpen}
       onPointerEnter={(event) => event.pointerType === "mouse" && onHoverStart(event)}
       onPointerMove={(event) => event.pointerType === "mouse" && onHoverMove(event)}
       onPointerLeave={onHoverEnd}
       onPointerCancel={onHoverEnd}
       className={cn(
-        "group relative flex min-w-0 min-h-28 flex-col overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-36 sm:p-2.5",
+        "group relative flex min-w-0 min-h-28 flex-col overflow-hidden rounded-lg border p-1.5 text-left transition-[background-color,border-color,box-shadow,transform] motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:min-h-36 sm:p-2.5",
         "focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-gold",
         day.isClosed
           ? "border-cream-dark/70 bg-cream-dark/35 text-charcoal-light hover:bg-cream-dark/60"
@@ -529,7 +532,7 @@ export function AttendanceCalendar({
   const canLoadPreviousMonth = !startMonthKey || calendar.monthKey > startMonthKey;
 
   async function loadMonth(monthKey: string) {
-    if (startMonthKey && monthKey < startMonthKey) return;
+    if (isLoading || (startMonthKey && monthKey < startMonthKey)) return;
 
     setHoverPreview(null);
     setIsLoading(true);
@@ -575,8 +578,9 @@ export function AttendanceCalendar({
       {today && (
         <button
           type="button"
+          disabled={isLoading}
           onClick={() => openDay(today)}
-          className="grid w-full grid-cols-4 gap-2 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[1.2fr_repeat(4,1fr)] sm:items-center sm:p-5"
+          className="grid w-full grid-cols-4 gap-2 disabled:opacity-50 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[1.2fr_repeat(4,1fr)] sm:items-center sm:p-5"
         >
           <div className="col-span-4 mb-1 sm:col-span-1 sm:mb-0">
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-gold-dark">Dnes</p>
@@ -634,8 +638,10 @@ export function AttendanceCalendar({
             {calendar.monthKey !== getCurrentMonthKey() && (
               <button
                 type="button"
+                disabled={isLoading}
+                aria-busy={isLoading || undefined}
                 onClick={() => loadMonth(getCurrentMonthKey())}
-                className="mt-0.5 text-xs font-bold text-gold-dark hover:underline"
+                className="mt-0.5 rounded px-2 py-1 text-xs font-bold text-gold-dark hover:underline disabled:opacity-50"
               >
                 Zpět na dnešek
               </button>
@@ -674,6 +680,7 @@ export function AttendanceCalendar({
               <CalendarDayButton
                 key={`mobile-${day.dateKey}`}
                 day={day}
+                disabled={isLoading}
                 onOpen={() => openDay(day)}
                 onHoverStart={(event) => showHoverPreview(day, event)}
                 onHoverMove={(event) => showHoverPreview(day, event)}
@@ -696,6 +703,7 @@ export function AttendanceCalendar({
               <CalendarDayButton
                 key={day.dateKey}
                 day={day}
+                disabled={isLoading}
                 onOpen={() => openDay(day)}
                 onHoverStart={(event) => showHoverPreview(day, event)}
                 onHoverMove={(event) => showHoverPreview(day, event)}

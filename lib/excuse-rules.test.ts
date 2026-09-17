@@ -35,37 +35,37 @@ describe("Excuse Rules", () => {
 
   describe("isAutoApproved", () => {
     it("should auto-approve when submitted more than 1 day before fromDate", () => {
-      const fromDate = new Date("2024-01-15");
-      // Submitted on Jan 13 at 8:00 AM (before 9 AM deadline on Jan 14)
-      const submittedAt = new Date("2024-01-13T08:00:00");
+      const fromDate = new Date("2024-01-16");
+      // Submitted on Jan 14 at 8:00 AM (before 9 AM deadline on Jan 15)
+      const submittedAt = new Date("2024-01-14T08:00:00");
       expect(isAutoApproved(submittedAt, fromDate)).toBe(true);
     });
 
     it("should auto-approve when submitted exactly at 8:59 AM the day before", () => {
-      const fromDate = new Date("2024-01-15");
-      // Submitted on Jan 14 at 8:59 AM (just before 9 AM deadline)
-      const submittedAt = new Date("2024-01-14T08:59:00");
+      const fromDate = new Date("2024-01-16");
+      // Submitted on Jan 15 at 8:59 AM (just before 9 AM deadline)
+      const submittedAt = new Date("2024-01-15T08:59:00");
       expect(isAutoApproved(submittedAt, fromDate)).toBe(true);
     });
 
     it("should NOT auto-approve when submitted at 9:00 AM the day before", () => {
-      const fromDate = new Date("2024-01-15");
-      // Submitted on Jan 14 at 9:00 AM (exactly at deadline)
-      const submittedAt = new Date("2024-01-14T09:00:00");
+      const fromDate = new Date("2024-01-16");
+      // Submitted on Jan 15 at 9:00 AM (exactly at deadline)
+      const submittedAt = new Date("2024-01-15T09:00:00");
       expect(isAutoApproved(submittedAt, fromDate)).toBe(false);
     });
 
     it("should NOT auto-approve when submitted after 9:00 AM the day before", () => {
-      const fromDate = new Date("2024-01-15");
-      // Submitted on Jan 14 at 10:00 AM (after deadline)
-      const submittedAt = new Date("2024-01-14T10:00:00");
+      const fromDate = new Date("2024-01-16");
+      // Submitted on Jan 15 at 10:00 AM (after deadline)
+      const submittedAt = new Date("2024-01-15T10:00:00");
       expect(isAutoApproved(submittedAt, fromDate)).toBe(false);
     });
 
     it("should NOT auto-approve when submitted on the same day as fromDate", () => {
-      const fromDate = new Date("2024-01-15");
-      // Submitted on Jan 15
-      const submittedAt = new Date("2024-01-15T08:00:00");
+      const fromDate = new Date("2024-01-16");
+      // Submitted on Jan 16
+      const submittedAt = new Date("2024-01-16T08:00:00");
       expect(isAutoApproved(submittedAt, fromDate)).toBe(false);
     });
 
@@ -77,14 +77,34 @@ describe("Excuse Rules", () => {
     });
   });
 
+  describe("Monday deadline", () => {
+    it.each([
+      ["2026-09-18T08:59:59", true],
+      ["2026-09-18T09:00:00", false],
+      ["2026-09-18T09:00:01", false],
+      ["2026-09-19T08:00:00", false],
+      ["2026-09-20T08:00:00", false],
+    ])("evaluates a Monday excuse submitted at %s", (submittedAt, expected) => {
+      expect(isAutoApproved(new Date(submittedAt), new Date(2026, 8, 21))).toBe(expected);
+    });
+
+    it.each([
+      [new Date(2026, 8, 21), new Date(2026, 8, 18, 9)],
+      [new Date(2026, 5, 1), new Date(2026, 4, 29, 9)],
+      [new Date(2024, 0, 1), new Date(2023, 11, 29, 9)],
+    ])("uses Friday at 9 AM for %s", (day, expected) => {
+      expect(getAutoApprovalDeadline(day)).toEqual(expected);
+    });
+  });
+
   describe("getAutoApprovalDeadline", () => {
     it("should return 9:00 AM the day before fromDate", () => {
-      const fromDate = new Date("2024-01-15");
+      const fromDate = new Date("2024-01-16");
       const deadline = getAutoApprovalDeadline(fromDate);
 
       expect(deadline.getFullYear()).toBe(2024);
       expect(deadline.getMonth()).toBe(0); // January
-      expect(deadline.getDate()).toBe(14);
+      expect(deadline.getDate()).toBe(15);
       expect(deadline.getHours()).toBe(9);
       expect(deadline.getMinutes()).toBe(0);
     });
@@ -100,18 +120,18 @@ describe("Excuse Rules", () => {
     });
 
     it("should return true when current time is before deadline", () => {
-      // Set current time to Jan 13, 2024 at 10:00 AM
-      vi.setSystemTime(new Date("2024-01-13T10:00:00"));
+      // Set current time to Jan 14, 2024 at 10:00 AM
+      vi.setSystemTime(new Date("2024-01-14T10:00:00"));
 
-      const fromDate = new Date("2024-01-15");
+      const fromDate = new Date("2024-01-16");
       expect(canStillAutoApprove(fromDate)).toBe(true);
     });
 
     it("should return false when current time is after deadline", () => {
-      // Set current time to Jan 14, 2024 at 10:00 AM
-      vi.setSystemTime(new Date("2024-01-14T10:00:00"));
+      // Set current time to Jan 15, 2024 at 10:00 AM
+      vi.setSystemTime(new Date("2024-01-15T10:00:00"));
 
-      const fromDate = new Date("2024-01-15");
+      const fromDate = new Date("2024-01-16");
       expect(canStillAutoApprove(fromDate)).toBe(false);
     });
   });
@@ -172,10 +192,10 @@ describe("Excuse Rules", () => {
     });
 
     it("should return remaining time when before deadline", () => {
-      // Set current time to Jan 13, 2024 at 9:00 AM
-      vi.setSystemTime(new Date("2024-01-13T09:00:00"));
+      // Set current time to Jan 14, 2024 at 9:00 AM
+      vi.setSystemTime(new Date("2024-01-14T09:00:00"));
 
-      const fromDate = new Date("2024-01-15");
+      const fromDate = new Date("2024-01-16");
       const result = getTimeUntilDeadline(fromDate);
 
       expect(result).not.toBeNull();
@@ -184,10 +204,10 @@ describe("Excuse Rules", () => {
     });
 
     it("should return isPast true when after deadline", () => {
-      // Set current time to Jan 14, 2024 at 10:00 AM
-      vi.setSystemTime(new Date("2024-01-14T10:00:00"));
+      // Set current time to Jan 15, 2024 at 10:00 AM
+      vi.setSystemTime(new Date("2024-01-15T10:00:00"));
 
-      const fromDate = new Date("2024-01-15");
+      const fromDate = new Date("2024-01-16");
       const result = getTimeUntilDeadline(fromDate);
 
       expect(result).not.toBeNull();

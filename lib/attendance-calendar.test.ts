@@ -129,7 +129,7 @@ describe("buildAttendanceCalendar", () => {
           childId: "bo",
           fromDate: new Date(2026, 7, 3),
           toDate: new Date(2026, 7, 3),
-          submittedAt: new Date(2026, 7, 1, 8),
+          submittedAt: new Date(2026, 6, 31, 8),
         }),
       ],
       closedDays: [],

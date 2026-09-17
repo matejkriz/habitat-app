@@ -69,7 +69,7 @@ export default function ExcuseManagementPage() {
   const [filter, setFilter] = useState<"all" | "pending" | "settled">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isChildrenLoading, setIsChildrenLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updatingIds, setUpdatingIds] = useState<ReadonlySet<string>>(new Set());
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -124,14 +124,19 @@ export default function ExcuseManagementPage() {
   }, []);
 
   const handleApprove = async (excuseId: string, approve: boolean) => {
-    setUpdatingId(excuseId);
+    if (updatingIds.has(excuseId)) return;
+    setUpdatingIds(ids => new Set(ids).add(excuseId));
     try {
       await updateExcuse(excuseId, approve);
       await loadExcuses(false);
     } catch (error) {
       console.error("Failed to update excuse:", error);
     } finally {
-      setUpdatingId(null);
+      setUpdatingIds(ids => {
+        const next = new Set(ids);
+        next.delete(excuseId);
+        return next;
+      });
     }
   };
 
@@ -456,7 +461,7 @@ export default function ExcuseManagementPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() => handleApprove(excuse.id, true)}
-                            isLoading={updatingId === excuse.id}
+                            isLoading={updatingIds.has(excuse.id)}
                           >
                             Schválit
                           </Button>
@@ -468,7 +473,7 @@ export default function ExcuseManagementPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleApprove(excuse.id, false)}
-                            isLoading={updatingId === excuse.id}
+                            isLoading={updatingIds.has(excuse.id)}
                           >
                             Zrušit schválení
                           </Button>

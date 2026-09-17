@@ -1,0 +1,4 @@
+interface:
+  display_name: "Import reportů Habitatu"
+  short_description: "Import reportů ze Slacku do produkčního Convexu"
+  default_prompt: "Použij $import-reports a naimportuj nové reporty z kanálu #fotky-reporty do produkčního Convexu se zachováním lokálních originálů."

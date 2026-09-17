@@ -16,6 +16,7 @@ export function TripFundTable({ initialOverview }: { initialOverview: TripFundOv
   const [overview, setOverview] = useState(initialOverview);
   const [adding, setAdding] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [retrying, setRetrying] = useState(false);
   const request = useRef(0);
   if (previousOverview !== initialOverview) {
     setPreviousOverview(initialOverview);
@@ -41,7 +42,7 @@ export function TripFundTable({ initialOverview }: { initialOverview: TripFundOv
         </div>
         <Button type="button" className="self-start sm:shrink-0" onClick={() => setAdding(true)}>Přidat útratu</Button>
       </div>
-      {refreshError && <div role="alert" className="text-sm text-red-700">{refreshError} <Button type="button" variant="ghost" size="sm" onClick={() => void refresh()}>Obnovit přehled</Button></div>}
+      {refreshError && <div role="alert" className="text-sm text-red-700">{refreshError} <Button type="button" variant="ghost" size="sm" isLoading={retrying} onClick={async () => { if (retrying) return; setRetrying(true); try { await refresh(); } finally { setRetrying(false); } }}>Obnovit přehled</Button></div>}
       <TripFundGrid overview={overview} renderDay={day => (
         <Link href={`/ucitel/dochazka?date=${getLocalDateKey(new Date(day.date))}`} className="block rounded-sm hover:text-gold-dark hover:underline focus-visible:outline-2 focus-visible:outline-gold">
           <span className="block whitespace-nowrap">{formatTripDate(day.date)}</span>

@@ -84,6 +84,10 @@ describe("AppUpdateBanner", () => {
     );
 
     expect(updateNow).toHaveBeenCalledOnce();
+    const pending = screen.getByRole("button", { name: "Aktualizuji…" });
+    expect((pending as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(pending);
+    expect(updateNow).toHaveBeenCalledOnce();
   });
 
   it("checks again when the PWA returns to the foreground", async () => {

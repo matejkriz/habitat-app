@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NavigationFeedback } from "@/components/ui/navigation-feedback";
 import type { LunchOverview } from "@/lib/lunch-overview";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -69,11 +70,12 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
           <Link
             href={monthHref(adjacentMonth(month, -1))}
             aria-label="Předchozí měsíc"
-            className="grid size-9 place-items-center rounded-lg text-charcoal-light transition-colors hover:bg-cream hover:text-charcoal"
+            className="relative grid size-9 place-items-center rounded-lg text-charcoal-light transition-colors hover:bg-cream hover:text-charcoal"
           >
             <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            <NavigationFeedback />
           </Link>
           <div className="min-w-40 px-2 text-center">
             <p className="font-bold text-charcoal">{monthLabel}</p>
@@ -82,11 +84,12 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
           <Link
             href={monthHref(adjacentMonth(month, 1))}
             aria-label="Následující měsíc"
-            className="grid size-9 place-items-center rounded-lg text-charcoal-light transition-colors hover:bg-cream hover:text-charcoal"
+            className="relative grid size-9 place-items-center rounded-lg text-charcoal-light transition-colors hover:bg-cream hover:text-charcoal"
           >
             <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
+            <NavigationFeedback />
           </Link>
         </div>
       </div>
@@ -101,9 +104,10 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
             {month !== currentMonth() && (
               <Link
                 href={monthHref(currentMonth())}
-                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-gold-dark transition-colors hover:bg-gold/10"
+                className="relative rounded-lg px-3 py-1.5 text-sm font-semibold text-gold-dark transition-colors hover:bg-gold/10"
               >
                 Aktuální měsíc
+                <NavigationFeedback />
               </Link>
             )}
           </div>

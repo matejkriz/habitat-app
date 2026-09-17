@@ -1,0 +1,21 @@
+.viewport {
+  position: relative;
+  overflow-anchor: none;
+}
+
+.outgoing {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
+}
+
+/* The date receives reading focus after navigation; it is not an interactive control. */
+.date:focus,
+.date:focus-visible {
+  outline: none;
+}
+
+/* Keep the controls in place even when an end of the list has no neighbor. */
+.navigation {
+  min-height: 77px;
+}

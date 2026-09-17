@@ -48,6 +48,7 @@ function reloadPage() {
 export function AppUpdateBanner({
   onUpdate = reloadPage,
 }: AppUpdateBannerProps) {
+  const [isUpdating, setIsUpdating] = useState(false);
   const currentCommitSha = process.env.NEXT_PUBLIC_APP_COMMIT_SHA;
   const [availableVersion, setAvailableVersion] =
     useState<AvailableVersion | null>(null);
@@ -126,14 +127,16 @@ export function AppUpdateBanner({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={onUpdate}
+          isLoading={isUpdating}
+          onClick={() => { if (isUpdating) return; setIsUpdating(true); onUpdate(); }}
           className="shrink-0 border border-gold-dark/20 bg-white/60 px-2.5 text-xs shadow-sm hover:bg-white/90 sm:px-3 sm:text-sm"
         >
-          Aktualizovat teď
+          {isUpdating ? "Aktualizuji…" : "Aktualizovat teď"}
         </Button>
         <button
           type="button"
           aria-label="Skrýt upozornění na aktualizaci"
+          disabled={isUpdating}
           onClick={() => setDismissedCommitSha(availableVersion.commitSha)}
           className="flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-lg text-charcoal-light transition-colors hover:bg-white/50 hover:text-charcoal focus-visible:ring-2 focus-visible:ring-charcoal focus-visible:ring-offset-1"
         >

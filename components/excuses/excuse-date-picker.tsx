@@ -193,6 +193,7 @@ export function ExcuseDatePicker({
           className={cn(
             "h-10 w-full min-w-0 max-w-full cursor-pointer rounded-lg border-2 border-cream-dark bg-white px-3 pr-10 text-charcoal",
             "transition-colors duration-200 hover:border-sage-light focus:border-gold focus:outline-none focus:ring-0",
+            isOpen && "border-gold bg-gold/5",
             "disabled:cursor-not-allowed disabled:opacity-50",
           )}
         />
@@ -225,8 +226,9 @@ export function ExcuseDatePicker({
             <button
               type="button"
               aria-label="Předchozí měsíc"
+              disabled={isLoading}
               onClick={() => setVisibleMonth((month) => shiftMonth(month, -1))}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-charcoal hover:bg-cream focus:outline-none focus:ring-2 focus:ring-gold"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-charcoal disabled:opacity-50 hover:bg-cream focus:outline-none focus:ring-2 focus:ring-gold"
             >
               <span aria-hidden="true">‹</span>
             </button>
@@ -236,8 +238,9 @@ export function ExcuseDatePicker({
             <button
               type="button"
               aria-label="Následující měsíc"
+              disabled={isLoading}
               onClick={() => setVisibleMonth((month) => shiftMonth(month, 1))}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-charcoal hover:bg-cream focus:outline-none focus:ring-2 focus:ring-gold"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-charcoal disabled:opacity-50 hover:bg-cream focus:outline-none focus:ring-2 focus:ring-gold"
             >
               <span aria-hidden="true">›</span>
             </button>
