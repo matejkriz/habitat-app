@@ -786,6 +786,20 @@ export const db: any = {
   },
 
   attendance: {
+    saveDay: async (input: {
+      records: Array<{ childId: string; presence: Presence }>;
+      date: Date;
+      recordedById: string;
+    }): Promise<Attendance[]> => {
+      const saved = await convexMutation(api.db.saveAttendanceDay, {
+        secret: getServerSecret(),
+        date: input.date.getTime(),
+        recordedById: input.recordedById,
+        records: input.records.map(record => ({ ...record, id: createId() })),
+        auditId: createId(),
+      });
+      return saved.map(fromRawAttendance);
+    },
     list: async (args: ListArgs = {}) => {
       const attendance = (await listTable<RawAttendance>("attendance")).map(fromRawAttendance);
       const children = (await listTable<RawChild>("children")).map(fromRawChild);
@@ -954,6 +968,16 @@ export const db: any = {
   },
 
   excuses: {
+    createParentBatch: async (input: {
+      parentId: string; requestId: string; childIds: string[];
+      fromDate: Date; toDate: Date; reason: string | null; cancelLunch: boolean;
+    dayPart?: "FULL_DAY" | "MORNING" | "AFTERNOON";
+    }): Promise<{ replayed: boolean; excuses: Excuse[] }> => {
+      const result = await convexMutation(api.parentExcuses.createParentExcuses, {
+        ...input, secret: getServerSecret(), fromDate: input.fromDate.getTime(), toDate: input.toDate.getTime(),
+      });
+      return { replayed: result.replayed, excuses: result.excuses.map(fromRawExcuse) };
+    },
     get: async (args: GetArgs) => {
       const raw = await getById<RawExcuse>("excuses", String(args.where.id));
       return raw ? fromRawExcuse(raw) : null;

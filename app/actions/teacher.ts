@@ -23,6 +23,7 @@ import {
   groupExcusesByChild,
   type ExcuseDayState,
 } from "@/lib/excuse-coverage";
+import { parseExcuseDate } from "@/lib/excuse-rules";
 import { revalidatePath } from "next/cache";
 
 type AttendanceRecord = {
@@ -236,9 +237,9 @@ export const saveAttendance = async (
     throw new Error("Unauthorized");
   }
 
-  const dateStr = formData.get("date") as string;
-  const date = new Date(dateStr);
-  date.setHours(0, 0, 0, 0);
+  const dateStr = formData.get("date");
+  if (typeof dateStr !== "string") throw new Error("Neplatné datum");
+  const date = parseExcuseDate(dateStr);
 
   // Check if we can enter attendance for this date
   const canEnter = await canEnterAttendance(date);
@@ -252,6 +253,9 @@ export const saveAttendance = async (
   for (const [key, value] of formData.entries()) {
     if (key.startsWith("child-")) {
       const childId = key.replace("child-", "");
+      if (!childId || (value !== "present" && value !== "absent")) {
+        throw new Error("Neplatný záznam docházky");
+      }
       records.push({
         childId,
         presence: value === "present" ? Presence.PRESENT : Presence.ABSENT,
@@ -261,21 +265,6 @@ export const saveAttendance = async (
 
   // Save all attendance records
   await recordBulkAttendance(records, date, user.id);
-
-  // Create audit log
-  await db.auditLogs.create({
-    data: {
-      userId: user.id,
-      action: "CREATE",
-      entityType: "Attendance",
-      entityId: `bulk-${dateStr}`,
-      newValue: {
-        date: dateStr,
-        recordCount: records.length,
-        presentCount: records.filter((r) => r.presence === Presence.PRESENT).length,
-      },
-    },
-  });
 
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/kalendar");

@@ -164,6 +164,11 @@ export default defineSchema({
     .index("by_entity", { fields: ["entityType", "entityId"] })
     .index("by_created_at", { fields: ["createdAt"] }),
 
+  parentExcuseRequests: defineTable({
+    parentId: v.string(), requestId: v.string(), fingerprint: v.string(),
+    excuseIds: v.array(v.string()), createdAt: v.number(),
+  }).index("by_parent_request", { fields: ["parentId", "requestId"] }),
+
   mcpExcuseRequests: defineTable({
     requestId: v.string(),
     workosUserId: v.string(),

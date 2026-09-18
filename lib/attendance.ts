@@ -108,19 +108,9 @@ export async function recordBulkAttendance(
   date: Date,
   recordedById: string
 ): Promise<Attendance[]> {
-  const results: Attendance[] = [];
-
-  for (const record of records) {
-    const attendance = await recordAttendance(
-      record.childId,
-      date,
-      record.presence,
-      recordedById
-    );
-    results.push(attendance);
-  }
-
-  return results;
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+  return db.attendance.saveDay({ records, date: normalizedDate, recordedById });
 }
 
 /**

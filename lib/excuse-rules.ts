@@ -76,12 +76,18 @@ export function isAutoApproved(submittedAt: Date, fromDate: Date): boolean {
  * @returns The deadline for auto-approval
  */
 export function getAutoApprovalDeadline(fromDate: Date): Date {
-  const deadline = new Date(fromDate);
+  // Dates in the app represent calendar days; the cutoff is always Prague time,
+  // even when the server runs in UTC. At 09:00 the DST transition is complete.
+  const previousDay = new Date(Date.UTC(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 9));
   do {
-    deadline.setDate(deadline.getDate() - 1);
-  } while (deadline.getDay() === 0 || deadline.getDay() === 6);
-  deadline.setHours(9, 0, 0, 0);
-  return deadline;
+    previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+  } while ([0, 6].includes(previousDay.getUTCDay()));
+  const wallTime = previousDay.getTime();
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Prague", hour: "2-digit", hourCycle: "h23",
+  }).format(new Date(wallTime));
+  const offsetHours = Number(hour) - 9;
+  return new Date(wallTime - offsetHours * 60 * 60 * 1000);
 }
 
 /**
@@ -93,6 +99,7 @@ export function getAutoApprovalDeadline(fromDate: Date): Date {
 export function formatDeadline(fromDate: Date): string {
   const deadline = getAutoApprovalDeadline(fromDate);
   const options: Intl.DateTimeFormatOptions = {
+    timeZone: "Europe/Prague",
     weekday: "long",
     day: "numeric",
     month: "long",

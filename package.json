@@ -17,7 +17,9 @@
     "convex:dev": "CONVEX_DISABLE_TELEMETRY=1 convex dev",
     "convex:deploy": "CONVEX_DISABLE_TELEMETRY=1 convex deploy",
     "convex:codegen": "CONVEX_DISABLE_TELEMETRY=1 convex codegen --typecheck disable",
-    "seed:dev": "CONVEX_DISABLE_TELEMETRY=1 convex run seed:development '{}' --push --typecheck disable"
+    "seed:dev": "CONVEX_DISABLE_TELEMETRY=1 convex run seed:development '{}' --push --typecheck disable",
+    "test:e2e": "playwright test",
+    "check": "pnpm typecheck && pnpm lint && pnpm test:run"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
@@ -39,6 +41,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.1",
@@ -47,6 +50,7 @@
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "4.0.18",
     "convex-test": "^0.0.56",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",

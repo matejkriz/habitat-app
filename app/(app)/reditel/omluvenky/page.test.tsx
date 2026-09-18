@@ -263,3 +263,25 @@ describe("ExcuseManagementPage", () => {
     expect(mocks.getExcuses).toHaveBeenCalledOnce();
   });
 });
+
+it("shows a failed load and can retry without claiming the list is empty", async () => {
+  mocks.getExcuseChildren.mockResolvedValue([]);
+  mocks.getExcuses.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce([lateExcuse]);
+  render(<ExcuseManagementPage />);
+  expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("načíst"));
+  expect(screen.queryByText("Žádné omluvenky")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Zkusit znovu" }));
+  expect(await screen.findByText("Tobiáš Tornádo")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("reports failed approval and allows another attempt", async () => {
+  mocks.getExcuseChildren.mockResolvedValue([]);
+  mocks.getExcuses.mockResolvedValue([lateExcuse]);
+  mocks.updateExcuse.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
+  render(<ExcuseManagementPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Schválit" }));
+  expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("schválení"));
+  fireEvent.click(screen.getByRole("button", { name: "Schválit" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+});

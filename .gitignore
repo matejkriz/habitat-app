@@ -47,3 +47,7 @@ next-env.d.ts
 
 # Local Slack report imports
 /data/slack-reports/
+# Browser sessions and test artifacts
+/.playwright/
+/playwright-report/
+/test-results/
