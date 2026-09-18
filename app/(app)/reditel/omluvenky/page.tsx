@@ -84,9 +84,12 @@ export default function ExcuseManagementPage() {
       createToDate &&
       createFromDate !== createToDate,
   );
+  const [loadError, setLoadError] = useState("");
+  const [updateError, setUpdateError] = useState("");
 
   const loadExcuses = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
+    setLoadError("");
     try {
       const options =
         filter === "pending"
@@ -96,8 +99,8 @@ export default function ExcuseManagementPage() {
             : undefined;
       const data = await getExcuses(options);
       setExcuses([...data]);
-    } catch (error) {
-      console.error("Failed to load excuses:", error);
+    } catch {
+      setLoadError("Nepodařilo se načíst omluvenky.");
     } finally {
       if (showLoading) setIsLoading(false);
     }
@@ -126,11 +129,12 @@ export default function ExcuseManagementPage() {
   const handleApprove = async (excuseId: string, approve: boolean) => {
     if (updatingIds.has(excuseId)) return;
     setUpdatingIds(ids => new Set(ids).add(excuseId));
+    setUpdateError("");
     try {
       await updateExcuse(excuseId, approve);
       await loadExcuses(false);
-    } catch (error) {
-      console.error("Failed to update excuse:", error);
+    } catch {
+      setUpdateError("Nepodařilo se změnit schválení. Zkuste to znovu.");
     } finally {
       setUpdatingIds(ids => {
         const next = new Set(ids);
@@ -228,6 +232,13 @@ export default function ExcuseManagementPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div role="alert" className="rounded-lg bg-coral/10 p-3 text-coral">
+          <p>{loadError}</p>
+          <Button type="button" variant="outline" onClick={() => void loadExcuses()}>Zkusit znovu</Button>
+        </div>
+      )}
+      {updateError && <p role="alert" className="text-coral">{updateError}</p>}
       {showCreateForm ? (
         <Card>
           <form onSubmit={handleCreate}>
@@ -394,7 +405,7 @@ export default function ExcuseManagementPage() {
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin h-8 w-8 border-4 border-gold border-t-transparent rounded-full" />
             </div>
-          ) : excuses.length === 0 ? (
+          ) : loadError ? null : excuses.length === 0 ? (
             <p className="text-charcoal-light text-center py-12">
               {filter === "pending"
                 ? "Žádné omluvenky ke schválení"

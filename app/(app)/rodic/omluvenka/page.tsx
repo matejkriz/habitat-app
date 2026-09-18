@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -19,7 +19,11 @@ import {
   submitExcuse,
   type ParentVisibleChild,
 } from "@/app/actions/parent";
-import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
+import {
+  canStillAutoApprove,
+  formatDeadline,
+  parseExcuseDate,
+} from "@/lib/excuse-rules";
 import {
   ExcuseDayPart,
   type ExcuseDayPart as ExcuseDayPartValue,
@@ -63,6 +67,7 @@ function mixedLunchMessage(summary: SubmissionSummary): string {
 }
 
 export default function NewExcusePage() {
+  const request = useRef<{ fingerprint: string; id: string } | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedChildId = searchParams.get("child");
@@ -118,7 +123,7 @@ export default function NewExcusePage() {
 
   useEffect(() => {
     if (fromDate) {
-      const from = new Date(fromDate);
+      const from = parseExcuseDate(fromDate);
       const canAutoApprove = canStillAutoApprove(from);
       setWillAutoApprove(canAutoApprove);
       setDeadline(formatDeadline(from));
@@ -153,6 +158,11 @@ export default function NewExcusePage() {
       formData.set("cancelLunch", String(shouldCancelLunch));
       if (reason) formData.set("reason", reason);
 
+      const fingerprint = JSON.stringify([...formData.entries()]);
+      if (request.current?.fingerprint !== fingerprint) {
+        request.current = { fingerprint, id: crypto.randomUUID() };
+      }
+      formData.set("requestId", request.current.id);
       const result = await submitExcuse(formData);
       setSuccess({
         count: result.excuses.length,

@@ -252,3 +252,9 @@ Uživatelé jsou při prvním přihlášení automaticky synchronizováni do dat
 - Pondělí až čtvrtek = výukové dny
 - Pátek, sobota, neděle = automaticky zavřeno
 - Ředitel může přidat další volné dny (prázdniny, svátky)
+
+## Testování
+
+`pnpm check` spustí typecheck, lint a rychlé automatické testy. Praktický rozsah
+pokrytí, browser průchody a nastavení testovacího prostředí popisuje
+[docs/testing.md](docs/testing.md).

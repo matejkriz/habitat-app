@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getDbUser: vi.fn(),
   tripFundOverview: vi.fn(),
+  createExtraPerson: vi.fn(), updateExtraPerson: vi.fn(), setExtraExpense: vi.fn(),
   childrenList: vi.fn(),
   childrenGet: vi.fn(),
   childrenUpdate: vi.fn(),
@@ -22,7 +23,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
 vi.mock("@/lib/db", () => ({
   db: {
-    tripFunds: { overview: mocks.tripFundOverview },
+    tripFunds: { overview: mocks.tripFundOverview, createExtraPerson: mocks.createExtraPerson, updateExtraPerson: mocks.updateExtraPerson, setExtraExpense: mocks.setExtraExpense },
     children: {
       list: mocks.childrenList,
       get: mocks.childrenGet,
@@ -52,6 +53,7 @@ vi.mock("@/lib/slack", () => ({
 }));
 
 import {
+  createExtraFundPerson, updateExtraFundPerson, setExtraFundExpense,
   createDirectorExcuse,
   getExcuseChildren,
   getExcuses,
@@ -571,5 +573,30 @@ describe("getTripFundOverview", () => {
     const overview = await getTripFundOverview();
     expect(overview.children.map(child => child.childId)).toEqual(["a", "z"]);
     expect(overview.children[1].fundBalance).toBe(420);
+  });
+});
+
+describe("director-only extra fund people", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it.each([null, { role: "PARENT" }, { role: "TEACHER" }])("rejects every extra-person write for %j", async user => {
+    mocks.getDbUser.mockResolvedValue(user);
+    await expect(createExtraFundPerson("Eva")).rejects.toThrow("Unauthorized");
+    await expect(updateExtraFundPerson("p", { name: "Eva" })).rejects.toThrow("Unauthorized");
+    await expect(setExtraFundExpense("p", "2026-09-10", 80)).rejects.toThrow("Unauthorized");
+    expect(mocks.createExtraPerson).not.toHaveBeenCalled();
+    expect(mocks.updateExtraPerson).not.toHaveBeenCalled();
+    expect(mocks.setExtraExpense).not.toHaveBeenCalled();
+  });
+  it("validates and saves the director's changes", async () => {
+    mocks.getDbUser.mockResolvedValue({ id: "director", role: "DIRECTOR" });
+    await createExtraFundPerson(" Eva ");
+    expect(mocks.createExtraPerson).toHaveBeenCalledWith("Eva", "director");
+    await updateExtraFundPerson("p", { name: " Eva Malá ", fundSent: 500 });
+    expect(mocks.updateExtraPerson).toHaveBeenCalledWith("p", { name: "Eva Malá", fundSent: 500 }, "director");
+    await setExtraFundExpense("p", "2026-09-10", 80);
+    expect(mocks.setExtraExpense).toHaveBeenCalledWith("p", new Date(2026, 8, 10), 80, "director");
+    await expect(createExtraFundPerson(" ")).rejects.toThrow();
+    await expect(updateExtraFundPerson("p", { fundSent: -5 })).rejects.toThrow();
+    await expect(setExtraFundExpense("p", "2026-02-30", 80)).rejects.toThrow();
   });
 });

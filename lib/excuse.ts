@@ -456,3 +456,49 @@ export async function canManageExcuses(
   );
   return access.every(Boolean);
 }
+
+/** The parent form commits all siblings, audits and notification jobs together. */
+export async function createParentExcuses(
+  input: {
+    parentId: string;
+    requestId: string;
+    childIds: string[];
+    fromDate: Date;
+    toDate: Date;
+    reason: string | null;
+    cancelLunch: boolean;
+    dayPart?: "FULL_DAY" | "MORNING" | "AFTERNOON";
+  },
+  schoolDays: ReadonlyArray<Date>,
+): Promise<Excuse[]> {
+  const validation = validateExcuseDates(input.fromDate, input.toDate);
+  if (!validation.valid) throw new Error(validation.error);
+  const result = await db.excuses.createParentBatch(input);
+  if (!result.replayed) {
+    // A failed secondary notification must never report the committed form as failed.
+    try {
+      const parent = await db.users.get({ where: { id: input.parentId } });
+      for (const excuse of result.excuses as Excuse[]) {
+        const child = await db.children.get({ where: { id: excuse.childId } });
+        if (child && parent) {
+          sendExcuseNotification({
+            childName: `${child.firstName} ${child.lastName}`,
+            parentName: parent.name || "Neznámý rodič",
+            fromDate: excuse.fromDate,
+            toDate: excuse.toDate,
+            reason: excuse.reason,
+            cancelLunch: excuse.cancelLunch,
+            dayPart: excuse.dayPart,
+            isOnTime: getLateDays(excuse, schoolDays).length === 0,
+            automaticallyApproved: excuse.lateApprovedAt !== null,
+          }).catch((error) =>
+            console.error("Failed to send Slack notification", error),
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to prepare Slack notification", error);
+    }
+  }
+  return result.excuses;
+}

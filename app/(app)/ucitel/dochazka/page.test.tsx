@@ -643,3 +643,30 @@ it("shows the event name even when details are collapsed", async () => {
   expect(screen.getByRole("heading", { name: "Den" })).toBeTruthy();
   cleanup();
 });
+
+it("does not show an old save confirmation after navigating to another day", async () => {
+  const saving = createDeferred<{ success: true; recordCount: number }>();
+  mocks.getAllChildren.mockResolvedValue([{ id: "a", firstName: "Anna", lastName: "Test", gender: "FEMALE" }]);
+  mocks.getAttendanceForDate.mockResolvedValue({ isClosed: false, attendance: [], excuses: [] });
+  mocks.saveAttendance.mockReturnValueOnce(saving.promise);
+  render(<TeacherAttendancePage />);
+  await screen.findByRole("checkbox");
+  fireEvent.click(screen.getByRole("button", { name: /Potvrdit docházku|Uložit změny/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Předchozí den" }));
+  await screen.findByRole("checkbox");
+  await act(async () => saving.resolve({ success: true, recordCount: 1 }));
+  expect(screen.queryByText("Docházka uložena (1 záznamů)")).toBeNull();
+});
+
+it("preserves attendance edits after failed save and lets the teacher retry", async () => {
+  mocks.getAllChildren.mockResolvedValue([{ id: "a", firstName: "Anna", lastName: "Test", gender: "FEMALE" }]);
+  mocks.getAttendanceForDate.mockResolvedValue({ isClosed: false, attendance: [], excuses: [] });
+  mocks.saveAttendance.mockRejectedValueOnce(new Error("Spojení přerušeno")).mockResolvedValueOnce({ success: true, recordCount: 1 });
+  render(<TeacherAttendancePage />);
+  fireEvent.click(await screen.findByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: /Potvrdit docházku|Uložit změny/ }));
+  await screen.findByText("Spojení přerušeno");
+  expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: /Potvrdit docházku|Uložit změny/ }));
+  expect(await screen.findByText("Docházka uložena (1 záznamů)")).toBeTruthy();
+});

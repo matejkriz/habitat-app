@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NewExcusePage from "./page";
 
 const mocks = vi.hoisted(() => ({
@@ -68,6 +68,24 @@ describe("NewExcusePage", () => {
         automaticallyApprovedDayCount: 0,
       },
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps the selected date when previewing its deadline west of UTC", async () => {
+    vi.stubEnv("TZ", "America/New_York");
+    render(<NewExcusePage />);
+
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2099-09-22" },
+    });
+
+    expect(
+      await screen.findByText(/termín do pondělí 21\. září.*09:00/i),
+    ).toBeTruthy();
   });
 
   it("disables closed endpoints but allows a range to span across them", async () => {
@@ -332,4 +350,21 @@ describe("NewExcusePage", () => {
       ),
     ).toBeTruthy();
   });
+  it("keeps the same request identity and form values when retrying a failed submission", async () => {
+    mocks.submitExcuse.mockRejectedValueOnce(new Error("Spojení přerušeno"));
+    render(<NewExcusePage />);
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-09-10" } });
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+    await screen.findByText("Spojení přerušeno");
+    expect(screen.getByLabelText<HTMLInputElement>("Od").value).toBe("10. 9. 2026");
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+    await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalledTimes(2));
+    const first = mocks.submitExcuse.mock.calls[0][0] as FormData;
+    const second = mocks.submitExcuse.mock.calls[1][0] as FormData;
+    expect(first.get("requestId")).toEqual(expect.any(String));
+    expect(second.get("requestId")).toBe(first.get("requestId"));
+  });
+
 });

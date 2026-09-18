@@ -3,6 +3,8 @@ import * as policy from "./dev-persona";
 
 type PersonaEnvironment = {
   DEV_PERSONA_SWITCHER?: string;
+  E2E_LOCAL?: string;
+  NEXT_PUBLIC_WORKOS_REDIRECT_URI?: string;
   WORKOS_API_KEY?: string;
   NODE_ENV?: string;
   VERCEL_TARGET_ENV?: string;
@@ -21,6 +23,14 @@ describe("development persona policy", () => {
     };
 
     expect(allow({ ...shared, NODE_ENV: "development" })).toBe(true);
+    expect(
+      allow({
+        ...shared,
+        NODE_ENV: "production",
+        E2E_LOCAL: "true",
+        NEXT_PUBLIC_WORKOS_REDIRECT_URI: "http://127.0.0.1:3000/callback",
+      }),
+    ).toBe(true);
     expect(
       allow({
         ...shared,
@@ -58,6 +68,21 @@ describe("development persona policy", () => {
         ...shared,
         VERCEL_TARGET_ENV: "preview",
         VERCEL_GIT_COMMIT_REF: "feature/anything",
+      }),
+    ).toBe(false);
+    expect(
+      allow({
+        ...shared,
+        E2E_LOCAL: "true",
+        NEXT_PUBLIC_WORKOS_REDIRECT_URI: "http://127.0.0.1:3000/callback",
+        WORKOS_API_KEY: "sk_live_example",
+      }),
+    ).toBe(false);
+    expect(
+      allow({
+        ...shared,
+        E2E_LOCAL: "true",
+        NEXT_PUBLIC_WORKOS_REDIRECT_URI: "https://preview.example.com/callback",
       }),
     ).toBe(false);
     expect(

@@ -17,7 +17,7 @@ import type {
   User,
   UserRole,
 } from "./types";
-import type { DayDetailsPatch } from "./day-details";
+import type { DayDetailsPatch, ExtraFundPersonPatch } from "./day-details";
 import type { AuditAction } from "./types";
 
 type TableName =
@@ -786,6 +786,20 @@ export const db: any = {
   },
 
   attendance: {
+    saveDay: async (input: {
+      records: Array<{ childId: string; presence: Presence }>;
+      date: Date;
+      recordedById: string;
+    }): Promise<Attendance[]> => {
+      const saved = await convexMutation(api.db.saveAttendanceDay, {
+        secret: getServerSecret(),
+        date: input.date.getTime(),
+        recordedById: input.recordedById,
+        records: input.records.map(record => ({ ...record, id: createId() })),
+        auditId: createId(),
+      });
+      return saved.map(fromRawAttendance);
+    },
     list: async (args: ListArgs = {}) => {
       const attendance = (await listTable<RawAttendance>("attendance")).map(fromRawAttendance);
       const children = (await listTable<RawChild>("children")).map(fromRawChild);
@@ -954,6 +968,16 @@ export const db: any = {
   },
 
   excuses: {
+    createParentBatch: async (input: {
+      parentId: string; requestId: string; childIds: string[];
+      fromDate: Date; toDate: Date; reason: string | null; cancelLunch: boolean;
+    dayPart?: "FULL_DAY" | "MORNING" | "AFTERNOON";
+    }): Promise<{ replayed: boolean; excuses: Excuse[] }> => {
+      const result = await convexMutation(api.parentExcuses.createParentExcuses, {
+        ...input, secret: getServerSecret(), fromDate: input.fromDate.getTime(), toDate: input.toDate.getTime(),
+      });
+      return { replayed: result.replayed, excuses: result.excuses.map(fromRawExcuse) };
+    },
     get: async (args: GetArgs) => {
       const raw = await getById<RawExcuse>("excuses", String(args.where.id));
       return raw ? fromRawExcuse(raw) : null;
@@ -1181,6 +1205,15 @@ export const db: any = {
     }),
   },
   tripFunds: {
+    createExtraPerson: (name: string, recordedById: string) => convexMutation(api.db.createExtraFundPerson, {
+      secret: getServerSecret(), id: randomUUID(), name, recordedById,
+    }),
+    updateExtraPerson: (personId: string, patch: ExtraFundPersonPatch, recordedById: string) => convexMutation(api.db.updateExtraFundPerson, {
+      secret: getServerSecret(), personId, ...patch, recordedById,
+    }),
+    setExtraExpense: (personId: string, date: Date, amount: number, recordedById: string) => convexMutation(api.db.setExtraFundExpense, {
+      secret: getServerSecret(), personId, date: date.getTime(), amount, recordedById,
+    }),
     parentOverview: (parentId: string) => convexQuery(api.db.getParentTripFundOverview, { secret: getServerSecret(), parentId }),
     createExpense: (date: Date, expense: number, overrides: { childId: string; amount: number }[], recordedById: string) => convexMutation(api.db.createTripExpense, {
       secret: getServerSecret(), date: date.getTime(), expense, overrides, recordedById,

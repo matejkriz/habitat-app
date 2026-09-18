@@ -1,6 +1,7 @@
 "use server";
 
 import type { DaySummary } from "@/lib/day-details";
+import { randomUUID } from "node:crypto";
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@/lib/types";
 import { getSchoolDaysInRange, isClosedDay } from "@/lib/school-days";
 import {
-  createExcuse,
+  createParentExcuses,
   canManageExcuse,
   canManageExcuses,
   canSubmitExcuse,
@@ -357,14 +358,13 @@ export const submitExcuse = async (formData: FormData) => {
     throw new ExcuseValidationError(CLOSED_EXCUSE_ENDPOINT_ERROR);
   }
 
-  const excuses = await Promise.all(
-    childIds.map((childId) =>
-      createExcuse(childId, fromDate, toDate, reason, user.id, schoolDays, {
-        dayPart,
-        cancelLunch,
-      }),
-    ),
-  );
+  const requestId = formData.get("requestId");
+  const excuses = await createParentExcuses({
+    parentId: user.id,
+    // Compatibility with forms opened before the new version was deployed.
+    requestId: typeof requestId === "string" ? requestId : randomUUID(),
+    childIds, fromDate, toDate, reason, cancelLunch, dayPart,
+  }, schoolDays);
   const automaticallyApprovedDayCount = excuses.reduce(
     (count, excuse) =>
       count + (excuse.lateApprovedAt === null ? 0 : schoolDays.length),

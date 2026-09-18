@@ -43,7 +43,34 @@ export type DaySummary = { date: number; name: string | null; expense: number | 
 export type TripFund = { childId: string; fundSent: number | null; fundSpent: number; fundBalance: number };
 export type ChildTripExpense = { childId: string; name: string; amount: number; override: number | null };
 
+export type ExtraFundPerson = {
+  personId: string;
+  name: string;
+  fundSent: number;
+  fundSpent: number;
+  fundBalance: number;
+  amounts: number[];
+};
+
+export type ExtraFundPersonPatch = { name?: string; fundSent?: number };
+
+export function validateExtraFundPersonPatch(patch: ExtraFundPersonPatch): ExtraFundPersonPatch {
+  const result: ExtraFundPersonPatch = {};
+  if (patch.name !== undefined) {
+    if (typeof patch.name !== "string" || !patch.name.trim() || patch.name.trim().length > 160) {
+      throw new Error("Zadejte jméno osoby (nejvýše 160 znaků).");
+    }
+    result.name = patch.name.trim();
+  }
+  if (patch.fundSent !== undefined) {
+    validateCrowns(patch.fundSent);
+    result.fundSent = patch.fundSent;
+  }
+  return result;
+}
+
 export type TripFundOverview = {
+  extraPeople?: ExtraFundPerson[];
   days: DaySummary[];
   children: (TripFund & {
     firstName: string;

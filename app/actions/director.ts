@@ -1,6 +1,6 @@
 "use server";
 
-import { validateCrowns, type TripFund, type TripFundOverview } from "@/lib/day-details";
+import { parseDayDate, validateExtraFundPersonPatch, type ExtraFundPersonPatch, validateCrowns, type TripFund, type TripFundOverview } from "@/lib/day-details";
 
 import { loadLunchOverview, type LunchOverview } from "@/lib/lunch-overview";
 export type { LunchOverview } from "@/lib/lunch-overview";
@@ -67,6 +67,12 @@ type AttendanceWithChild = Attendance & {
     readonly gender: ChildGender | null;
   };
 };
+
+function serializeCsvCell(value: unknown): string {
+  const text = String(value);
+  const safeText = /^[=+\-@]/.test(text) ? `\t${text}` : text;
+  return `"${safeText.replaceAll('"', '""')}"`;
+}
 
 type ExcuseWithChildAndSubmitter = Excuse & {
   readonly child: {
@@ -151,6 +157,29 @@ async function getSchoolDaysCoveringExcuses(
     { from: Number.POSITIVE_INFINITY, to: Number.NEGATIVE_INFINITY },
   );
   return getSchoolDaysInRange(new Date(from), new Date(to));
+}
+
+export async function createExtraFundPerson(name: string): Promise<void> {
+  const user = await requireDirector();
+  const validated = validateExtraFundPersonPatch({ name });
+  if (!validated.name) throw new Error("Zadejte jméno osoby.");
+  await db.tripFunds.createExtraPerson(validated.name, user.id);
+  revalidatePath("/reditel");
+}
+
+export async function updateExtraFundPerson(personId: string, patch: ExtraFundPersonPatch): Promise<void> {
+  const user = await requireDirector();
+  const validated = validateExtraFundPersonPatch(patch);
+  await db.tripFunds.updateExtraPerson(personId, validated, user.id);
+  revalidatePath("/reditel");
+}
+
+export async function setExtraFundExpense(personId: string, dateKey: string, amount: number): Promise<void> {
+  const user = await requireDirector();
+  const date = parseDayDate(dateKey);
+  validateCrowns(amount);
+  await db.tripFunds.setExtraExpense(personId, date, amount, user.id);
+  revalidatePath("/reditel");
 }
 
 export async function getTripFundOverview(): Promise<TripFundOverview> {
@@ -734,7 +763,7 @@ export async function exportAttendanceCSV(
 
   const csvContent = [
     headers.join(";"),
-    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(";")),
+    ...rows.map((row) => row.map(serializeCsvCell).join(";")),
   ].join("\n");
 
   return csvContent;

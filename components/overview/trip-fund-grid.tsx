@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { DaySummary, TripFundOverview } from "@/lib/day-details";
+import type { DaySummary, ExtraFundPerson, TripFundOverview } from "@/lib/day-details";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -7,17 +7,26 @@ const crowns = new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZ
 const dateLabel = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "numeric", year: "numeric" });
 export const formatTripDate = (date: number) => dateLabel.format(date);
 
-type FundChild = TripFundOverview["children"][number];
+type FundRow = TripFundOverview["children"][number] | ExtraFundPerson;
 
-export function TripFundGrid({ overview, renderAmount, renderDay, children }: {
+export function TripFundGrid({ overview, renderAmount, renderDay, renderName, addPerson, showTotals = false, children }: {
   overview: TripFundOverview;
-  renderAmount?: (amount: number, child: FundChild, day?: DaySummary) => ReactNode;
+  renderAmount?: (amount: number, child: FundRow, day?: DaySummary) => ReactNode;
   renderDay?: (day: DaySummary) => ReactNode;
+  renderName?: (person: ExtraFundPerson) => ReactNode;
+  addPerson?: ReactNode;
+  showTotals?: boolean;
   children: ReactNode;
 }) {
+  const rows: FundRow[] = [...overview.children, ...(overview.extraPeople ?? [])];
+  const totals = [
+    rows.reduce((sum, row) => sum + (row.fundSent ?? 0), 0),
+    ...overview.days.map((_, index) => rows.reduce((sum, row) => sum + (row.amounts[index] ?? 0), 0)),
+    rows.reduce((sum, row) => sum + row.fundBalance, 0),
+  ];
   return (
       <Card className="overflow-hidden p-0 ring-1 ring-charcoal/5">
-        {overview.children.length === 0 ? (
+        {rows.length === 0 && !addPerson ? (
           <p className="px-6 py-12 text-center text-charcoal-light">Nejsou evidované žádné děti.</p>
         ) : (
           <div className="overflow-x-auto overscroll-x-contain max-md:max-h-[calc(100dvh-8rem)] max-md:overflow-y-auto">
@@ -38,11 +47,12 @@ export function TripFundGrid({ overview, renderAmount, renderDay, children }: {
                 </tr>
               </thead>
               <tbody>
-                {overview.children.map((child, index) => {
+                {rows.map((child, index) => {
+                  const isExtra = "personId" in child;
                   const background = index % 2 === 0 ? "bg-white" : "bg-[#fdfaf6]";
                   return (
-                    <tr key={child.childId}>
-                      <th scope="row" className={cn("whitespace-nowrap border-b border-r border-cream-dark px-4 py-3 text-left font-bold text-charcoal md:sticky md:left-0 md:z-10", background)}>{child.firstName} {child.lastName}</th>
+                    <tr key={isExtra ? `extra:${child.personId}` : `child:${child.childId}`} className={isExtra && index === overview.children.length ? "[&>th]:border-t-[3px] [&>td]:border-t-[3px] [&>th]:border-t-charcoal/35 [&>td]:border-t-charcoal/35" : undefined}>
+                      <th scope="row" className={cn("whitespace-nowrap border-b border-r border-cream-dark px-4 py-3 text-left font-bold text-charcoal md:sticky md:left-0 md:z-10", background, isExtra && renderName && "py-1")}>{isExtra ? renderName?.(child) ?? child.name : `${child.firstName} ${child.lastName}`}</th>
                       <td className={cn("border-b border-r border-cream-dark px-1 py-1 text-right text-charcoal", background)}>
                         {renderAmount ? renderAmount(child.fundSent ?? 0, child) : <span className="block px-2 py-3">{crowns.format(child.fundSent ?? 0)}</span>}
                       </td>
@@ -58,7 +68,14 @@ export function TripFundGrid({ overview, renderAmount, renderDay, children }: {
                     </tr>
                   );
                 })}
+                {addPerson && <tr><td colSpan={overview.days.length + 3} className="border-b border-cream-dark bg-white px-4 py-2">{addPerson}</td></tr>}
               </tbody>
+              {showTotals && <tfoot>
+                <tr className="font-bold text-charcoal">
+                  <th scope="row" className="border-t-2 border-r border-sage/40 bg-[#e8eee2] px-4 py-4 text-left md:sticky md:left-0 md:z-10">Celkem</th>
+                  {totals.map((amount, index) => <td key={index} className={cn("whitespace-nowrap border-t-2 border-r border-sage/40 bg-[#e8eee2] px-3 py-4 text-right", index === totals.length - 1 && "sticky right-0 z-10 border-l shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]", amount < 0 && "text-red-700")}>{crowns.format(amount)}</td>)}
+                </tr>
+              </tfoot>}
             </table>
           </div>
         )}
