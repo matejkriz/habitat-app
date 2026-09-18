@@ -30,6 +30,11 @@ async function setAbsence(page: Page) {
   await page.getByLabel("Datum docházky").fill(date);
   const toggle = page.getByRole("checkbox", { name: `Docházka: ${childName}` });
   await expect(toggle).toBeAttached();
+  if (!(await toggle.isChecked())) {
+    await toggle.check({ force: true });
+    await page.getByRole("button", { name: /Potvrdit docházku|Uložit změny/ }).click();
+    await expect(page.getByText(/Docházka uložena/)).toBeVisible();
+  }
   await toggle.uncheck({ force: true });
   await page.getByRole("button", { name: /Potvrdit docházku|Uložit změny/ }).click();
   await expect(page.getByText(/Docházka uložena/)).toBeVisible();
@@ -41,6 +46,7 @@ test("parent excuse → director approval → lunch cancellation", async ({
   await setAbsence(page);
   await persona(page, "parent-roza");
   await page.goto(`/rodic/omluvenka?child=${childId}&date=${date}`);
+  await expect(page.getByRole("checkbox", { name: "Žofie", exact: true })).toBeChecked();
   await page.getByLabel("Důvod (volitelné)").fill(marker);
   await page.getByRole("button", { name: "Odeslat omluvenku" }).click();
   await expect(page).toHaveURL(/\/rodic\?child=/);
@@ -50,7 +56,7 @@ test("parent excuse → director approval → lunch cancellation", async ({
   await page.goto("/reditel/omluvenky");
   const excuse = page
     .locator("div.rounded-lg")
-    .filter({ has: page.getByText(marker, { exact: true }) })
+    .filter({ has: page.getByText(`Důvod: ${marker}`, { exact: true }) })
     .last();
   await excuse.getByRole("button", { name: "Schválit", exact: true }).click();
   await expect(
@@ -96,7 +102,7 @@ test("director assigns a child and only the linked family sees it", async ({
   const lastName = "Testovací";
   await persona(page, "director-bohumil");
   await page.goto("/reditel/deti");
-  await page.getByRole("button", { name: "Přidat nové dítě" }).click();
+  await expect(page.getByRole("heading", { name: "Přidat nové dítě" })).toBeVisible();
   await page.getByLabel("Jméno", { exact: true }).fill(firstName);
   await page.getByLabel("Příjmení", { exact: true }).fill(lastName);
   await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
