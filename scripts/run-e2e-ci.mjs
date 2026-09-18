@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { resolve } from "node:path";
 import { createEmulator } from "@workos/emulate";
+import { previousSchoolDay } from "./e2e-date.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const envFile = resolve(root, ".env.local");
@@ -22,27 +23,6 @@ const originalConvexTsconfig = hadConvexTsconfig
 const children = [];
 let workos;
 let cleaningUp = false;
-
-function previousSchoolDay(now = new Date()) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      day: "2-digit",
-      month: "2-digit",
-      timeZone: "Europe/Prague",
-      year: "numeric",
-    })
-      .formatToParts(now)
-      .filter(({ type }) => type !== "literal")
-      .map(({ type, value }) => [type, Number(value)]),
-  );
-  const candidate = new Date(
-    Date.UTC(parts.year, parts.month - 1, parts.day - 1, 12),
-  );
-  while (candidate.getUTCDay() === 0 || candidate.getUTCDay() === 6) {
-    candidate.setUTCDate(candidate.getUTCDate() - 1);
-  }
-  return candidate.toISOString().slice(0, 10);
-}
 
 const testEnv = {
   ...process.env,
