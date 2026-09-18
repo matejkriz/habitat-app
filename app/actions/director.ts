@@ -734,7 +734,7 @@ export async function exportAttendanceCSV(
 
   const csvContent = [
     headers.join(";"),
-    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(";")),
+    ...rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")),
   ].join("\n");
 
   return csvContent;

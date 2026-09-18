@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getClosedDays, addClosedDay, removeClosedDay } from "@/app/actions/director";
 import {
   Card,
@@ -27,20 +27,19 @@ export default function ClosedDaysPage() {
   const [error, setError] = useState("");
   const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(new Set());
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const data = await getClosedDays();
-        setClosedDays(data);
-      } catch (error) {
-        console.error("Failed to load closed days:", error);
-      } finally {
-        setIsLoading(false);
-      }
+  const [loadError, setLoadError] = useState("");
+  const loadDays = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      setClosedDays(await getClosedDays());
+    } catch {
+      setLoadError("Nepodařilo se načíst volné dny.");
+    } finally {
+      setIsLoading(false);
     }
-    loadData();
   }, []);
+  useEffect(() => { void loadDays(); }, [loadDays]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,11 +67,12 @@ export default function ClosedDaysPage() {
   const handleDelete = async (id: string) => {
     if (deletingIds.has(id)) return;
     setDeletingIds(ids => new Set(ids).add(id));
+    setError("");
     try {
       await removeClosedDay(id);
       setClosedDays((prev) => prev.filter((d) => d.id !== id));
-    } catch (error) {
-      console.error("Failed to delete closed day:", error);
+    } catch {
+      setError("Nepodařilo se smazat volný den. Zkuste to znovu.");
     } finally {
       setDeletingIds(ids => {
         const next = new Set(ids);
@@ -127,6 +127,10 @@ export default function ClosedDaysPage() {
         </div>
       </div>
 
+      {loadError && <div role="alert" className="rounded-lg bg-coral/10 p-3 text-coral">
+        <p>{loadError}</p>
+        <Button type="button" variant="outline" onClick={() => void loadDays()}>Zkusit znovu</Button>
+      </div>}
       {/* Add new closed day */}
       <Card>
         <CardHeader>
@@ -135,7 +139,7 @@ export default function ClosedDaysPage() {
         <CardContent>
           <form onSubmit={handleAdd} className="space-y-4">
             {error && (
-              <div className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm">
+              <div role="alert" className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm">
                 {error}
               </div>
             )}
@@ -226,6 +230,7 @@ export default function ClosedDaysPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-label="Smazat"
                     onClick={() => handleDelete(day.id)}
                     isLoading={deletingIds.has(day.id)}
                   >

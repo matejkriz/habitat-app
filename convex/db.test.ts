@@ -327,3 +327,19 @@ describe("indexed startup queries", () => {
     expect(children.map((child) => child.id)).toEqual(["active-child"]);
   });
 });
+
+describe("runtime database authorization", () => {
+  it("rejects reads and writes with the wrong server secret", async () => {
+    vi.stubEnv("PUSH_INTERNAL_SECRET", "expected-secret");
+    try {
+      const t = convexTest(schema, modules);
+      await expect(t.query(api.db.list, { secret: "wrong", table: "children" })).rejects.toThrow();
+      await expect(t.mutation(api.db.saveAttendanceDay, {
+        secret: "wrong", date: 0, recordedById: "teacher", auditId: "audit", records: [],
+      })).rejects.toThrow();
+      expect(await t.run(({ db }) => db.query("attendance").collect())).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});

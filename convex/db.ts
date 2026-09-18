@@ -570,3 +570,73 @@ export const getParentTripFundOverview = query({
     };
   },
 });
+
+/** A whole day and its audit are committed together; retries update the same rows. */
+export const saveAttendanceDay = mutation({
+  args: {
+    secret: v.string(),
+    date: v.number(),
+    recordedById: v.string(),
+    auditId: v.string(),
+    records: v.array(
+      v.object({
+        id: v.string(),
+        childId: v.string(),
+        presence: v.union(v.literal("PRESENT"), v.literal("ABSENT")),
+      }),
+    ),
+  },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (
+      !Number.isFinite(args.date) ||
+      args.records.length === 0 ||
+      new Set(args.records.map((record) => record.childId)).size !==
+        args.records.length
+    ) {
+      throw new Error("Neplatná docházka");
+    }
+    const now = Date.now();
+    const saved = [];
+    for (const record of args.records) {
+      const child = await db
+        .query("children")
+        .withIndex("by_app_id", (q) => q.eq("id", record.childId))
+        .unique();
+      if (!child?.active)
+        throw new Error("Dítě nebylo nalezeno nebo není aktivní");
+      const existing = await db
+        .query("attendance")
+        .withIndex("by_child_date", (q) =>
+          q.eq("childId", record.childId).eq("date", args.date),
+        )
+        .unique();
+      const value = {
+        id: existing?.id ?? record.id,
+        childId: record.childId,
+        date: args.date,
+        presence: record.presence,
+        recordedById: args.recordedById,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      if (existing) await db.patch(existing._id, value);
+      else await db.insert("attendance", value);
+      saved.push(value);
+    }
+    await db.insert("auditLogs", {
+      id: args.auditId,
+      userId: args.recordedById,
+      action: "UPDATE",
+      entityType: "Attendance",
+      entityId: `bulk-${args.date}`,
+      newValue: {
+        date: args.date,
+        recordCount: saved.length,
+        presentCount: saved.filter((row) => row.presence === "PRESENT").length,
+      },
+      createdAt: now,
+    });
+    return saved;
+  },
+});

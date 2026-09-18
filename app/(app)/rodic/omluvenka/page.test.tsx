@@ -332,4 +332,21 @@ describe("NewExcusePage", () => {
       ),
     ).toBeTruthy();
   });
+  it("keeps the same request identity and form values when retrying a failed submission", async () => {
+    mocks.submitExcuse.mockRejectedValueOnce(new Error("Spojení přerušeno"));
+    render(<NewExcusePage />);
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-09-10" } });
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+    await screen.findByText("Spojení přerušeno");
+    expect(screen.getByLabelText<HTMLInputElement>("Od").value).toBe("10. 9. 2026");
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
+    await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalledTimes(2));
+    const first = mocks.submitExcuse.mock.calls[0][0] as FormData;
+    const second = mocks.submitExcuse.mock.calls[1][0] as FormData;
+    expect(first.get("requestId")).toEqual(expect.any(String));
+    expect(second.get("requestId")).toBe(first.get("requestId"));
+  });
+
 });
