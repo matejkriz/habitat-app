@@ -21,11 +21,15 @@ Generované Convex soubory, konfigurace a samotné testy se nepočítají.
 - Běžné fixture používají `Europe/Prague`. Test uzávěrky navíc spouští samostatné
   Node procesy v UTC i Praze, v létě, zimě a při změně času.
 
-## Tři browser průchody
+## Pět browser průchodů
 
 `pnpm test:e2e` používá Chromium a skutečné serverové akce i Convex. Žádné API
 se v těchto testech nemockuje. Testuje podání a schválení omluvenky včetně oběda,
 uložení docházky po obnovení stránky a přiřazení dítěte rodiči s izolací rodin.
+Další dva průchody ověřují příspěvek do fondu, individuální útratu a přepočet
+po změně docházky i uložení učitelského reportu a jeho čtení rodičem po reloadu.
+Odmítnutí rodičovského zápisu reportu navíc ověřuje integrační test přes skutečnou
+serverovou akci, DB adaptér a lokální Convex.
 
 Potřebuje **izolovaný testovací Convex**, nasazené změny tohoto checkoutu,
 WorkOS staging a povolený existující přepínač vývojových identit. Testy zapisují
@@ -47,7 +51,7 @@ běh použij čistý testovací deployment nebo nové vhodné datum bez jiných 
    Po přihlášení ověř přepínač „Testovací identita“ a zavři okno. Session je tajná;
    složka `.playwright` je v `.gitignore`. Po vypršení session postup opakuj.
 4. Spusť testy proti témuž originu a zvol minulý školní den bez uzavírky, bez dne
-   bez oběda a bez existujících omluvenek Žofie:
+   bez oběda a bez existujících omluvenek Žofie a bez zadané výletní útraty:
 
    ```sh
    E2E_BASE_URL=https://ADRESA-TESTOVACI-APLIKACE \
@@ -56,7 +60,7 @@ běh použij čistý testovací deployment nebo nové vhodné datum bez jiných 
 
 Testy vyžadují viditelný vývojový přepínač; nepřidávají žádnou cestu obcházející
 přihlášení. Selhání ukládá screenshot a trace do ignorovaných složek. CI zatím
-ověřuje, že se tři testy načtou; skutečné E2E se spouští ručně s testovací session.
+ověřuje, že se pět testů načte; skutečné E2E se spouští ručně s testovací session.
 
 ## Ručně po změnách přihlášení, push nebo PWA
 
@@ -73,3 +77,7 @@ Idempotence rodičovského formuláře platí při opakování stejného podán�
 otevřené stránce. Změna obsahu nebo otevření nového formuláře vytvoří nové podání;
 formuláře otevřené před nasazením zachovávají kompatibilitu bez této ochrany.
 Neděláme plošné snapshoty UI, zátěžové testy ani rozsáhlou browser matici.
+
+Test fondu vytváří vlastní dítě s příspěvkem 1 000 Kč, přiřazuje ho Róze a ponechá
+ho v testovacích datech. Pro další běh zvol jiné datum bez výletní útraty. Test
+reportu připisuje unikátní text k existujícímu testovacímu reportu.
