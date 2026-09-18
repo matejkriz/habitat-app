@@ -350,4 +350,17 @@ describe("director workflows", () => {
     ]);
     expect(await db.attendance.list()).toHaveLength(1);
   });
+
+  it("neutralizes formula-leading values in attendance CSV exports", async () => {
+    const first = await createChild("=2+2", "+SUM(1,1)", "FEMALE");
+    const second = await createChild("-10", "@command", "MALE");
+    await saveAttendance(attendance(first.id, second.id));
+
+    const csv = await exportAttendanceCSV(day, day);
+
+    expect(csv).toContain('"\t=2+2"');
+    expect(csv).toContain('"\t+SUM(1,1)"');
+    expect(csv).toContain('"\t-10"');
+    expect(csv).toContain('"\t@command"');
+  });
 });

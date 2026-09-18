@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NewExcusePage from "./page";
 
 const mocks = vi.hoisted(() => ({
@@ -68,6 +68,24 @@ describe("NewExcusePage", () => {
         automaticallyApprovedDayCount: 0,
       },
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps the selected date when previewing its deadline west of UTC", async () => {
+    vi.stubEnv("TZ", "America/New_York");
+    render(<NewExcusePage />);
+
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.change(screen.getByLabelText("Od"), {
+      target: { value: "2099-09-22" },
+    });
+
+    expect(
+      await screen.findByText(/termín do pondělí 21\. září.*09:00/i),
+    ).toBeTruthy();
   });
 
   it("disables closed endpoints but allows a range to span across them", async () => {

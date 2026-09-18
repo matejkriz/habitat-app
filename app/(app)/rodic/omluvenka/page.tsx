@@ -19,7 +19,11 @@ import {
   submitExcuse,
   type ParentVisibleChild,
 } from "@/app/actions/parent";
-import { canStillAutoApprove, formatDeadline } from "@/lib/excuse-rules";
+import {
+  canStillAutoApprove,
+  formatDeadline,
+  parseExcuseDate,
+} from "@/lib/excuse-rules";
 import {
   ExcuseDayPart,
   type ExcuseDayPart as ExcuseDayPartValue,
@@ -119,7 +123,7 @@ export default function NewExcusePage() {
 
   useEffect(() => {
     if (fromDate) {
-      const from = new Date(fromDate);
+      const from = parseExcuseDate(fromDate);
       const canAutoApprove = canStillAutoApprove(from);
       setWillAutoApprove(canAutoApprove);
       setDeadline(formatDeadline(from));

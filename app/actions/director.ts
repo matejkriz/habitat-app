@@ -68,6 +68,12 @@ type AttendanceWithChild = Attendance & {
   };
 };
 
+function serializeCsvCell(value: unknown): string {
+  const text = String(value);
+  const safeText = /^[=+\-@]/.test(text) ? `\t${text}` : text;
+  return `"${safeText.replaceAll('"', '""')}"`;
+}
+
 type ExcuseWithChildAndSubmitter = Excuse & {
   readonly child: {
     readonly id: string;
@@ -734,7 +740,7 @@ export async function exportAttendanceCSV(
 
   const csvContent = [
     headers.join(";"),
-    ...rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")),
+    ...rows.map((row) => row.map(serializeCsvCell).join(";")),
   ].join("\n");
 
   return csvContent;
