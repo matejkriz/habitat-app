@@ -46,6 +46,7 @@ import {
   getLunchOverview,
 } from "../app/actions/director";
 import { db } from "../lib/db";
+import { getDayReports, saveDayReport } from "../app/actions/day-details";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const createTest = () => convexTest(schema, modules);
@@ -110,6 +111,17 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+});
+
+it("lets a teacher publish a report but rejects a parent's write without changing it", async () => {
+  await saveDayReport(day, "**Výlet** a společné čtení");
+  transport.user = { id: "parent", role: "PARENT" };
+  const published = await getDayReports();
+  expect(published.reports).toEqual([
+    expect.objectContaining({ report: "**Výlet** a společné čtení" }),
+  ]);
+  await expect(saveDayReport(day, "Přepsáno rodičem")).rejects.toThrow("Unauthorized");
+  expect(await getDayReports()).toEqual(published);
 });
 
 describe("attendance through actions, adapter and Convex", () => {
