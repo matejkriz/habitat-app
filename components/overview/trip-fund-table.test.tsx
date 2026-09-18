@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TripFundTable } from "./trip-fund-table";
 import type { TripFundOverview } from "@/lib/day-details";
 
-const mocks = vi.hoisted(() => ({ updateChild: vi.fn(), setChildTripExpense: vi.fn(), createTripExpense: vi.fn(), getDayTripExpenses: vi.fn(), getTripFundOverview: vi.fn() }));
-vi.mock("@/app/actions/director", () => ({ updateChild: mocks.updateChild, getTripFundOverview: mocks.getTripFundOverview }));
+const mocks = vi.hoisted(() => ({ createExtraFundPerson: vi.fn(), updateExtraFundPerson: vi.fn(), setExtraFundExpense: vi.fn(), updateChild: vi.fn(), setChildTripExpense: vi.fn(), createTripExpense: vi.fn(), getDayTripExpenses: vi.fn(), getTripFundOverview: vi.fn() }));
+vi.mock("@/app/actions/director", () => ({ createExtraFundPerson: mocks.createExtraFundPerson, updateExtraFundPerson: mocks.updateExtraFundPerson, setExtraFundExpense: mocks.setExtraFundExpense, updateChild: mocks.updateChild, getTripFundOverview: mocks.getTripFundOverview }));
 vi.mock("@/app/actions/day-details", () => ({ setChildTripExpense: mocks.setChildTripExpense, createTripExpense: mocks.createTripExpense, getDayTripExpenses: mocks.getDayTripExpenses }));
 
 const initial: TripFundOverview = {
@@ -33,7 +33,7 @@ describe("editable trip fund", () => {
     mocks.getTripFundOverview.mockResolvedValue({ ...initial, children: [{ ...initial.children[0], fundSent: 700, fundBalance: 620 }, initial.children[1]] });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(mocks.updateChild).toHaveBeenCalledWith("anna", { fundSent: 700 }));
-    await screen.findByText(/620\s*Kč/);
+    await within(screen.getByRole("row", { name: /Anna Malá/ })).findByText(/620\s*Kč/);
     expect(screen.queryByRole("spinbutton")).toBeNull();
   });
 
@@ -137,4 +137,55 @@ describe("editable trip fund", () => {
     expect(mocks.updateChild).toHaveBeenCalledTimes(1);
   });
 
+});
+
+const extraPerson = { personId: "extra", name: "Eva Nová", fundSent: 300, fundSpent: 40, fundBalance: 260, amounts: [40] };
+
+it("adds an extra person even when there are no children, then edits their name", async () => {
+  render(<TripFundTable initialOverview={{ days: [], children: [] }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Přidat extra osobu" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Jméno osoby" }), { target: { value: "Eva Nová" } });
+  mocks.getTripFundOverview.mockResolvedValue({ ...initial, extraPeople: [extraPerson] });
+  fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
+  await waitFor(() => expect(mocks.createExtraFundPerson).toHaveBeenCalledWith("Eva Nová"));
+  fireEvent.click(await screen.findByRole("button", { name: "Upravit jméno: Eva Nová" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Jméno osoby" }), { target: { value: "Eva Malá" } });
+  fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
+  await waitFor(() => expect(mocks.updateExtraFundPerson).toHaveBeenCalledWith("extra", { name: "Eva Malá" }));
+});
+
+it("sums children and extra people by column and edits extra amounts", async () => {
+  const overview = { ...initial, extraPeople: [extraPerson] };
+  mocks.getTripFundOverview.mockResolvedValue(overview);
+  render(<TripFundTable initialOverview={overview} />);
+  const total = screen.getByRole("row", { name: /Celkem/ });
+  expect(within(total).getAllByRole("cell").map(cell => cell.textContent?.replace(/\s/g, ""))).toEqual(["800Kč", "120Kč", "680Kč"]);
+  const rows = screen.getAllByRole("row");
+  expect(rows.findIndex(row => row.textContent?.includes("Eva Nová"))).toBeGreaterThan(rows.findIndex(row => row.textContent?.includes("Petr Nový")));
+  fireEvent.click(screen.getByRole("button", { name: "Upravit příjem: Eva Nová" }));
+  fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "400" } });
+  fireEvent.keyDown(screen.getByRole("spinbutton"), { key: "Enter" });
+  await waitFor(() => expect(mocks.updateExtraFundPerson).toHaveBeenCalledWith("extra", { fundSent: 400 }));
+  await waitFor(() => expect(screen.queryByRole("spinbutton")).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Upravit útratu: Eva Nová, 10. 9. 2026" }));
+  fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "60" } });
+  fireEvent.keyDown(screen.getByRole("spinbutton"), { key: "Enter" });
+  await waitFor(() => expect(mocks.setExtraFundExpense).toHaveBeenCalledWith("extra", "2026-09-10", 60));
+});
+
+it("preserves a failed name edit and lets the director retry", async () => {
+  render(<TripFundTable initialOverview={{ ...initial, extraPeople: [extraPerson] }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Upravit jméno: Eva Nová" }));
+  const name = screen.getByRole("textbox", { name: "Jméno osoby" });
+  fireEvent.change(name, { target: { value: " " } });
+  fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
+  expect(mocks.updateExtraFundPerson).not.toHaveBeenCalled();
+  mocks.updateExtraFundPerson.mockRejectedValueOnce(new Error("Uložení selhalo"));
+  fireEvent.change(name, { target: { value: "Eva Malá" } });
+  fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
+  await screen.findByText("Uložení selhalo");
+  expect((name as HTMLInputElement).value).toBe("Eva Malá");
+  fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(mocks.updateExtraFundPerson).toHaveBeenCalledTimes(2);
 });

@@ -17,7 +17,7 @@ import type {
   User,
   UserRole,
 } from "./types";
-import type { DayDetailsPatch } from "./day-details";
+import type { DayDetailsPatch, ExtraFundPersonPatch } from "./day-details";
 import type { AuditAction } from "./types";
 
 type TableName =
@@ -1205,6 +1205,15 @@ export const db: any = {
     }),
   },
   tripFunds: {
+    createExtraPerson: (name: string, recordedById: string) => convexMutation(api.db.createExtraFundPerson, {
+      secret: getServerSecret(), id: randomUUID(), name, recordedById,
+    }),
+    updateExtraPerson: (personId: string, patch: ExtraFundPersonPatch, recordedById: string) => convexMutation(api.db.updateExtraFundPerson, {
+      secret: getServerSecret(), personId, ...patch, recordedById,
+    }),
+    setExtraExpense: (personId: string, date: Date, amount: number, recordedById: string) => convexMutation(api.db.setExtraFundExpense, {
+      secret: getServerSecret(), personId, date: date.getTime(), amount, recordedById,
+    }),
     parentOverview: (parentId: string) => convexQuery(api.db.getParentTripFundOverview, { secret: getServerSecret(), parentId }),
     createExpense: (date: Date, expense: number, overrides: { childId: string; amount: number }[], recordedById: string) => convexMutation(api.db.createTripExpense, {
       secret: getServerSecret(), date: date.getTime(), expense, overrides, recordedById,

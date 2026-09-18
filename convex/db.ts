@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, type QueryCtx } from "./_generated/server";
-import { validateCrowns, validateDayDetails, type TripFundOverview } from "../lib/day-details";
+import { validateCrowns, validateDayDetails, validateExtraFundPersonPatch, type TripFundOverview } from "../lib/day-details";
 import { requireServerSecret } from "./serverSecret";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
@@ -409,18 +409,21 @@ export const listDayDetails = query({
   },
 });
 
-async function readTripFundOverview(db: QueryCtx["db"]): Promise<TripFundOverview> {
-  const [children, days, attendance, overrides] = await Promise.all([
+async function readTripFundOverview(db: QueryCtx["db"], includeExtraPeople = false): Promise<TripFundOverview> {
+  const [children, days, attendance, overrides, extraPeople, extraExpenses] = await Promise.all([
     db.query("children").collect(),
     db.query("dayDetails").collect(),
     db.query("attendance").collect(),
     db.query("childTripExpenses").collect(),
+    includeExtraPeople ? db.query("extraFundPeople").collect() : [],
+    includeExtraPeople ? db.query("extraFundExpenses").collect() : [],
   ]);
   const details = new Map(days.map(day => [day.date, day]));
   // Individual amounts remain chargeable even if the day's default was cleared.
   const dates = new Set([
     ...days.filter(day => day.expense != null).map(day => day.date),
     ...overrides.map(row => row.date),
+    ...extraExpenses.map(row => row.date),
   ]);
   const tripDays = [...dates].sort((a, b) => a - b).map(date => ({
     date, name: details.get(date)?.name ?? null, expense: details.get(date)?.expense ?? null,
@@ -428,7 +431,13 @@ async function readTripFundOverview(db: QueryCtx["db"]): Promise<TripFundOvervie
   const individual = new Map(overrides.map(row => [`${row.childId}:${row.date}`, row.amount]));
   const present = new Set(attendance.filter(row => row.presence === "PRESENT").map(row => `${row.childId}:${row.date}`));
 
+  const extraAmounts = new Map(extraExpenses.map(row => [`${row.personId}:${row.date}`, row.amount]));
   return {
+    ...(includeExtraPeople ? { extraPeople: extraPeople.map(person => {
+      const amounts = tripDays.map(day => extraAmounts.get(`${person.id}:${day.date}`) ?? 0);
+      const fundSpent = amounts.reduce((sum, amount) => sum + amount, 0);
+      return { personId: person.id, name: person.name, fundSent: person.fundSent, amounts, fundSpent, fundBalance: person.fundSent - fundSpent };
+    }) } : {}),
     days: tripDays,
     children: children.map(child => {
       const amounts = tripDays.map(day => {
@@ -449,7 +458,60 @@ export const getTripFundOverview = query({
   args: { secret: v.string() },
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
-    return readTripFundOverview(db);
+    return readTripFundOverview(db, true);
+  },
+});
+
+export const createExtraFundPerson = mutation({
+  args: { secret: v.string(), id: v.string(), name: v.string(), recordedById: v.string() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const { name } = validateExtraFundPersonPatch({ name: args.name });
+    if (await db.query("extraFundPeople").withIndex("by_app_id", q => q.eq("id", args.id)).unique()) {
+      throw new Error("Osoba už existuje.");
+    }
+    const updatedAt = Date.now();
+    await db.insert("extraFundPeople", { id: args.id, name: name!, fundSent: 0, recordedById: args.recordedById, updatedAt });
+    await db.insert("auditLogs", { id: `extra_fund_${args.id}_${updatedAt}`, userId: args.recordedById,
+      action: "CREATE", entityType: "ExtraFundPerson", entityId: args.id,
+      previousValue: null, newValue: { name, fundSent: 0 }, createdAt: updatedAt });
+    return null;
+  },
+});
+
+export const updateExtraFundPerson = mutation({
+  args: { secret: v.string(), personId: v.string(), name: v.optional(v.string()), fundSent: v.optional(v.number()), recordedById: v.string() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const patch = validateExtraFundPersonPatch(args);
+    const person = await db.query("extraFundPeople").withIndex("by_app_id", q => q.eq("id", args.personId)).unique();
+    if (!person) throw new Error("Osoba nebyla nalezena.");
+    const updatedAt = Date.now();
+    await db.patch(person._id, { ...patch, recordedById: args.recordedById, updatedAt });
+    await db.insert("auditLogs", { id: `extra_fund_${args.personId}_${updatedAt}`, userId: args.recordedById,
+      action: "UPDATE", entityType: "ExtraFundPerson", entityId: args.personId,
+      previousValue: { name: person.name, fundSent: person.fundSent }, newValue: patch, createdAt: updatedAt });
+    return null;
+  },
+});
+
+export const setExtraFundExpense = mutation({
+  args: { secret: v.string(), personId: v.string(), date: v.number(), amount: v.number(), recordedById: v.string() },
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    validateCrowns(args.amount);
+    if (!Number.isFinite(args.date) || !Number.isFinite(new Date(args.date).getTime())) throw new Error("Neplatné datum");
+    const person = await db.query("extraFundPeople").withIndex("by_app_id", q => q.eq("id", args.personId)).unique();
+    if (!person) throw new Error("Osoba nebyla nalezena.");
+    const current = await db.query("extraFundExpenses").withIndex("by_person_date", q => q.eq("personId", args.personId).eq("date", args.date)).unique();
+    const updatedAt = Date.now();
+    const value = { personId: args.personId, date: args.date, amount: args.amount, recordedById: args.recordedById, updatedAt };
+    if (current) await db.patch(current._id, value);
+    else await db.insert("extraFundExpenses", value);
+    await db.insert("auditLogs", { id: `extra_fund_expense_${args.personId}_${args.date}_${updatedAt}`, userId: args.recordedById,
+      action: "UPDATE", entityType: "ExtraFundExpense", entityId: `${args.personId}:${args.date}`,
+      previousValue: { amount: current?.amount ?? null }, newValue: { amount: args.amount }, createdAt: updatedAt });
+    return null;
   },
 });
 

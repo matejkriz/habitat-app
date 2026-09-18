@@ -36,6 +36,7 @@ import {
   deleteParentExcuse,
 } from "../app/actions/parent";
 import {
+  createExtraFundPerson, updateExtraFundPerson, setExtraFundExpense, getTripFundOverview,
   createChild,
   assignParentToChild,
   removeParentFromChild,
@@ -363,4 +364,18 @@ describe("director workflows", () => {
     expect(csv).toContain('"\t-10"');
     expect(csv).toContain('"\t@command"');
   });
+});
+
+it("persists extra fund people through server actions, adapter and Convex", async () => {
+  transport.user = { id: "director", role: "DIRECTOR" };
+  await createExtraFundPerson(" Eva Nová ");
+  const first = await getTripFundOverview();
+  const personId = first.extraPeople![0].personId;
+  await updateExtraFundPerson(personId, { name: "Eva Malá", fundSent: 500 });
+  await setExtraFundExpense(personId, day, 80);
+  const saved = await getTripFundOverview();
+  expect(saved.extraPeople).toEqual([{ personId, name: "Eva Malá", fundSent: 500, fundSpent: 80, fundBalance: 420, amounts: [80] }]);
+  expect(saved.children).toHaveLength(2);
+  const audit = await t.run(({ db }) => db.query("auditLogs").collect());
+  expect(audit.filter(row => row.entityType.startsWith("ExtraFund"))).toHaveLength(3);
 });

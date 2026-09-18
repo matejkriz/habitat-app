@@ -36,6 +36,6 @@ describe("TripFundOverviewSection", () => {
     ] });
     render(await TripFundOverviewSection());
     expect(screen.getAllByRole("columnheader")).toHaveLength(3);
-    expect(screen.getAllByText(/500\s*Kč/)).toHaveLength(2);
+    expect(within(screen.getByRole("row", { name: /Anna Malá/ })).getAllByText(/500\s*Kč/)).toHaveLength(2);
   });
 });

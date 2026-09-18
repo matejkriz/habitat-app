@@ -132,6 +132,22 @@ export default defineSchema({
   }).index("by_child_date", { fields: ["childId", "date"] })
     .index("by_date", { fields: ["date"] }),
 
+  extraFundPeople: defineTable({
+    id: v.string(),
+    name: v.string(),
+    fundSent: v.number(),
+    recordedById: v.string(),
+    updatedAt: v.number(),
+  }).index("by_app_id", { fields: ["id"] }),
+
+  extraFundExpenses: defineTable({
+    personId: v.string(),
+    date: v.number(),
+    amount: v.number(),
+    recordedById: v.string(),
+    updatedAt: v.number(),
+  }).index("by_person_date", { fields: ["personId", "date"] }),
+
   dayReports: defineTable({
     date: v.number(),
     report: v.string(),

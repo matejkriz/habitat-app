@@ -7,14 +7,16 @@ import { Button } from "@/components/ui/button";
 import type { TripFundOverview } from "@/lib/day-details";
 import { FundAmountCell } from "./fund-amount-cell";
 import { TripExpenseDialog } from "./trip-expense-dialog";
-import { getTripFundOverview, updateChild } from "@/app/actions/director";
+import { getTripFundOverview, updateChild, createExtraFundPerson, updateExtraFundPerson, setExtraFundExpense } from "@/app/actions/director";
 import { TripFundGrid, formatTripDate } from "./trip-fund-grid";
+import { ExtraFundPersonDialog } from "./extra-fund-person-dialog";
 import { getLocalDateKey } from "@/lib/lunches";
 
 export function TripFundTable({ initialOverview }: { initialOverview: TripFundOverview }) {
   const [previousOverview, setPreviousOverview] = useState(initialOverview);
   const [overview, setOverview] = useState(initialOverview);
   const [adding, setAdding] = useState(false);
+  const [editingPerson, setEditingPerson] = useState<{ personId?: string; name: string } | null>(null);
   const [refreshError, setRefreshError] = useState("");
   const [retrying, setRetrying] = useState(false);
   const request = useRef(0);
@@ -43,20 +45,32 @@ export function TripFundTable({ initialOverview }: { initialOverview: TripFundOv
         <Button type="button" className="self-start sm:shrink-0" onClick={() => setAdding(true)}>Přidat útratu</Button>
       </div>
       {refreshError && <div role="alert" className="text-sm text-red-700">{refreshError} <Button type="button" variant="ghost" size="sm" isLoading={retrying} onClick={async () => { if (retrying) return; setRetrying(true); try { await refresh(); } finally { setRetrying(false); } }}>Obnovit přehled</Button></div>}
-      <TripFundGrid overview={overview} renderDay={day => (
+      <TripFundGrid overview={overview} showTotals
+        addPerson={<Button type="button" variant="ghost" onClick={() => setEditingPerson({ name: "" })}><span aria-hidden="true">+</span> Přidat extra osobu</Button>}
+        renderName={person => <button type="button" aria-label={`Upravit jméno: ${person.name}`} onClick={() => setEditingPerson(person)} className="min-h-11 rounded-md text-left underline decoration-charcoal/25 decoration-dotted underline-offset-4 hover:text-gold-dark focus-visible:outline-2 focus-visible:outline-gold">{person.name}</button>}
+        renderDay={day => (
         <Link href={`/ucitel/dochazka?date=${getLocalDateKey(new Date(day.date))}`} className="block rounded-sm hover:text-gold-dark hover:underline focus-visible:outline-2 focus-visible:outline-gold">
           <span className="block whitespace-nowrap">{formatTripDate(day.date)}</span>
           {day.name && <span className="mt-1 block max-w-40 truncate text-xs font-normal text-charcoal-light" title={day.name}>{day.name}</span>}
         </Link>
       )} renderAmount={(amount, child, day) => (
-        <FundAmountCell amount={amount} childName={`${child.firstName} ${child.lastName}`} dateLabel={day ? formatTripDate(day.date) : undefined} onSave={async next => {
-          if (day) await setChildTripExpense(getLocalDateKey(new Date(day.date)), child.childId, next);
+        <FundAmountCell amount={amount} childName={"personId" in child ? child.name : `${child.firstName} ${child.lastName}`} dateLabel={day ? formatTripDate(day.date) : undefined} onSave={async next => {
+          if ("personId" in child) {
+            if (day) await setExtraFundExpense(child.personId, getLocalDateKey(new Date(day.date)), next);
+            else await updateExtraFundPerson(child.personId, { fundSent: next });
+          } else if (day) await setChildTripExpense(getLocalDateKey(new Date(day.date)), child.childId, next);
           else await updateChild(child.childId, { fundSent: next });
           await refresh();
         }} />
       )}>
-        Částky upravíte kliknutím. Příjem je celková částka poslaná do fondu. Útrata se započítává jen při zapsané přítomnosti a respektuje individuální částku dítěte.
+        Částky upravíte kliknutím. Příjem je celková částka poslaná do fondu. U dětí se útrata započítává jen při zapsané přítomnosti a respektuje individuální částku dítěte. U extra osob se útraty zadávají ručně.
       </TripFundGrid>
+      {editingPerson && <ExtraFundPersonDialog person={editingPerson} onClose={() => setEditingPerson(null)} onSave={async name => {
+        if (editingPerson.personId) await updateExtraFundPerson(editingPerson.personId, { name });
+        else await createExtraFundPerson(name);
+        setEditingPerson(null);
+        await refresh();
+      }} />}
       {adding && <TripExpenseDialog existingDates={overview.days.map(day => getLocalDateKey(new Date(day.date)))} onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await refresh(); }} />}
     </section>
   );
