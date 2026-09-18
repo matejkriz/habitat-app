@@ -256,5 +256,5 @@ Uživatelé jsou při prvním přihlášení automaticky synchronizováni do dat
 ## Testování
 
 `pnpm check` spustí typecheck, lint a rychlé automatické testy. Praktický rozsah
-pokrytí, tři browser průchody a nastavení testovacího prostředí popisuje
+pokrytí, browser průchody a nastavení testovacího prostředí popisuje
 [docs/testing.md](docs/testing.md).

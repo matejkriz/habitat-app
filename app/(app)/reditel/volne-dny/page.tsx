@@ -28,9 +28,11 @@ export default function ClosedDaysPage() {
   const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(new Set());
 
   const [loadError, setLoadError] = useState("");
-  const loadDays = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError("");
+  const loadDays = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setIsLoading(true);
+      setLoadError("");
+    }
     try {
       setClosedDays(await getClosedDays());
     } catch {
@@ -39,7 +41,7 @@ export default function ClosedDaysPage() {
       setIsLoading(false);
     }
   }, []);
-  useEffect(() => { void loadDays(); }, [loadDays]);
+  useEffect(() => { void loadDays(false); }, [loadDays]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
