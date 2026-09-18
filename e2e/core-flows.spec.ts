@@ -59,7 +59,9 @@ test("saved attendance survives reload and is visible to the parent", async ({
 }) => {
   await setAbsence(page);
   await page.reload();
-  await page.getByLabel("Datum docházky").fill(date);
+  const dateInput = page.getByLabel("Datum docházky");
+  await expect(dateInput).toHaveCount(1);
+  await dateInput.fill(date);
   await expect(
     page.getByRole("checkbox", { name: `Docházka: ${childName}` }),
   ).not.toBeChecked();

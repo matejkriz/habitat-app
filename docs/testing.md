@@ -21,7 +21,7 @@ Generované Convex soubory, konfigurace a samotné testy se nepočítají.
 - Běžné fixture používají `Europe/Prague`. Test uzávěrky navíc spouští samostatné
   Node procesy v UTC i Praze, v létě, zimě a při změně času.
 
-## Pět browser průchodů
+## Pět browser průchodů v CI
 
 `pnpm test:e2e` používá Chromium a skutečné serverové akce i Convex. Žádné API
 se v těchto testech nemockuje. Testuje podání a schválení omluvenky včetně oběda,
@@ -31,12 +31,36 @@ po změně docházky i uložení učitelského reportu a jeho čtení rodičem p
 Odmítnutí rodičovského zápisu reportu navíc ověřuje integrační test přes skutečnou
 serverovou akci, DB adaptér a lokální Convex.
 
-Potřebuje **izolovaný testovací Convex**, nasazené změny tohoto checkoutu,
-WorkOS staging a povolený existující přepínač vývojových identit. Testy zapisují
-omluvenky, docházku a nové dítě. Nespouštět proti produkci ani sdíleným ostrým
-záznamům. Použij development seed (`pnpm seed:dev`) na správném testovacím cíli.
-Seed obnovuje profily a vazby, ale nemaže staré omluvenky či docházku; pro opakovaný
-běh použij čistý testovací deployment nebo nové vhodné datum bez jiných omluvenek.
+GitHub workflow `Checks` je spouští automaticky po úspěchu rychlých kontrol na
+každém PR a po pushi do `main` nebo `develop`. Samostatný job `e2e` si vytvoří:
+
+- čerstvý anonymní Convex backend na loopbacku, nahraje funkce a development seed,
+- lokální WorkOS emulátor s jediným účtem `dev@habitatzbraslav.cz`,
+- produkční Next.js build a automatickou WorkOS browser session,
+- datum posledního pracovního dne a jeden Chromium worker.
+
+Job nepotřebuje GitHub secrets, WorkOS účet ani Convex účet a nemůže se připojit
+k produkční databázi. Při selhání uloží na sedm dní Playwright HTML report, trace
+a screenshoty. Na GitHubu stačí otevřít konkrétní běh workflow a job `e2e`.
+
+Stejný izolovaný runner lze pro diagnostiku pustit v čistém checkoutu s
+instalovaným Chromiem:
+
+```sh
+pnpm exec playwright install chromium
+CI=true pnpm test:e2e:ci
+```
+
+Runner dočasně nahradí `.env.local`, po skončení ho obnoví a odstraní Convex stav,
+pokud před během neexistoval. Je určený hlavně pro čisté CI checkouty.
+
+## Ruční běh proti existujícímu testovacímu prostředí
+
+`pnpm test:e2e` zůstává pro cílené lokální ladění proti už spuštěné testovací
+aplikaci. Testy zapisují omluvenky, docházku a nové dítě. Nespouštět je proti
+produkci ani sdíleným ostrým záznamům. Použij development seed (`pnpm seed:dev`)
+na správném testovacím cíli. Seed obnovuje profily a vazby, ale nemaže staré
+omluvenky či docházku.
 
 1. Spusť aplikaci s WorkOS staging konfigurací nebo použij její testovací Preview.
    Na Preview musí být povolen přepínač vývojových identit podle `lib/dev-persona.ts`.
@@ -58,9 +82,8 @@ běh použij čistý testovací deployment nebo nové vhodné datum bez jiných 
    E2E_TEST_DATABASE=true E2E_DATE=2026-09-17 pnpm test:e2e
    ```
 
-Testy vyžadují viditelný vývojový přepínač; nepřidávají žádnou cestu obcházející
-přihlášení. Selhání ukládá screenshot a trace do ignorovaných složek. CI zatím
-ověřuje, že se pět testů načte; skutečné E2E se spouští ručně s testovací session.
+Testy vyžadují viditelný vývojový přepínač; nepřidávají cestu obcházející
+přihlášení. Selhání ukládá screenshot a trace do ignorovaných složek.
 
 ## Ručně po změnách přihlášení, push nebo PWA
 

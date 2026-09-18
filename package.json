@@ -19,6 +19,7 @@
     "convex:codegen": "CONVEX_DISABLE_TELEMETRY=1 convex codegen --typecheck disable",
     "seed:dev": "CONVEX_DISABLE_TELEMETRY=1 convex run seed:development '{}' --push --typecheck disable",
     "test:e2e": "playwright test",
+    "test:e2e:ci": "node scripts/run-e2e-ci.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm test:run"
   },
   "dependencies": {
@@ -51,6 +52,7 @@
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.1.2",
     "@vitest/coverage-v8": "4.0.18",
+    "@workos/emulate": "^0.13.0",
     "convex-test": "^0.0.56",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",

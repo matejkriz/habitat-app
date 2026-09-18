@@ -33,4 +33,26 @@ describe("getWorkOSBaseUrl", () => {
       ),
     ).toBe("https://habitat-abc123-matejkrizs-projects.vercel.app");
   });
+
+  it("allows plain HTTP only for the isolated local E2E runner", () => {
+    expect(
+      getWorkOSBaseUrl(
+        "http://127.0.0.1:3000/callback",
+        undefined,
+        undefined,
+        undefined,
+        "true",
+      ),
+    ).toBe("http://127.0.0.1:3000");
+
+    expect(() =>
+      getWorkOSBaseUrl(
+        "http://example.com/callback",
+        undefined,
+        undefined,
+        undefined,
+        "true",
+      ),
+    ).toThrow("loopback");
+  });
 });

@@ -56,6 +56,8 @@ export const DEFAULT_DEV_PERSONA_ID: DevPersonaId =
 
 export interface DevPersonaEnvironment {
   DEV_PERSONA_SWITCHER?: string;
+  E2E_LOCAL?: string;
+  NEXT_PUBLIC_WORKOS_REDIRECT_URI?: string;
   WORKOS_API_KEY?: string;
   NODE_ENV?: string;
   VERCEL_TARGET_ENV?: string;
@@ -79,11 +81,23 @@ export function isDevPersonaModeAllowed(
   const isLocalDevelopment =
     environment.NODE_ENV === "development" &&
     environment.VERCEL_TARGET_ENV === undefined;
+  let hasLoopbackRedirect = false;
+  try {
+    hasLoopbackRedirect = ["127.0.0.1", "localhost", "[::1]"].includes(
+      new URL(environment.NEXT_PUBLIC_WORKOS_REDIRECT_URI ?? "").hostname,
+    );
+  } catch {
+    hasLoopbackRedirect = false;
+  }
+  const isLocalE2E =
+    environment.E2E_LOCAL === "true" &&
+    hasLoopbackRedirect &&
+    environment.VERCEL_TARGET_ENV === undefined;
   const isDevelopPreview =
     environment.VERCEL_TARGET_ENV === "preview" &&
     ["develop", "workos", "calendar"].includes(environment.VERCEL_GIT_COMMIT_REF ?? "");
 
-  return isLocalDevelopment || isDevelopPreview;
+  return isLocalDevelopment || isLocalE2E || isDevelopPreview;
 }
 
 export function isDevPersonaEmail(email: string | null | undefined): boolean {
