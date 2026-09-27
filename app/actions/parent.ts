@@ -42,6 +42,7 @@ import {
   ExcuseValidationError,
   parseExcuseDate,
   resolveExcuseChildIds,
+  validateExcuseDates,
 } from "@/lib/excuse-rules";
 import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
@@ -337,6 +338,17 @@ export const submitExcuse = async (formData: FormData) => submitParentRecord(for
 export const submitMakeup = async (formData: FormData) => submitParentRecord(formData, "MAKEUP");
 
 async function submitParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP") {
+  try {
+    return await createParentRecord(formData, kind);
+  } catch (error) {
+    if (error instanceof ExcuseValidationError) {
+      return { success: false as const, error: error.message };
+    }
+    throw error;
+  }
+}
+
+async function createParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP") {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
@@ -352,7 +364,7 @@ async function submitParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
     typeof fromDateStr !== "string" ||
     typeof toDateStr !== "string"
   ) {
-    throw new Error("Missing required fields");
+    throw new ExcuseValidationError("Zadejte datum začátku a konce.");
   }
 
   const requestedChildIds = formData
@@ -366,6 +378,10 @@ async function submitParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
 
   const fromDate = parseExcuseDate(fromDateStr);
   const toDate = parseExcuseDate(toDateStr);
+  const validation = validateExcuseDates(fromDate, toDate);
+  if (!validation.valid) {
+    throw new ExcuseValidationError(validation.error);
+  }
   const dayPart = getExcuseDayPartForRange(
     requestedDayPart,
     fromDate,
@@ -426,7 +442,7 @@ async function submitParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
   revalidatePath("/");
 
   return {
-    success: true,
+    success: true as const,
     excuses: excuses.map((excuse) => ({
       id: excuse.id,
       childId: excuse.childId,

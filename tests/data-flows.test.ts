@@ -184,6 +184,7 @@ describe("parent isolation at the server action boundary", () => {
     async (action) => {
       transport.user = { id: "parent", role: "PARENT" };
       const created = await submitExcuse(excuse("a"));
+      if (!created.success) throw new Error(created.error);
       transport.user = { id: "other-parent", role: "PARENT" };
       const id = created.excuses[0].id;
       await expect(
@@ -226,7 +227,9 @@ describe("parent excuse submission recovery", () => {
   });
   it("retries the same submission without duplicate excuses or audit entries", async () => {
     const first = await submitExcuse(excuse("a", "b"));
+    if (!first.success) throw new Error(first.error);
     const second = await submitExcuse(excuse("a", "b"));
+    if (!second.success) throw new Error(second.error);
     expect(second.excuses).toEqual(first.excuses);
     expect(await rows("excuses")).toHaveLength(2);
     expect(await rows("auditLogs")).toHaveLength(2);
@@ -254,6 +257,7 @@ describe("parent excuse submission recovery", () => {
           data: { doesNotTakeLunch: true },
         });
       const result = await submitExcuse(form);
+      if (!result.success) throw new Error(result.error);
       expect(result.summary.lateDayCount).toBe(0);
       expect(result.summary.automaticallyApprovedDayCount).toBe(1);
       expect(await rows("excuses")).toEqual([
@@ -329,6 +333,7 @@ describe("director workflows", () => {
     await saveAttendance(attendance("a"));
     transport.user = { id: "parent", role: "PARENT" };
     const created = await submitExcuse(excuse("a"));
+    if (!created.success) throw new Error(created.error);
     transport.user = { id: "director", role: "DIRECTOR" };
     expect(
       (await getLunchOverview("2026-09")).children.find(

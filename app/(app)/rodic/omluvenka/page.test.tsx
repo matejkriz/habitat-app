@@ -193,6 +193,54 @@ describe("NewExcusePage", () => {
     expect((mocks.submitMakeup.mock.calls[0][0] as FormData).getAll("childIds")).toEqual(["child-1"]);
   });
 
+  it("prevents a makeup on a regular attendance day", async () => {
+    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-30";
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
+    render(<NewExcusePage />);
+    await screen.findByText("Nová náhrada");
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat náhradu" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
+    expect(mocks.submitMakeup).not.toHaveBeenCalled();
+  });
+
+  it("requires an extra attendance day for every selected child", async () => {
+    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-30";
+    mocks.getParentChildren.mockResolvedValueOnce([
+      { ...children[0], attendanceDays: [1, 2, 4] },
+      { ...children[1], attendanceDays: [1, 2, 3] },
+    ]);
+    render(<NewExcusePage />);
+    await screen.findByRole("checkbox", { name: "Anna" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Jan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat náhradu" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
+    expect(mocks.submitMakeup).not.toHaveBeenCalled();
+  });
+
+  it.each(["EXCUSE", "MAKEUP"])("shows returned %s validation without treating it as success", async (kind) => {
+    mocks.searchParams = `child=child-1&kind=${kind.toLowerCase()}&date=2026-09-10`;
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
+    const action = kind === "MAKEUP" ? mocks.submitMakeup : mocks.submitExcuse;
+    action.mockResolvedValueOnce({ success: false, error: "Vyberte jiné datum." });
+    render(<NewExcusePage />);
+    await screen.findByText(kind === "MAKEUP" ? "Nová náhrada" : "Nová omluvenka");
+    fireEvent.click(screen.getByRole("button", { name: kind === "MAKEUP" ? "Odeslat náhradu" : "Odeslat omluvenku" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Vyberte jiné datum.");
+    expect(screen.queryByText(/odeslána$/)).toBeNull();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("hides minified production server errors", async () => {
+    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-10";
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
+    mocks.submitMakeup.mockRejectedValueOnce(Object.assign(new Error("Minified React error #441; visit https://react.dev/errors/441"), { digest: "123456" }));
+    render(<NewExcusePage />);
+    await screen.findByText("Nová náhrada");
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat náhradu" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Nepodařilo se odeslat náhradu. Zkuste to prosím znovu.");
+    expect(screen.queryByText(/Minified React/)).toBeNull();
+  });
+
   it("disables closed endpoints but allows a range to span across them", async () => {
     mocks.searchParams = "child=child-1&date=2026-09-10";
     render(<NewExcusePage />);
@@ -462,7 +510,7 @@ describe("NewExcusePage", () => {
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-09-10" } });
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-10" } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
-    await screen.findByText("Spojení přerušeno");
+    await screen.findByText("Nepodařilo se odeslat omluvenku. Zkuste to prosím znovu.");
     expect(screen.getByLabelText<HTMLInputElement>("Od").value).toBe("10. 9. 2026");
     fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
     await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalledTimes(2));

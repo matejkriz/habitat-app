@@ -191,6 +191,11 @@ export default function NewExcusePage() {
       return;
     }
 
+    if (isMakeup && selectedMakeupChildren.length !== selectedChildren.length) {
+      setError("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -212,6 +217,10 @@ export default function NewExcusePage() {
       }
       formData.set("requestId", request.current.id);
       const result = await (isMakeup ? submitMakeup(formData) : submitExcuse(formData));
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
       setSuccess({
         count: result.excuses.length,
         ...result.summary,
@@ -221,8 +230,8 @@ export default function NewExcusePage() {
       setTimeout(() => {
         router.push(`/rodic?child=${selectedChildIds[0] ?? selectedChildId}`);
       }, 2000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : isMakeup ? "Nepodařilo se odeslat náhradu." : "Nepodařilo se odeslat omluvenku.");
+    } catch {
+      setError(isMakeup ? "Nepodařilo se odeslat náhradu. Zkuste to prosím znovu." : "Nepodařilo se odeslat omluvenku. Zkuste to prosím znovu.");
     } finally {
       setIsSubmitting(false);
     }

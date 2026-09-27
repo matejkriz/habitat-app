@@ -35,11 +35,14 @@ async function openCalendarDay(page: Page, date: string) {
   return page.getByRole("dialog");
 }
 
-test("regular day off → parent makeup → staff plan and enrolled lunch without attendance", async ({ page }) => {
+test("regular day off → parent makeup → staff plan and enrolled lunch without attendance", async ({ page, browser }) => {
   test.skip(process.env.E2E_LOCAL !== "true", "Writes only to the isolated local seeded E2E database.");
   const date = futureTuesday();
   const month = date.slice(0, 7);
   const dayNumber = Number(date.slice(-2));
+  const regularDay = new Date(`${date}T12:00:00`);
+  regularDay.setDate(regularDay.getDate() + 1);
+  const regularDate = `${regularDay.getFullYear()}-${String(regularDay.getMonth() + 1).padStart(2, "0")}-${String(regularDay.getDate()).padStart(2, "0")}`;
   const marker = `E2EMakeup${Date.now()}`;
   let created = false;
 
@@ -68,6 +71,45 @@ test("regular day off → parent makeup → staff plan and enrolled lunch withou
     await expect(expectedChildren.getByText(childName, { exact: true })).toHaveCount(0);
 
     await persona(page, "parent-roza");
+    await page.goto(`/rodic/omluvenka?child=${childId}&kind=makeup&date=${regularDate}`);
+    await expect(page.getByRole("heading", { name: "Nová náhrada", exact: true })).toBeVisible();
+    const morning = page.getByRole("radio", { name: "Dopoledne", exact: true });
+    await page.locator("label").filter({ has: morning }).click();
+    await expect(morning).toBeChecked();
+    await page.getByLabel("Poznámka (volitelné)").fill(marker);
+    await page.getByRole("button", { name: "Odeslat náhradu", exact: true }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toHaveText("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
+    await expect(page.getByText(/Minified React error|react\.dev\/errors\/441/)).toHaveCount(0);
+    await expect(page.getByText("Náhrada odeslána", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Poznámka (volitelné)")).toHaveValue(marker);
+    await expect(page).toHaveURL(/\/rodic\/omluvenka\?/);
+
+    await page.goto(`/rodic/omluvenka?child=${childId}&kind=makeup&date=${date}`);
+    await expect(page.getByRole("tab", { name: "Náhrada", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByLabel("Poznámka (volitelné)").fill(marker);
+    const directorContext = await browser.newContext({
+      baseURL: new URL(page.url()).origin,
+      storageState: await page.context().storageState(),
+      timezoneId: "Europe/Prague",
+    });
+    const directorPage = await directorContext.newPage();
+    try {
+      await persona(directorPage, "director-bohumil");
+      await setRegularTuesday(directorPage, true);
+      await expect(page.getByRole("combobox", { name: "Testovací identita" })).toHaveValue("seed-user-parent-roza");
+      await page.getByRole("button", { name: "Odeslat náhradu", exact: true }).click();
+      await expect(page.getByRole("main").getByRole("alert")).toHaveText("Náhradu lze zadat pouze dítěti, které nechodí každý den.");
+      await expect(page.getByText(/Minified React error|react\.dev\/errors\/441/)).toHaveCount(0);
+      await expect(page.getByText("Náhrada odeslána", { exact: true })).toHaveCount(0);
+      await expect(page.getByLabel("Poznámka (volitelné)")).toHaveValue(marker);
+    } finally {
+      try {
+        await setRegularTuesday(directorPage, false);
+      } finally {
+        await directorContext.close();
+      }
+    }
+
     await page.goto(`/rodic?child=${childId}&month=${month}`);
     const offDay = page.getByRole("button", { name: new RegExp(`úterý ${dayNumber}\\..*Nechodí, zadat náhradu`) });
     await offDay.click();
