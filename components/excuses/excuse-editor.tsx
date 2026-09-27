@@ -3,7 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { DayPartSelector } from "@/components/excuses/day-part-selector";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ExcuseDatePicker } from "@/components/excuses/excuse-date-picker";
+import { getAttendanceDateDisabledReason, type AttendanceSchedule } from "@/lib/attendance-schedule";
 import { Textarea } from "@/components/ui/textarea";
 import type { ExcuseDayPart } from "@/lib/types";
 
@@ -21,6 +22,7 @@ type EditableExcuse = {
   readonly dayPart: ExcuseDayPart;
   readonly reason: string | null;
   readonly kind?: "EXCUSE" | "MAKEUP";
+  readonly child?: AttendanceSchedule;
 };
 
 type ExcuseEditorProps = {
@@ -113,13 +115,13 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
     <form className="mt-4 space-y-4 border-t border-cream-dark pt-4" onSubmit={handleSubmit}>
       {error ? <p className="text-sm text-coral" role="alert">{error}</p> : null}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input
+        <ExcuseDatePicker
           label="Od"
-          type="date"
+          name="fromDate"
           value={fromDate}
           max={toDate}
-          onChange={(event) => {
-            const nextFromDate = event.target.value;
+          getDisabledReason={(date) => getAttendanceDateDisabledReason(excuse.child ?? {}, date, excuse.kind)}
+          onChange={(nextFromDate) => {
             setFromDate(nextFromDate);
             if (nextFromDate && toDate && nextFromDate !== toDate) {
               setDayPart("FULL_DAY");
@@ -127,13 +129,13 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
           }}
           required
         />
-        <Input
+        <ExcuseDatePicker
           label="Do"
-          type="date"
+          name="toDate"
           value={toDate}
           min={fromDate}
-          onChange={(event) => {
-            const nextToDate = event.target.value;
+          getDisabledReason={(date) => getAttendanceDateDisabledReason(excuse.child ?? {}, date, excuse.kind)}
+          onChange={(nextToDate) => {
             setToDate(nextToDate);
             if (fromDate && nextToDate && fromDate !== nextToDate) {
               setDayPart("FULL_DAY");

@@ -56,6 +56,24 @@ describe("ExcuseManagementPage", () => {
     ]);
   });
 
+  it("filters director-created absence dates and clears dates after selecting another child", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    mocks.getExcuseChildren.mockResolvedValue([
+      { id: "child-1", firstName: "Tobiáš", lastName: "Tornádo", attendanceDays: [1, 3] },
+      { id: "child-2", firstName: "Anna", lastName: "Malá", attendanceDays: [1, 2] },
+    ]);
+    render(<ExcuseManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Přidat omluvenku" }));
+    fireEvent.change(screen.getByLabelText("Dítě"), { target: { value: "child-1" } });
+    fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-08-19" } });
+    fireEvent.click(screen.getByLabelText("Od"));
+    expect(await screen.findByRole("button", { name: /čtvrtek 20\. srpna 2026/i })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /středa 19\. srpna 2026/i })).toHaveProperty("disabled", false);
+    fireEvent.change(screen.getByLabelText("Dítě"), { target: { value: "child-2" } });
+    expect(screen.getByLabelText("Od")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("Do")).toHaveProperty("value", "");
+  });
+
   it("identifies a makeup and lets the director approve the lunch registration", async () => {
     mocks.getExcuses.mockResolvedValue([{ ...lateExcuse, kind: "MAKEUP", cancelLunch: false }]);
     render(<ExcuseManagementPage />);
@@ -125,7 +143,7 @@ describe("ExcuseManagementPage", () => {
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-08-21" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
     expect((await screen.findByRole("alert")).textContent).toBe(error);
-    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("2026-08-21");
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("21. 8. 2026");
     expect(mocks.getExcuses).toHaveBeenCalledOnce();
   });
 

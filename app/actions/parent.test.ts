@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getSchoolDaysInRange: vi.fn(),
   revalidatePath: vi.fn(),
   childrenGet: vi.fn(), attendanceGet: vi.fn(), isClosedDay: vi.fn(), getExcusesOverlapping: vi.fn(),
+  excusesList: vi.fn(), canSubmitExcuse: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
@@ -16,6 +17,7 @@ vi.mock("@/lib/db", () => ({
   db: {
     parentLinks: { list: mocks.listParentLinks },
     children: { get: mocks.childrenGet }, attendance: { get: mocks.attendanceGet },
+    excuses: { list: mocks.excusesList },
   },
 }));
 vi.mock("@/lib/school-days", () => ({
@@ -27,7 +29,7 @@ vi.mock("@/lib/excuse", () => ({
   getExcusesOverlapping: mocks.getExcusesOverlapping,
   canManageExcuse: vi.fn(),
   canManageExcuses: mocks.canManageExcuses,
-  canSubmitExcuse: vi.fn(),
+  canSubmitExcuse: mocks.canSubmitExcuse,
   deleteExcuse: vi.fn(),
   updateExcuse: vi.fn(),
 }));
@@ -37,7 +39,7 @@ vi.mock("@/lib/parent-calendar", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 
-import { getParentChildren, getChildTodayStatus, submitExcuse, submitMakeup } from "./parent";
+import { getParentChildren, getChildExcuses, getChildTodayStatus, submitExcuse, submitMakeup } from "./parent";
 
 const makeExcuse = (childId: string): Excuse => ({
   id: `excuse-${childId}`,
@@ -79,6 +81,7 @@ describe("submitExcuse", () => {
       role: "PARENT",
     });
     mocks.canManageExcuses.mockResolvedValue(true);
+    mocks.listParentLinks.mockResolvedValue([1, 2].map(id => ({ child: { id: `child-${id}`, active: true } })));
     mocks.getSchoolDaysInRange.mockResolvedValue([new Date(2026, 8, 10)]);
     mocks.createParentExcuses.mockImplementation(({ childIds }: { childIds: string[] }) =>
       Promise.resolve(childIds.map(makeExcuse)),
@@ -220,19 +223,19 @@ describe("submitExcuse", () => {
     const formData = makeFormData();
     formData.delete("childIds");
     formData.append("childIds", "child-1");
-    formData.set("fromDate", "2026-09-10");
-    formData.set("toDate", "2026-09-11");
+    formData.set("fromDate", "2026-09-09");
+    formData.set("toDate", "2026-09-10");
     formData.set("dayPart", "AFTERNOON");
     mocks.getSchoolDaysInRange.mockResolvedValue([
+      new Date(2026, 8, 9),
       new Date(2026, 8, 10),
-      new Date(2026, 8, 11),
     ]);
 
     await submitExcuse(formData);
 
     expect(mocks.createParentExcuses).toHaveBeenCalledWith(
-      expect.objectContaining({ childIds: ["child-1"], fromDate: new Date(2026, 8, 10), toDate: new Date(2026, 8, 11), dayPart: "FULL_DAY", cancelLunch: true }),
-      [new Date(2026, 8, 10), new Date(2026, 8, 11)],
+      expect.objectContaining({ childIds: ["child-1"], fromDate: new Date(2026, 8, 9), toDate: new Date(2026, 8, 10), dayPart: "FULL_DAY", cancelLunch: true }),
+      [new Date(2026, 8, 9), new Date(2026, 8, 10)],
     );
   });
 
@@ -247,6 +250,24 @@ describe("submitExcuse", () => {
       error: "Začátek i konec omluvenky musí být v den, kdy je Habitat otevřený.",
     });
     expect(mocks.createParentExcuses).not.toHaveBeenCalled();
+  });
+
+  it("rejects a regular day off for any selected child before saving", async () => {
+    mocks.listParentLinks.mockResolvedValue([
+      { child: { id: "child-1", active: true } },
+      { child: { id: "child-2", active: true, attendanceDays: [1, 2, 3] } },
+    ]);
+    await expect(submitExcuse(makeFormData())).resolves.toEqual({
+      success: false, error: "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.",
+    });
+    expect(mocks.createParentExcuses).not.toHaveBeenCalled();
+  });
+
+  it("allows a range with a regular day off between valid attendance endpoints", async () => {
+    const value = makeFormData(); value.set("fromDate", "2026-09-07"); value.set("toDate", "2026-09-09");
+    mocks.listParentLinks.mockResolvedValue([1, 2].map(id => ({ child: { id: `child-${id}`, active: true, attendanceDays: [1, 3] } })));
+    mocks.getSchoolDaysInRange.mockResolvedValue([7, 8, 9].map(day => new Date(2026, 8, day)));
+    await expect(submitExcuse(value)).resolves.toMatchObject({ success: true });
   });
 
   it("allows open endpoints with closed days inside the range", async () => {
@@ -374,9 +395,9 @@ describe("submitMakeup", () => {
     await expect(submitMakeup(makeFormData())).resolves.toMatchObject({ success: true, summary: { schoolDayCount: 2, onTimeDayCount: 1 } });
   });
   it("counts only extra dates inside a range", async () => {
-    const value = form(); value.set("toDate", "2026-09-14");
-    mocks.getSchoolDaysInRange.mockResolvedValue([new Date(2026, 8, 10), new Date(2026, 8, 14)]);
-    await expect(submitMakeup(value)).resolves.toMatchObject({ success: true, summary: { schoolDayCount: 1 } });
+    const value = form(); value.set("toDate", "2026-09-17");
+    mocks.getSchoolDaysInRange.mockResolvedValue([10, 14, 15, 16, 17].map(day => new Date(2026, 8, day)));
+    await expect(submitMakeup(value)).resolves.toMatchObject({ success: true, summary: { schoolDayCount: 2 } });
   });
   it("rejects a makeup for a child who already attends every day", async () => {
     mocks.listParentLinks.mockResolvedValue([{ child: { id: "child-1", active: true } }]);
@@ -387,7 +408,15 @@ describe("submitMakeup", () => {
     mocks.listParentLinks.mockResolvedValue([{ child: { id: "child-1", active: true, attendanceDays: [4] } }]);
     await expect(submitMakeup(form())).resolves.toEqual({
       success: false,
-      error: "Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.",
+      error: "Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí.",
+    });
+    expect(mocks.createParentExcuses).not.toHaveBeenCalled();
+  });
+  it.each([["fromDate", "2026-09-09"], ["toDate", "2026-09-14"]])("rejects a regular attendance endpoint %s even with an extra date inside", async (field, date) => {
+    const value = form(); value.set(field, date);
+    mocks.getSchoolDaysInRange.mockResolvedValue([9, 10, 14].map(day => new Date(2026, 8, day)));
+    await expect(submitMakeup(value)).resolves.toEqual({
+      success: false, error: "Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí.",
     });
     expect(mocks.createParentExcuses).not.toHaveBeenCalled();
   });
@@ -408,6 +437,18 @@ describe("submitMakeup", () => {
     mocks.canManageExcuses.mockResolvedValue(false);
     await expect(submitMakeup(form())).rejects.toThrow("Access denied");
     expect(mocks.createParentExcuses).not.toHaveBeenCalled();
+  });
+});
+
+describe("getChildExcuses schedule for editing", () => {
+  it("returns only the child's attendance schedule alongside its records", async () => {
+    mocks.getDbUser.mockResolvedValue({ id: "parent-1", role: "PARENT" });
+    mocks.canSubmitExcuse.mockResolvedValue(true);
+    mocks.childrenGet.mockResolvedValue({ attendanceDays: [1, 3, 4], secret: "private" });
+    mocks.excusesList.mockResolvedValue([makeExcuse("child-1")]);
+    await expect(getChildExcuses("child-1")).resolves.toEqual([
+      expect.objectContaining({ child: { attendanceDays: [1, 3, 4] } }),
+    ]);
   });
 });
 

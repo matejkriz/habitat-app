@@ -11,3 +11,5 @@ Docházka dětí, jejich plánované absence a mimořádné příchody do Habita
 **Omluvenka**: Oznámení plánované absence dítěte na celý den, dopoledne nebo odpoledne.
 
 **Náhrada**: Oznámení mimořádného příchodu dítěte v den, kdy pravidelně nechodí. Příchod platí i při pozdním zadání; oběd je zajištěn při zadání před 9:00 předchozího dne nebo po dodatečném přihlášení ředitelkou.
+
+Začátek a konec omluvenky lze vybrat jen v běžné docházkové dny, u náhrady jen v pravidelné volné dny. Při výběru více dětí musí oba konce vyhovovat všem. Rozmezí může překlenout nevybíratelné dny stejně jako víkendy.

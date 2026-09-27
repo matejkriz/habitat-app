@@ -452,7 +452,7 @@ describe("getExcuseChildren", () => {
     ]);
     expect(mocks.childrenList).toHaveBeenCalledWith({
       where: { active: true },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, attendanceDays: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
   });
@@ -566,6 +566,16 @@ describe("createDirectorExcuse", () => {
     await expect(createDirectorExcuse(formData)).resolves.toEqual({
       success: false,
       error: "Začátek i konec omluvenky musí být v den, kdy je Habitat otevřený.",
+    });
+    expect(mocks.excusesCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects an excuse endpoint on a regular day off", async () => {
+    mocks.childrenGet.mockResolvedValue({ id: "tobias", active: true, attendanceDays: [1, 2, 4] });
+    const formData = new FormData();
+    formData.set("childId", "tobias"); formData.set("fromDate", "2026-08-19"); formData.set("toDate", "2026-08-19");
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: false, error: "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.",
     });
     expect(mocks.excusesCreate).not.toHaveBeenCalled();
   });

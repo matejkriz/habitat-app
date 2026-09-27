@@ -360,6 +360,7 @@ export async function getExcuses(options?: {
 }
 
 export type ExcuseChild = {
+  readonly attendanceDays?: ReadonlyArray<number>;
   readonly id: string;
   readonly firstName: string;
   readonly lastName: string;
@@ -377,7 +378,7 @@ export async function getExcuseChildren(): Promise<ReadonlyArray<ExcuseChild>> {
 
   return db.children.list({
     where: { active: true },
-    select: { id: true, firstName: true, lastName: true },
+    select: { id: true, firstName: true, lastName: true, attendanceDays: true },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   }) as Promise<ReadonlyArray<ExcuseChild>>;
 }
@@ -417,7 +418,7 @@ export async function createDirectorExcuse(
 
   const child = await db.children.get({
     where: { id: childId },
-    select: { id: true, active: true },
+    select: { id: true, active: true, attendanceDays: true },
   });
   if (!child || !child.active) {
     return { success: false, error: "Dítě nebylo nalezeno." };
@@ -450,6 +451,9 @@ export async function createDirectorExcuse(
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
   if (!areExcuseEndpointsOpen(fromDate, toDate, schoolDays)) {
     return { success: false, error: CLOSED_EXCUSE_ENDPOINT_ERROR };
+  }
+  if (![fromDate, toDate].every(day => isRegularAttendanceDay(child, day))) {
+    return { success: false, error: "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí." };
   }
   await createExcuse(
     childId,

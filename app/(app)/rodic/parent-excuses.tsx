@@ -21,6 +21,7 @@ type ParentExcuse = {
   readonly cancelLunch: boolean;
   readonly submittedAt: Date;
   readonly kind?: "EXCUSE" | "MAKEUP";
+  readonly child?: { readonly attendanceDays?: ReadonlyArray<number> };
 };
 
 export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: ParentExcuse[] }) {

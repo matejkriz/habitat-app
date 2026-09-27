@@ -77,6 +77,54 @@ describe("NewExcusePage", () => {
     vi.unstubAllEnvs();
   });
 
+  it.each([false, true])("filters date endpoints by the child's schedule (makeup=%s)", async (makeup) => {
+    mocks.searchParams = `child=child-1&date=2026-09-09${makeup ? "&kind=makeup" : ""}`;
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 3] }]);
+    render(<NewExcusePage />);
+    await screen.findByText(makeup ? "Nová náhrada" : "Nová omluvenka");
+    fireEvent.click(screen.getByLabelText("Od"));
+    const wednesday = await screen.findByRole("button", { name: /středa 9\. září 2026/i });
+    const thursday = screen.getByRole("button", { name: /čtvrtek 10\. září 2026/i });
+    expect(wednesday).toHaveProperty("disabled", makeup);
+    expect(thursday).toHaveProperty("disabled", !makeup);
+    expect((makeup ? wednesday : thursday).className).toContain("line-through");
+    fireEvent.click(makeup ? thursday : wednesday);
+    fireEvent.click(screen.getByLabelText("Do"));
+    expect(await screen.findByRole("button", { name: /čtvrtek 10\. září 2026/i })).toHaveProperty("disabled", !makeup);
+  });
+
+  it("keeps only dates valid for all selected children", async () => {
+    mocks.searchParams = "child=child-1&date=2026-09-09";
+    mocks.getParentChildren.mockResolvedValueOnce([
+      { ...children[0], attendanceDays: [1, 3] },
+      { ...children[1], attendanceDays: [1, 2] },
+    ]);
+    render(<NewExcusePage />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Jan" }));
+    expect(screen.getByLabelText("Od")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("Do")).toHaveProperty("value", "");
+    fireEvent.click(screen.getByLabelText("Od"));
+    expect(await screen.findByRole("button", { name: /středa 9\. září 2026/i })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /pondělí 7\. září 2026/i })).toHaveProperty("disabled", false);
+  });
+
+  it("clears dates when switching to the opposite attendance kind", async () => {
+    mocks.searchParams = "child=child-1&date=2026-09-09";
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 3] }]);
+    render(<NewExcusePage />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Náhrada" }));
+    expect(screen.getByLabelText("Od")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("Do")).toHaveProperty("value", "");
+  });
+
+  it("blocks all days until a child is selected", async () => {
+    mocks.searchParams = "child=child-1&date=2026-09-09";
+    render(<NewExcusePage />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Anna" }));
+    fireEvent.click(screen.getByLabelText("Od"));
+    expect(await screen.findByRole("button", { name: /středa 9\. září 2026/i })).toHaveProperty("disabled", true);
+  });
+
   it("keeps the selected date when previewing its deadline west of UTC", async () => {
     vi.stubEnv("TZ", "America/New_York");
     render(<NewExcusePage />);
@@ -159,26 +207,26 @@ describe("NewExcusePage", () => {
     expect(screen.queryByText(/Oběd bude přihlášen/)).toBeNull();
     expect(screen.queryByText(/Oběd není zajištěný/)).toBeNull();
   });
-  it("uses general lunch rules for a range that starts on a regular attendance day", async () => {
-    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-21";
+  it("uses general lunch rules for a range between regular off days", async () => {
+    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-22";
     mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 3, 4] }]);
     render(<NewExcusePage />);
     await screen.findByText("Nová náhrada");
-    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-22" } });
+    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-29" } });
     expect(screen.getByText("Pravidla pro přihlášení oběda")).toBeTruthy();
     expect(screen.queryByText("Termín pro přihlášení oběda uplynul")).toBeNull();
     expect(screen.queryByText("Oběd bude přihlášen")).toBeNull();
     expect(screen.queryByText(/Termín byl do/)).toBeNull();
   });
-  it("asks for a regular off day instead of promising lunch for scheduled days", async () => {
+  it("clears a makeup deep link for a regular attendance day", async () => {
     mocks.searchParams = "child=child-1&kind=makeup&date=2099-09-21";
     mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
     render(<NewExcusePage />);
     await screen.findByText("Nová náhrada");
-    expect(screen.getByText("Vyberte den, kdy dítě běžně nechodí.")).toBeTruthy();
+    expect(screen.getByLabelText("Od")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("Do")).toHaveProperty("value", "");
     expect(screen.queryByText("Oběd bude přihlášen")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2099-09-23" } });
-    expect(screen.getByText("Vyberte den, kdy dítě běžně nechodí.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Odeslat náhradu" })).toHaveProperty("disabled", true);
   });
   it("clears full-schedule children selected before switching to makeup", async () => {
     mocks.searchParams = "child=child-2&date=2026-09-10";
@@ -198,8 +246,7 @@ describe("NewExcusePage", () => {
     mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
     render(<NewExcusePage />);
     await screen.findByText("Nová náhrada");
-    fireEvent.click(screen.getByRole("button", { name: "Odeslat náhradu" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
+    expect(screen.getByRole("button", { name: "Odeslat náhradu" })).toHaveProperty("disabled", true);
     expect(mocks.submitMakeup).not.toHaveBeenCalled();
   });
 
@@ -213,12 +260,13 @@ describe("NewExcusePage", () => {
     await screen.findByRole("checkbox", { name: "Anna" });
     fireEvent.click(screen.getByRole("checkbox", { name: "Jan" }));
     fireEvent.click(screen.getByRole("button", { name: "Odeslat náhradu" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
+    expect(screen.getByLabelText("Od")).toHaveProperty("value", "");
+    expect(screen.getByRole("button", { name: "Odeslat náhradu" })).toHaveProperty("disabled", true);
     expect(mocks.submitMakeup).not.toHaveBeenCalled();
   });
 
   it.each(["EXCUSE", "MAKEUP"])("shows returned %s validation without treating it as success", async (kind) => {
-    mocks.searchParams = `child=child-1&kind=${kind.toLowerCase()}&date=2026-09-10`;
+    mocks.searchParams = `child=child-1&kind=${kind.toLowerCase()}&date=${kind === "MAKEUP" ? "2026-09-10" : "2026-09-09"}`;
     mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
     const action = kind === "MAKEUP" ? mocks.submitMakeup : mocks.submitExcuse;
     action.mockResolvedValueOnce({ success: false, error: "Vyberte jiné datum." });
@@ -291,7 +339,7 @@ describe("NewExcusePage", () => {
     expect((jan as HTMLInputElement).checked).toBe(true);
   });
 
-  it("shows an error and does not submit when all children are cleared", async () => {
+  it("does not submit when all children are cleared", async () => {
     render(<NewExcusePage />);
 
     const anna = await screen.findByRole("checkbox", { name: "Anna" });
@@ -300,7 +348,7 @@ describe("NewExcusePage", () => {
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2026-09-10" } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
 
-    expect(await screen.findByText("Vyberte alespoň jedno dítě.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Odeslat omluvenku" })).toHaveProperty("disabled", true);
     expect(mocks.submitExcuse).not.toHaveBeenCalled();
   });
 

@@ -8,6 +8,7 @@ const actions = vi.hoisted(() => ({
 }));
 
 vi.mock("@/app/actions/parent", () => actions);
+vi.mock("@/app/actions/calendar", () => ({ getExcuseCalendarMonth: vi.fn() }));
 
 const excuse = {
   id: "excuse-1",
@@ -114,7 +115,7 @@ describe("ParentExcuses", () => {
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-04" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
     expect((await screen.findByRole("alert")).textContent).toBe(error);
-    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("2024-01-04");
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("4. 1. 2024");
     expect(screen.getByText("2. 1. – 3. 1.")).toBeTruthy();
   });
 });

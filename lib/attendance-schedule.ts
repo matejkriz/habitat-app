@@ -1,7 +1,7 @@
 import { coversDay, getDayPartCoverage, type CoveringExcuse } from "./excuse-coverage";
 import { isMakeupLunchOnTime } from "./makeup-rules";
 import { isDefaultClosedDay } from "./school-calendar";
-import { ExcuseDayPart } from "./types";
+import { ExcuseDayPart, type ExcuseKind } from "./types";
 
 export const DEFAULT_ATTENDANCE_DAYS = [1, 2, 3, 4] as const;
 export type AttendanceSchedule = { readonly attendanceDays?: ReadonlyArray<number> };
@@ -23,6 +23,12 @@ export function hasPartialAttendance(child: AttendanceSchedule): boolean {
 
 export function isRegularAttendanceDay(child: AttendanceSchedule, day: Date): boolean {
   return getAttendanceDays(child).includes(day.getDay());
+}
+
+export function getAttendanceDateDisabledReason(child: AttendanceSchedule, day: Date, kind: ExcuseKind = "EXCUSE"): string | null {
+  const scheduled = isRegularAttendanceDay(child, day);
+  if (kind === "MAKEUP") return scheduled ? "Dítě tento den běžně chodí." : null;
+  return scheduled ? null : "Dítě tento den běžně nechodí.";
 }
 
 export type ChildDayPlan = {

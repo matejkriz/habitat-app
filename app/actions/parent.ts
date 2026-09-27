@@ -1,6 +1,6 @@
 "use server";
 
-import { getAttendanceDays, getChildDayPlan, hasPartialAttendance, isRegularAttendanceDay } from "@/lib/attendance-schedule";
+import { getAttendanceDays, getAttendanceDateDisabledReason, getChildDayPlan, hasPartialAttendance, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import type { DaySummary } from "@/lib/day-details";
 import { randomUUID } from "node:crypto";
 import { getDbUser } from "@/lib/auth";
@@ -80,6 +80,7 @@ type AttendanceHistoryItem = {
 };
 
 type ChildExcuseItem = {
+  readonly child: { readonly attendanceDays: ReadonlyArray<number> };
   readonly kind?: "EXCUSE" | "MAKEUP";
   readonly id: string;
   readonly fromDate: Date;
@@ -260,14 +261,17 @@ export const getChildExcuses = async (
     }
   }
 
-  const excuses = (await db.excuses.list({
+  const [excuses, child] = await Promise.all([db.excuses.list({
     where: { childId },
     orderBy: { submittedAt: "desc" },
     take: limit,
-  })) as ReadonlyArray<Excuse>;
+  }) as Promise<ReadonlyArray<Excuse>>, db.children.get({
+    where: { id: childId }, select: { attendanceDays: true },
+  })]);
 
   return excuses.map((e) => ({
     id: e.id,
+    child: { attendanceDays: [...getAttendanceDays(child ?? {})] },
     kind: e.kind ?? "EXCUSE",
     fromDate: e.fromDate,
     toDate: e.toDate,
@@ -394,17 +398,20 @@ async function createParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
   }
 
   const makeupChildren: Child[] = [];
-  if (kind === "MAKEUP") {
-    const links = await db.parentLinks.list({ where: { parentId: user.id }, include: { child: true } }) as ParentChildWithChild[];
-    for (const childId of childIds) {
-      const child = links.find(link => link.child.id === childId)?.child;
-      if (!child?.active || !hasPartialAttendance(child)) {
+  const links = await db.parentLinks.list({ where: { parentId: user.id }, include: { child: true } }) as ParentChildWithChild[];
+  for (const childId of childIds) {
+    const child = links.find(link => link.child.id === childId)?.child;
+    if (!child?.active) throw new ExcuseValidationError("Dítě nebylo nalezeno nebo není aktivní.");
+    if (kind === "MAKEUP") {
+      if (!hasPartialAttendance(child)) {
         throw new ExcuseValidationError("Náhradu lze zadat pouze dítěti, které nechodí každý den.");
       }
-      if (!schoolDays.some(day => !isRegularAttendanceDay(child, day))) {
-        throw new ExcuseValidationError("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
-      }
       makeupChildren.push(child);
+    }
+    if ([fromDate, toDate].some(day => getAttendanceDateDisabledReason(child, day, kind))) {
+      throw new ExcuseValidationError(kind === "MAKEUP"
+        ? "Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí."
+        : "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.");
     }
   }
   const requestId = formData.get("requestId");

@@ -26,7 +26,7 @@ import {
   parseExcuseDate,
 } from "@/lib/excuse-rules";
 import { formatMakeupLunchDeadline, isMakeupLunchOnTime } from "@/lib/makeup-rules";
-import { DEFAULT_ATTENDANCE_DAYS, isRegularAttendanceDay } from "@/lib/attendance-schedule";
+import { DEFAULT_ATTENDANCE_DAYS, getAttendanceDateDisabledReason, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import {
   ExcuseDayPart,
   type ExcuseDayPart as ExcuseDayPartValue,
@@ -128,6 +128,22 @@ export default function NewExcusePage() {
     ? formatMakeupLunchDeadline(parseExcuseDate(fromDate))
     : "";
 
+  const getDisabledReason = (date: Date, selected = selectedChildren, makeup = isMakeup): string | null =>
+    selected.length === 0
+      ? "Nejprve vyberte dítě."
+      : selected.map((child) => getAttendanceDateDisabledReason(child, date, makeup ? "MAKEUP" : "EXCUSE")).find(Boolean) ?? null;
+
+  const keepValidDates = (selected: ParentVisibleChild[], makeup: boolean) => {
+    if (fromDate && getDisabledReason(parseExcuseDate(fromDate), selected, makeup)) setFromDate("");
+    if (toDate && getDisabledReason(parseExcuseDate(toDate), selected, makeup)) setToDate("");
+  };
+
+  const changeChildren = (nextIds: string[]) => {
+    setSelectedChildIds(nextIds);
+    setSelectedChildId(nextIds[0] ?? "");
+    keepValidDates(children.filter((child) => nextIds.includes(child.id)), isMakeup);
+  };
+
   const changeMode = (makeup: boolean) => {
     setIsMakeup(makeup);
     setError("");
@@ -138,6 +154,7 @@ export default function NewExcusePage() {
     const nextIds = keptIds.length > 0 ? keptIds : allowedChildren.slice(0, 1).map((child) => child.id);
     setSelectedChildIds(nextIds);
     setSelectedChildId(nextIds[0] ?? "");
+    keepValidDates(children.filter((child) => nextIds.includes(child.id)), makeup);
     const params = new URLSearchParams(searchParams.toString());
     if (makeup) params.set("kind", "makeup");
     else params.delete("kind");
@@ -161,13 +178,18 @@ export default function NewExcusePage() {
             availableChildren[0];
           setSelectedChildId(fallbackChild.id);
           setSelectedChildIds([fallbackChild.id]);
+          const mode = requestedMakeup && eligibleChildren.length > 0 ? "MAKEUP" : "EXCUSE";
+          if (preselectedDate && getAttendanceDateDisabledReason(fallbackChild, parseExcuseDate(preselectedDate), mode)) {
+            setFromDate("");
+            setToDate("");
+          }
         }
       } catch {
         setError("Nepodařilo se načíst seznam dětí.");
       }
     }
     loadChildren();
-  }, [preselectedChildId, requestedMakeup]);
+  }, [preselectedChildId, requestedMakeup, preselectedDate]);
 
   useEffect(() => {
     if (fromDate) {
@@ -377,11 +399,9 @@ export default function NewExcusePage() {
                           value={child.id}
                           checked={selectedChildIds.includes(child.id)}
                           onChange={(event) => {
-                            setSelectedChildIds((current) =>
-                              event.target.checked
-                                ? [...current, child.id]
-                                : current.filter((id) => id !== child.id),
-                            );
+                            changeChildren(event.target.checked
+                              ? [...selectedChildIds, child.id]
+                              : selectedChildIds.filter((id) => id !== child.id));
                           }}
                           className="h-5 w-5 rounded border-cream-dark accent-gold"
                         />
@@ -407,6 +427,7 @@ export default function NewExcusePage() {
               label="Od"
               name="fromDate"
               value={fromDate}
+              getDisabledReason={getDisabledReason}
               onChange={(nextFromDate) => {
                 const nextToDate =
                   !toDate || nextFromDate > toDate ? nextFromDate : toDate;
@@ -429,6 +450,7 @@ export default function NewExcusePage() {
               label="Do"
               name="toDate"
               value={toDate}
+              getDisabledReason={getDisabledReason}
               onChange={(nextToDate) => {
                 setToDate(nextToDate);
                 if (fromDate && nextToDate && fromDate !== nextToDate) {

@@ -90,6 +90,40 @@ describe("attendance schedule and makeup persistence", () => {
     await expect(t.mutation(api.parentExcuses.createParentExcuses, input)).rejects.toThrow("nechodí");
   });
 
+  it.each(["fromDate", "toDate"] as const)("rejects a regular makeup %s endpoint even if another date is an off day", async field => {
+    const t = await setup();
+    await t.mutation(api.db.patchById, { secret, table: "children", id: "child", patch: { attendanceDays: [1, 3, 4] } });
+    const range = field === "fromDate" ? { fromDate: date - 86400000 } : { toDate: date + 86400000 };
+    await expect(t.mutation(api.parentExcuses.createParentExcuses, { ...input, ...range })).rejects.toThrow("nechodí");
+    expect(await t.run(({ db }) => db.query("excuses").collect())).toHaveLength(0);
+  });
+
+  it("rejects a regular day off excuse before writing any records", async () => {
+    const t = await setup();
+    await t.mutation(api.db.patchById, { secret, table: "children", id: "child", patch: { attendanceDays: [1, 3, 4] } });
+    await expect(t.mutation(api.parentExcuses.createParentExcuses, { ...input, kind: "EXCUSE" })).rejects.toThrow("pravidelně chodí");
+    expect(await t.run(({ db }) => db.query("excuses").collect())).toHaveLength(0);
+    expect(await t.run(({ db }) => db.query("auditLogs").collect())).toHaveLength(0);
+  });
+
+  it("preserves the all-weekdays default for regular excuses", async () => {
+    const t = await setup();
+    const result = await t.mutation(api.parentExcuses.createParentExcuses, { ...input, kind: "EXCUSE" });
+    expect(result.excuses).toHaveLength(1);
+  });
+
+  it("validates every sibling before committing the excuse batch", async () => {
+    const t = await setup();
+    await t.run(async ({ db }) => {
+      await db.insert("children", { id: "other", firstName: "Max", lastName: "Malý", active: true, attendanceDays: [1, 3, 4], createdAt: now, updatedAt: now });
+      await db.insert("parentChildren", { id: "other-link", parentId: "PARENT", childId: "other", createdAt: now });
+    });
+    await expect(t.mutation(api.parentExcuses.createParentExcuses, { ...input, kind: "EXCUSE", childIds: ["child", "other"] })).rejects.toThrow("pravidelně chodí");
+    expect(await t.run(({ db }) => db.query("excuses").collect())).toHaveLength(0);
+    expect(await t.run(({ db }) => db.query("auditLogs").collect())).toHaveLength(0);
+    expect(await t.run(({ db }) => db.query("parentExcuseRequests").collect())).toHaveLength(0);
+  });
+
   it("rejects a closed missing-schedule date", async () => {
     const t = await setup();
     await t.mutation(api.db.patchById, { secret, table: "children", id: "child", patch: { attendanceDays: [1, 3, 4] } });

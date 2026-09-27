@@ -30,6 +30,8 @@ import {
 } from "@/components/ui";
 import type { ExcuseRangeState } from "@/lib/excuse-coverage";
 import type { ExcuseDayPart } from "@/lib/types";
+import { getAttendanceDateDisabledReason } from "@/lib/attendance-schedule";
+import { parseExcuseDate } from "@/lib/excuse-rules";
 import { formatDate, formatDateRange } from "@/lib/utils";
 
 interface Excuse {
@@ -47,6 +49,7 @@ interface Excuse {
     firstName: string;
     lastName: string;
     doesNotTakeLunch: boolean;
+    attendanceDays?: ReadonlyArray<number>;
   };
   submittedBy: {
     id: string;
@@ -74,6 +77,7 @@ export default function ExcuseManagementPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [createChildId, setCreateChildId] = useState("");
   const [createFromDate, setCreateFromDate] = useState("");
   const [createToDate, setCreateToDate] = useState("");
   const [createCancelLunch, setCreateCancelLunch] = useState(true);
@@ -156,6 +160,10 @@ export default function ExcuseManagementPage() {
     await loadExcuses(false);
   };
 
+  const createChild = children.find((child) => child.id === createChildId);
+  const getCreateDisabledReason = (date: Date): string | null =>
+    createChild ? getAttendanceDateDisabledReason(createChild, date) : "Nejprve vyberte dítě.";
+
   const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreateError("");
@@ -177,6 +185,7 @@ export default function ExcuseManagementPage() {
 
       await loadExcuses(false);
       setShowCreateForm(false);
+      setCreateChildId("");
       setCreateFromDate("");
       setCreateToDate("");
       setCreateCancelLunch(true);
@@ -208,6 +217,7 @@ export default function ExcuseManagementPage() {
             type="button"
             onClick={() => {
               setCreateError("");
+              setCreateChildId("");
               setCreateFromDate("");
               setCreateToDate("");
               setCreateCancelLunch(true);
@@ -261,6 +271,14 @@ export default function ExcuseManagementPage() {
               <Select
                 label="Dítě"
                 name="childId"
+                value={createChildId}
+                onChange={(event) => {
+                  const childId = event.target.value;
+                  const nextChild = children.find((child) => child.id === childId);
+                  setCreateChildId(childId);
+                  if (!nextChild || (createFromDate && getAttendanceDateDisabledReason(nextChild, parseExcuseDate(createFromDate)))) setCreateFromDate("");
+                  if (!nextChild || (createToDate && getAttendanceDateDisabledReason(nextChild, parseExcuseDate(createToDate)))) setCreateToDate("");
+                }}
                 required
                 disabled={isChildrenLoading || children.length === 0}
                 options={[
@@ -283,6 +301,7 @@ export default function ExcuseManagementPage() {
                   label="Od"
                   name="fromDate"
                   value={createFromDate}
+                  getDisabledReason={getCreateDisabledReason}
                   onChange={(nextFromDate) => {
                     const nextToDate =
                       nextFromDate &&
@@ -305,6 +324,7 @@ export default function ExcuseManagementPage() {
                   label="Do"
                   name="toDate"
                   value={createToDate}
+                  getDisabledReason={getCreateDisabledReason}
                   min={createFromDate || undefined}
                   onChange={(nextToDate) => {
                     setCreateToDate(nextToDate);
@@ -365,6 +385,7 @@ export default function ExcuseManagementPage() {
                 onClick={() => {
                   setShowCreateForm(false);
                   setCreateError("");
+                  setCreateChildId("");
                   setCreateFromDate("");
                   setCreateToDate("");
                   setCreateCancelLunch(true);

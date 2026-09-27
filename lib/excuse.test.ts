@@ -41,6 +41,7 @@ vi.mock("./school-days", () => ({
 import {
   canManageExcuse,
   canManageExcuses,
+  createMakeup,
   getExcusesOverlapping,
   updateExcuse,
 } from "./excuse";
@@ -75,6 +76,14 @@ describe("getExcusesOverlapping", () => {
       from,
       to,
     });
+  });
+});
+
+describe("createMakeup endpoints", () => {
+  it("rejects a range beginning on a regular day even if its end is an off day", async () => {
+    mocks.getChild.mockResolvedValue({ active: true, attendanceDays: [1, 3, 4] });
+    await expect(createMakeup("child-1", new Date(2024, 0, 1), new Date(2024, 0, 2), null, "parent-1", [new Date(2024, 0, 1), new Date(2024, 0, 2)]))
+      .rejects.toThrow("Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí.");
   });
 });
 
@@ -156,6 +165,28 @@ describe("updateExcuse", () => {
         cancelLunch: true,
       },
     });
+  });
+
+  it("rejects changing an excuse endpoint to a regular day off", async () => {
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceDays: [1, 3, 4] });
+    await expect(updateExcuse(currentExcuse.id, { fromDate: new Date(2024, 0, 2) }, "parent-1"))
+      .rejects.toThrow("Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.");
+    expect(mocks.updateExcuse).not.toHaveBeenCalled();
+    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("rejects changing a makeup endpoint to a regular attendance day", async () => {
+    mocks.getExcuse.mockResolvedValue({ ...currentExcuse, kind: "MAKEUP" });
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceDays: [2] });
+    await expect(updateExcuse(currentExcuse.id, { fromDate: new Date(2024, 0, 2) }, "parent-1"))
+      .rejects.toThrow("Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí.");
+    expect(mocks.updateExcuse).not.toHaveBeenCalled();
+  });
+
+  it("allows a note-only edit if the schedule changed after submission", async () => {
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceDays: [] });
+    await expect(updateExcuse(currentExcuse.id, { reason: "Kontrola" }, "parent-1"))
+      .resolves.toMatchObject({ reason: "Kontrola" });
   });
 
   it("preserves lunch cancellation when a single-day excuse changes to afternoon-only", async () => {

@@ -16,7 +16,7 @@ import { getExcuseDayPartForRange } from "./excuse-input";
 import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
-import { isRegularAttendanceDay } from "./attendance-schedule";
+import { getAttendanceDateDisabledReason, isRegularAttendanceDay } from "./attendance-schedule";
 
 export type ExcuseWithChild = Excuse & {
   child: {
@@ -210,8 +210,8 @@ export async function createMakeup(
   if (!areExcuseEndpointsOpen(fromDate, toDate, openDays)) {
     throw new ExcuseValidationError("Začátek i konec náhrady musí být v den, kdy je Habitat otevřený.");
   }
-  if (!openDays.some(day => !isRegularAttendanceDay(child, day))) {
-    throw new ExcuseValidationError("Náhradu lze zadat pouze na den, kdy dítě pravidelně nechodí.");
+  if ([fromDate, toDate].some(day => getAttendanceDateDisabledReason(child, day, "MAKEUP"))) {
+    throw new ExcuseValidationError("Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí.");
   }
   return createExcuse(childId, fromDate, toDate, reason, submittedById, openDays, {
     ...options, kind: "MAKEUP", cancelLunch: false,
@@ -326,6 +326,17 @@ export async function updateExcuse(
     throw new ExcuseValidationError(
       "Rozsah omluvenky nelze rozšířit. Na další dny podejte novou omluvenku.",
     );
+  }
+
+  if (startOfDay(newFromDate) !== startOfDay(current.fromDate) || startOfDay(newToDate) !== startOfDay(current.toDate)) {
+    const child = await db.children.get({ where: { id: current.childId }, select: { attendanceDays: true } });
+    if (!child) throw new ExcuseValidationError("Dítě nebylo nalezeno.");
+    const kind = current.kind ?? "EXCUSE";
+    if ([newFromDate, newToDate].some(day => getAttendanceDateDisabledReason(child, day, kind))) {
+      throw new ExcuseValidationError(kind === "MAKEUP"
+        ? "Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí."
+        : "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.");
+    }
   }
 
   // Create audit log

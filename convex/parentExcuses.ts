@@ -99,20 +99,22 @@ export const createParentExcuses = mutation({
       return { replayed: true, excuses: excuses.map((excuse) => excuse!) };
     }
     const isMakeup = args.kind === "MAKEUP";
-    if (isMakeup) {
-      const closedDays = await ctx.db.query("closedDays").collect();
-      const closedKeys = new Set(closedDays.map(day => pragueDateKey(day.date)));
-      const dates = calendarDates(args.fromDate, args.toDate);
-      const isOpen = (day: { key: string; weekday: number }) =>
-        day.weekday >= 1 && day.weekday <= 4 && !closedKeys.has(day.key);
-      if (!dates.length || !isOpen(dates[0]) || !isOpen(dates[dates.length - 1])) {
-        throw new Error("Začátek i konec náhrady musí být v den, kdy je Habitat otevřený.");
-      }
-      for (const child of children) {
-        const regularDays = child.attendanceDays ?? [1, 2, 3, 4];
-        if (!dates.some(day => isOpen(day) && !regularDays.includes(day.weekday))) {
-          throw new Error("Náhradu lze zadat pouze na den, kdy dítě pravidelně nechodí.");
-        }
+    const closedDays = await ctx.db.query("closedDays").collect();
+    const closedKeys = new Set(closedDays.map(day => pragueDateKey(day.date)));
+    const dates = calendarDates(args.fromDate, args.toDate);
+    const isOpen = (day: { key: string; weekday: number }) =>
+      day.weekday >= 1 && day.weekday <= 4 && !closedKeys.has(day.key);
+    if (!dates.length || !isOpen(dates[0]) || !isOpen(dates[dates.length - 1])) {
+      throw new Error(isMakeup
+        ? "Začátek i konec náhrady musí být v den, kdy je Habitat otevřený."
+        : "Začátek i konec omluvenky musí být v den, kdy je Habitat otevřený.");
+    }
+    for (const child of children) {
+      const regularDays = child.attendanceDays ?? [1, 2, 3, 4];
+      if (![dates[0], dates[dates.length - 1]].every(day => regularDays.includes(day.weekday) !== isMakeup)) {
+        throw new Error(isMakeup
+          ? "Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí."
+          : "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.");
       }
     }
     const now = Date.now();

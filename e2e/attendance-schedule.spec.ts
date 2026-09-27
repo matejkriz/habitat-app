@@ -35,6 +35,28 @@ async function openCalendarDay(page: Page, date: string) {
   return page.getByRole("dialog");
 }
 
+async function openDatePickerDay(page: Page, field: "Od" | "Do", date: string) {
+  await page.keyboard.press("Escape");
+  await page.getByRole("combobox", { name: field, exact: true }).click();
+  const picker = page.getByRole("dialog", { name: `Kalendář ${field}`, exact: true });
+  const targetDate = new Date(`${date}T12:00:00`);
+  const label = targetDate.toLocaleDateString("cs-CZ", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+  const day = picker.getByRole("button", { name: new RegExp(`^${label}`) });
+  if (!(await day.isVisible())) {
+    const precedingMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1)
+      .toLocaleDateString("cs-CZ", { month: "long", year: "numeric" });
+    const visibleMonth = (await picker.locator("p").first().innerText()).toLocaleLowerCase("cs-CZ").trim();
+    await picker.getByRole("button", {
+      name: visibleMonth === precedingMonth ? "Následující měsíc" : "Předchozí měsíc",
+      exact: true,
+    }).click();
+  }
+  await expect(day).toBeVisible();
+  return day;
+}
+
 test("regular day off → parent makeup → staff plan and enrolled lunch without attendance", async ({ page, browser }) => {
   test.skip(process.env.E2E_LOCAL !== "true", "Writes only to the isolated local seeded E2E database.");
   const date = futureTuesday();
@@ -71,14 +93,36 @@ test("regular day off → parent makeup → staff plan and enrolled lunch withou
     await expect(expectedChildren.getByText(childName, { exact: true })).toHaveCount(0);
 
     await persona(page, "parent-roza");
+    await page.goto(`/rodic/omluvenka?child=${childId}&date=${regularDate}`);
+    await expect(page.getByRole("heading", { name: "Nová omluvenka", exact: true })).toBeVisible();
+    const excuseOffDay = await openDatePickerDay(page, "Od", date);
+    await expect(excuseOffDay).toBeDisabled();
+    await expect(excuseOffDay).toHaveAttribute("aria-label", /Dítě tento den běžně nechodí\./);
+
     await page.goto(`/rodic/omluvenka?child=${childId}&kind=makeup&date=${regularDate}`);
     await expect(page.getByRole("heading", { name: "Nová náhrada", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Od", exact: true })).toHaveValue("");
+    await expect(page.getByRole("combobox", { name: "Do", exact: true })).toHaveValue("");
+    await expect(page.getByRole("button", { name: "Odeslat náhradu", exact: true })).toBeDisabled();
     const morning = page.getByRole("radio", { name: "Dopoledne", exact: true });
     await page.locator("label").filter({ has: morning }).click();
     await expect(morning).toBeChecked();
     await page.getByLabel("Poznámka (volitelné)").fill(marker);
-    await page.getByRole("button", { name: "Odeslat náhradu", exact: true }).click();
-    await expect(page.getByRole("main").getByRole("alert")).toHaveText("Vyberte alespoň jeden den, kdy dítě pravidelně nechodí.");
+    const makeupRegularDay = await openDatePickerDay(page, "Od", regularDate);
+    await expect(makeupRegularDay).toBeDisabled();
+    await expect(makeupRegularDay).toHaveAttribute("aria-label", /Dítě tento den běžně chodí\./);
+    const makeupOffDay = await openDatePickerDay(page, "Od", date);
+    await expect(makeupOffDay).toBeEnabled();
+    await makeupOffDay.click();
+    await expect(page.getByRole("combobox", { name: "Od", exact: true })).not.toHaveValue("");
+    await expect(page.getByRole("combobox", { name: "Do", exact: true })).not.toHaveValue("");
+    await expect(page.getByRole("button", { name: "Odeslat náhradu", exact: true })).toBeEnabled();
+    const makeupRegularEndDay = await openDatePickerDay(page, "Do", regularDate);
+    await expect(makeupRegularEndDay).toBeDisabled();
+    await expect(makeupRegularEndDay).toHaveAttribute("aria-label", /Dítě tento den běžně chodí\./);
+    const makeupOffEndDay = await openDatePickerDay(page, "Do", date);
+    await expect(makeupOffEndDay).toBeEnabled();
+    await page.keyboard.press("Escape");
     await expect(page.getByText(/Minified React error|react\.dev\/errors\/441/)).toHaveCount(0);
     await expect(page.getByText("Náhrada odeslána", { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Poznámka (volitelné)")).toHaveValue(marker);

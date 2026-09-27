@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getChildDayPlan, getAttendanceDays, hasPartialAttendance, parseAttendanceDays } from "./attendance-schedule";
+import { getChildDayPlan, getAttendanceDays, getAttendanceDateDisabledReason, hasPartialAttendance, parseAttendanceDays } from "./attendance-schedule";
 import { getDayCoverage, getDayPartCoverage, type CoveringExcuse } from "./excuse-coverage";
 import { getMakeupLunchDeadline, isMakeupLunchOnTime } from "./makeup-rules";
 
@@ -21,6 +21,19 @@ describe("regular attendance and makeup days", () => {
     expect(parseAttendanceDays([4, 1])).toEqual([1, 4]);
     expect(() => parseAttendanceDays([1, 1])).toThrow();
     expect(() => parseAttendanceDays([5])).toThrow();
+  });
+  it("offers opposite weekdays for excuses and makeups", () => {
+    expect(getAttendanceDateDisabledReason(child, tuesday, "EXCUSE")).toBe("Dítě tento den běžně nechodí.");
+    expect(getAttendanceDateDisabledReason(child, tuesday, "MAKEUP")).toBeNull();
+    const wednesday = new Date(2026, 8, 30);
+    expect(getAttendanceDateDisabledReason(child, wednesday, "EXCUSE")).toBeNull();
+    expect(getAttendanceDateDisabledReason(child, wednesday, "MAKEUP")).toBe("Dítě tento den běžně chodí.");
+  });
+  it("preserves default attendance and supports children with no regular days", () => {
+    expect(getAttendanceDateDisabledReason({}, tuesday)).toBeNull();
+    expect(getAttendanceDateDisabledReason({}, tuesday, "MAKEUP")).toBe("Dítě tento den běžně chodí.");
+    expect(getAttendanceDateDisabledReason({ attendanceDays: [] }, tuesday)).toBe("Dítě tento den běžně nechodí.");
+    expect(getAttendanceDateDisabledReason({ attendanceDays: [] }, tuesday, "MAKEUP")).toBeNull();
   });
   it("removes an unscheduled day from expected children and lunches", () => {
     expect(getChildDayPlan(child, [], tuesday)).toMatchObject({
