@@ -5,6 +5,14 @@ import { requireServerSecret } from "./serverSecret";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
 
+function validateAttendanceDays(value: unknown): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || new Set(value).size !== value.length ||
+    value.some(day => !Number.isInteger(day) || day < 1 || day > 4)) {
+    throw new Error("Neplatné dny docházky.");
+  }
+}
+
 const tableName = v.union(
   v.literal("users"),
   v.literal("children"),
@@ -28,6 +36,7 @@ const excuseValue = v.object({
   fromDate: v.number(),
   toDate: v.number(),
   reason: v.union(v.string(), v.null()),
+  kind: v.optional(v.union(v.literal("EXCUSE"), v.literal("MAKEUP"))),
   dayPart: v.optional(excuseDayPart),
   cancelLunch: v.boolean(),
   submittedById: v.string(),
@@ -233,6 +242,7 @@ export const insert = mutation({
   returns: v.string(),
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
+    if (args.table === "children") validateAttendanceDays(args.value.attendanceDays);
     return await db.insert(args.table, args.value);
   },
 });
@@ -250,7 +260,8 @@ export const createExcuse = mutation({
       .unique();
     if (!child) throw new Error("Child not found");
 
-    const cancelLunch = child.doesNotTakeLunch ? true : value.cancelLunch;
+    const isMakeup = value.kind === "MAKEUP";
+    const cancelLunch = isMakeup ? false : child.doesNotTakeLunch ? true : value.cancelLunch;
     const dayPart =
       value.fromDate === value.toDate ? (value.dayPart ?? "FULL_DAY") : "FULL_DAY";
     const excuse = {
@@ -259,7 +270,7 @@ export const createExcuse = mutation({
       cancelLunch,
       lateApprovedAt:
         value.lateApprovedAt == null &&
-        (child.doesNotTakeLunch || !cancelLunch)
+        (child.doesNotTakeLunch || (isMakeup ? dayPart === "AFTERNOON" : !cancelLunch))
           ? Date.now()
           : value.lateApprovedAt,
     };
@@ -287,6 +298,8 @@ export const patchById = mutation({
     if (!current) {
       throw new Error(`Document not found in ${args.table} for id ${args.id}`);
     }
+
+    if (args.table === "children") validateAttendanceDays(args.patch.attendanceDays);
 
     if (args.table === "excuses") {
       const previous = current as Doc<"excuses">;

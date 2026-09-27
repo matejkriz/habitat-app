@@ -22,6 +22,9 @@ export const ExcuseDayPart = {
 export type ExcuseDayPart =
   (typeof ExcuseDayPart)[keyof typeof ExcuseDayPart];
 
+export const ExcuseKind = { EXCUSE: "EXCUSE", MAKEUP: "MAKEUP" } as const;
+export type ExcuseKind = (typeof ExcuseKind)[keyof typeof ExcuseKind];
+
 export const ExcuseStatus = {
   NONE: "NONE",
   EXCUSED: "EXCUSED",
@@ -63,6 +66,8 @@ export type Child = {
   lastName: string;
   gender: ChildGender | null;
   doesNotTakeLunch: boolean;
+  /** Regular school weekdays (1 = Monday through 4 = Thursday); absent means all. */
+  attendanceDays?: number[];
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -91,6 +96,8 @@ export type Excuse = {
   fromDate: Date;
   toDate: Date;
   reason: string | null;
+  /** Legacy records are absences; makeups add attendance outside the regular schedule. */
+  kind?: ExcuseKind;
   /** Which part of every covered school day the child will miss. */
   dayPart: ExcuseDayPart;
   /** Whether an excused absence should also cancel the child's lunch. */

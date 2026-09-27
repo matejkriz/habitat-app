@@ -17,6 +17,7 @@ import { ExcuseDatePicker } from "@/components/excuses/excuse-date-picker";
 import {
   getParentChildren,
   submitExcuse,
+  submitMakeup,
   type ParentVisibleChild,
 } from "@/app/actions/parent";
 import {
@@ -24,6 +25,8 @@ import {
   formatDeadline,
   parseExcuseDate,
 } from "@/lib/excuse-rules";
+import { formatMakeupLunchDeadline, isMakeupLunchOnTime } from "@/lib/makeup-rules";
+import { DEFAULT_ATTENDANCE_DAYS, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import {
   ExcuseDayPart,
   type ExcuseDayPart as ExcuseDayPartValue,
@@ -72,8 +75,10 @@ export default function NewExcusePage() {
   const searchParams = useSearchParams();
   const preselectedChildId = searchParams.get("child");
   const preselectedDate = searchParams.get("date") || "";
+  const requestedMakeup = searchParams.get("kind")?.toLowerCase() === "makeup";
 
   const [children, setChildren] = useState<ParentVisibleChild[]>([]);
+  const [isMakeup, setIsMakeup] = useState(requestedMakeup);
   const [selectedChildId, setSelectedChildId] = useState(preselectedChildId || "");
   const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
   const [fromDate, setFromDate] = useState(preselectedDate);
@@ -101,16 +106,59 @@ export default function NewExcusePage() {
     fromDate && toDate && fromDate !== toDate,
   );
   const shouldCancelLunch = allSelectedChildrenDoNotTakeLunch || cancelLunch;
+  const makeupChildren = children.filter((child) =>
+    child.attendanceDays !== undefined && child.attendanceDays.length < 4,
+  );
+  const visibleChildren = isMakeup ? makeupChildren : children;
+  const makeupDates = fromDate ? DEFAULT_ATTENDANCE_DAYS.map((weekday) => {
+    const date = parseExcuseDate(fromDate);
+    date.setDate(date.getDate() + (weekday - date.getDay() + 7) % 7);
+    return date;
+  }).filter((date) => date <= parseExcuseDate(toDate || fromDate)) : [];
+  const selectedMakeupChildren = selectedChildren.filter((child) =>
+    !fromDate || makeupDates.some((date) => !isRegularAttendanceDay(child, date)),
+  );
+  const hasMakeupDays = selectedMakeupChildren.length > 0;
+  const makeupTakesLunch = selectedMakeupChildren.some((child) => !child.doesNotTakeLunch)
+    && (hasMultipleDays || dayPart !== ExcuseDayPart.AFTERNOON);
+  const makeupOnTime = fromDate
+    ? isMakeupLunchOnTime(new Date(), parseExcuseDate(fromDate))
+    : null;
+  const makeupDeadline = fromDate
+    ? formatMakeupLunchDeadline(parseExcuseDate(fromDate))
+    : "";
+
+  const changeMode = (makeup: boolean) => {
+    setIsMakeup(makeup);
+    setError("");
+    setSuccess(null);
+    request.current = null;
+    const allowedChildren = makeup ? makeupChildren : children;
+    const keptIds = selectedChildIds.filter((id) => allowedChildren.some((child) => child.id === id));
+    const nextIds = keptIds.length > 0 ? keptIds : allowedChildren.slice(0, 1).map((child) => child.id);
+    setSelectedChildIds(nextIds);
+    setSelectedChildId(nextIds[0] ?? "");
+    const params = new URLSearchParams(searchParams.toString());
+    if (makeup) params.set("kind", "makeup");
+    else params.delete("kind");
+    const query = params.toString();
+    router.replace(`/rodic/omluvenka${query ? `?${query}` : ""}`, { scroll: false });
+  };
 
   useEffect(() => {
     async function loadChildren() {
       try {
         const loadedChildren = await getParentChildren();
         setChildren([...loadedChildren]);
-        if (loadedChildren.length > 0) {
+        const eligibleChildren = requestedMakeup
+          ? loadedChildren.filter((child) => child.attendanceDays !== undefined && child.attendanceDays.length < 4)
+          : loadedChildren;
+        const availableChildren = eligibleChildren.length > 0 ? eligibleChildren : loadedChildren;
+        setIsMakeup(requestedMakeup && eligibleChildren.length > 0);
+        if (availableChildren.length > 0) {
           const fallbackChild =
-            loadedChildren.find((child) => child.id === preselectedChildId) ??
-            loadedChildren[0];
+            availableChildren.find((child) => child.id === preselectedChildId) ??
+            availableChildren[0];
           setSelectedChildId(fallbackChild.id);
           setSelectedChildIds([fallbackChild.id]);
         }
@@ -119,7 +167,7 @@ export default function NewExcusePage() {
       }
     }
     loadChildren();
-  }, [preselectedChildId]);
+  }, [preselectedChildId, requestedMakeup]);
 
   useEffect(() => {
     if (fromDate) {
@@ -158,12 +206,12 @@ export default function NewExcusePage() {
       formData.set("cancelLunch", String(shouldCancelLunch));
       if (reason) formData.set("reason", reason);
 
-      const fingerprint = JSON.stringify([...formData.entries()]);
+      const fingerprint = JSON.stringify([isMakeup, ...formData.entries()]);
       if (request.current?.fingerprint !== fingerprint) {
         request.current = { fingerprint, id: crypto.randomUUID() };
       }
       formData.set("requestId", request.current.id);
-      const result = await submitExcuse(formData);
+      const result = await (isMakeup ? submitMakeup(formData) : submitExcuse(formData));
       setSuccess({
         count: result.excuses.length,
         ...result.summary,
@@ -174,7 +222,7 @@ export default function NewExcusePage() {
         router.push(`/rodic?child=${selectedChildIds[0] ?? selectedChildId}`);
       }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nepodařilo se odeslat omluvenku.");
+      setError(err instanceof Error ? err.message : isMakeup ? "Nepodařilo se odeslat náhradu." : "Nepodařilo se odeslat omluvenku.");
     } finally {
       setIsSubmitting(false);
     }
@@ -182,13 +230,24 @@ export default function NewExcusePage() {
 
   return (
     <div className="max-w-lg mx-auto">
+      {makeupChildren.length > 0 && (
+        <div role="tablist" aria-label="Záznam docházky" className="mb-4 flex gap-2 rounded-full bg-cream-dark/60 p-1">
+          {[{ makeup: false, label: "Omluvenka" }, { makeup: true, label: "Náhrada" }].map((tab) => (
+            <button key={tab.label} type="button" role="tab" aria-selected={isMakeup === tab.makeup} disabled={isSubmitting}
+              onClick={() => changeMode(tab.makeup)}
+              className={`min-h-11 flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${isMakeup === tab.makeup ? "bg-white text-charcoal shadow-sm" : "text-charcoal-light hover:bg-white/50"}`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Nová omluvenka
+            {isMakeup ? "Nová náhrada" : "Nová omluvenka"}
           </CardTitle>
         </CardHeader>
 
@@ -214,10 +273,22 @@ export default function NewExcusePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span className="font-semibold">
-                    {success.count > 1 ? "Omluvenky odeslány" : "Omluvenka odeslána"}
+                    {isMakeup
+                      ? success.count > 1 ? "Náhrady odeslány" : "Náhrada odeslána"
+                      : success.count > 1 ? "Omluvenky odeslány" : "Omluvenka odeslána"}
                   </span>
                 </div>
-                {success.schoolDayCount === 0 ? (
+                {isMakeup ? (
+                  <div className="space-y-1">
+                    <p>O mimořádném příchodu se dozví ředitelka a učitelé.</p>
+                    {success.schoolDayCount === 0 ? <p>V zadaném období nejsou žádné dny pro náhradu.</p> : makeupTakesLunch ? (
+                      <>
+                        {success.onTimeDayCount > 0 && <p>{success.onTimeDayCount === 1 ? "Oběd bude přihlášen." : `${success.onTimeDayCount} obědy budou přihlášeny.`}</p>}
+                        {success.lateDayCount > 0 && <p>Oběd není zajištěný pro dny zadané po termínu. Dítě může dorazit i bez zajištěného oběda.</p>}
+                      </>
+                    ) : null}
+                  </div>
+                ) : success.schoolDayCount === 0 ? (
                   <p>V zadaném období nejsou žádné školní dny.</p>
                 ) : !success.cancelLunch ? (
                   <p>
@@ -273,13 +344,19 @@ export default function NewExcusePage() {
               </div>
             )}
 
-            {children.length > 1 && (
+            {isMakeup && visibleChildren.length === 1 && (
+              <div className="rounded-lg border border-cream-dark bg-cream p-3">
+                <p className="text-sm text-charcoal-light">Dítě</p>
+                <p className="font-semibold text-charcoal">{visibleChildren[0].firstName}</p>
+              </div>
+            )}
+            {visibleChildren.length > 1 && (
               <fieldset>
                 <legend className="mb-2 block text-sm font-medium text-charcoal">
                   Děti
                 </legend>
                 <div className="space-y-2 rounded-lg border-2 border-cream-dark bg-white p-3">
-                  {children.map((child) => {
+                  {visibleChildren.map((child) => {
                     return (
                       <label
                         key={child.id}
@@ -357,20 +434,21 @@ export default function NewExcusePage() {
               <DayPartSelector
                 value={dayPart}
                 onChange={setDayPart}
+                label={isMakeup ? "Dítě dorazí" : "Dítě bude chybět"}
               />
             ) : null}
 
             {!hasMultipleDays && dayPart === ExcuseDayPart.MORNING ? (
               <p className="text-sm text-charcoal-light">
-                Dítě bude chybět dopoledne a přijde až odpoledne.
+                {isMakeup ? "Dítě dorazí pouze dopoledne." : "Dítě bude chybět dopoledne a přijde až odpoledne."}
               </p>
             ) : !hasMultipleDays && dayPart === ExcuseDayPart.AFTERNOON ? (
               <p className="text-sm text-charcoal-light">
-                Dítě bude ve škole dopoledne, odpoledne bude chybět.
+                {isMakeup ? "Dítě dorazí pouze odpoledne." : "Dítě bude ve škole dopoledne, odpoledne bude chybět."}
               </p>
             ) : null}
 
-            <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
+            {!isMakeup && <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
               <Toggle
                 id="cancel-lunch"
                 role="switch"
@@ -383,18 +461,29 @@ export default function NewExcusePage() {
                     : "Oběd zůstane přihlášený a omluvenku není potřeba schvalovat."
                 }
               />
-            </div>
+            </div>}
 
             <Textarea
-              label="Důvod (volitelné)"
+              label={isMakeup ? "Poznámka (volitelné)" : "Důvod (volitelné)"}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Např. nemoc, rodinné důvody..."
+              placeholder={isMakeup ? "Doplňující informace k příchodu..." : "Např. nemoc, rodinné důvody..."}
               rows={3}
             />
 
             {/* Auto-approval info */}
-            {fromDate && (
+            {isMakeup && fromDate && selectedChildren.length > 0 && !hasMakeupDays && (
+              <p className="rounded-lg bg-gold/10 p-3 text-sm text-charcoal">Vyberte den, kdy dítě běžně nechodí.</p>
+            )}
+            {isMakeup && fromDate && !hasMultipleDays && makeupTakesLunch && (
+              <div className={`rounded-lg border p-4 ${makeupOnTime ? "border-sage/20 bg-sage/10" : "border-gold/20 bg-gold/10"}`}>
+                <p className="font-semibold text-charcoal">{makeupOnTime ? "Oběd bude přihlášen" : "Termín pro přihlášení oběda uplynul"}</p>
+                <p className="mt-1 text-sm text-charcoal-light">
+                  {makeupOnTime ? `Pro zajištění oběda odešlete náhradu do ${makeupDeadline}.` : `Termín byl do ${makeupDeadline}. Náhradu můžete zadat, ale oběd už není zajištěný.`}
+                </p>
+              </div>
+            )}
+            {!isMakeup && fromDate && (
               <div className={`p-4 rounded-lg ${
                 !shouldCancelLunch || willAutoApprove || allSelectedChildrenDoNotTakeLunch
                   ? "bg-sage/10 border border-sage/20"
@@ -473,17 +562,17 @@ export default function NewExcusePage() {
             )}
 
             {/* Info box */}
-            <div className="p-4 bg-cream rounded-lg">
+            {(!isMakeup || makeupTakesLunch) && <div className="p-4 bg-cream rounded-lg">
               <h4 className="font-semibold text-charcoal text-sm mb-2">
-                Pravidla pro omluvenky
+                {isMakeup ? "Pravidla pro přihlášení oběda" : "Pravidla pro omluvenky"}
               </h4>
               <ul className="text-sm text-charcoal-light space-y-1">
                 <li className="flex items-start gap-2">
                   <span className="text-gold">•</span>
-                  Pro automatické odhlášení oběda odešlete omluvenku do 9:00 předchozího všedního dne. Na pondělí tedy v pátek do 9:00
+                  {isMakeup ? "Pro zajištění oběda odešlete náhradu do 9:00 předchozího dne. Po tomto termínu může dítě dorazit, ale oběd není zajištěný." : "Pro automatické odhlášení oběda odešlete omluvenku do 9:00 předchozího všedního dne. Na pondělí tedy v pátek do 9:00"}
                 </li>
               </ul>
-            </div>
+            </div>}
           </CardContent>
 
           <CardFooter className="flex gap-3">
@@ -501,7 +590,7 @@ export default function NewExcusePage() {
               disabled={!selectedChildId || !fromDate || !toDate || !!success}
               className="flex-1"
             >
-              Odeslat omluvenku
+              {isMakeup ? "Odeslat náhradu" : "Odeslat omluvenku"}
             </Button>
           </CardFooter>
         </form>

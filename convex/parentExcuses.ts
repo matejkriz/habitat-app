@@ -3,6 +3,21 @@ import { mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireServerSecret } from "./serverSecret";
 
+const pragueDateKey = (timestamp: number): string => new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit",
+}).format(new Date(timestamp));
+
+function calendarDates(from: number, to: number): Array<{ key: string; weekday: number }> {
+  const current = new Date(`${pragueDateKey(from)}T12:00:00Z`);
+  const lastKey = pragueDateKey(to);
+  const days = [];
+  while (current.toISOString().slice(0, 10) <= lastKey) {
+    days.push({ key: current.toISOString().slice(0, 10), weekday: current.getUTCDay() });
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return days;
+}
+
 export const createParentExcuses = mutation({
   args: {
     secret: v.string(),
@@ -13,6 +28,7 @@ export const createParentExcuses = mutation({
     toDate: v.number(),
     reason: v.union(v.string(), v.null()),
     cancelLunch: v.boolean(),
+    kind: v.optional(v.union(v.literal("EXCUSE"), v.literal("MAKEUP"))),
     dayPart: v.optional(v.union(v.literal("FULL_DAY"), v.literal("MORNING"), v.literal("AFTERNOON"))),
   },
   handler: async (ctx, args) => {
@@ -50,14 +66,17 @@ export const createParentExcuses = mutation({
         throw new Error("Dítě nebylo nalezeno nebo k němu nemáte přístup");
       children.push(child);
     }
-    const fingerprint = JSON.stringify([
+    const fingerprintValues = [
       args.childIds,
       args.fromDate,
       args.toDate,
       args.reason,
       args.cancelLunch,
       args.dayPart ?? "FULL_DAY",
-    ]);
+    ];
+    // Preserve fingerprints of already committed legacy excuse requests.
+    if (args.kind === "MAKEUP") fingerprintValues.push("MAKEUP");
+    const fingerprint = JSON.stringify(fingerprintValues);
     const previous = await ctx.db
       .query("parentExcuseRequests")
       .withIndex("by_parent_request", (q) =>
@@ -79,22 +98,41 @@ export const createParentExcuses = mutation({
         throw new Error("Omluvenka již byla smazána. Odešlete nový formulář.");
       return { replayed: true, excuses: excuses.map((excuse) => excuse!) };
     }
+    const isMakeup = args.kind === "MAKEUP";
+    if (isMakeup) {
+      const closedDays = await ctx.db.query("closedDays").collect();
+      const closedKeys = new Set(closedDays.map(day => pragueDateKey(day.date)));
+      const dates = calendarDates(args.fromDate, args.toDate);
+      const isOpen = (day: { key: string; weekday: number }) =>
+        day.weekday >= 1 && day.weekday <= 4 && !closedKeys.has(day.key);
+      if (!dates.length || !isOpen(dates[0]) || !isOpen(dates[dates.length - 1])) {
+        throw new Error("Začátek i konec náhrady musí být v den, kdy je Habitat otevřený.");
+      }
+      for (const child of children) {
+        const regularDays = child.attendanceDays ?? [1, 2, 3, 4];
+        if (!dates.some(day => isOpen(day) && !regularDays.includes(day.weekday))) {
+          throw new Error("Náhradu lze zadat pouze na den, kdy dítě pravidelně nechodí.");
+        }
+      }
+    }
     const now = Date.now();
     const excuses = [];
     for (const child of children) {
       const id: string = `parent-${args.parentId}-${args.requestId}-${excuses.length}`;
-      const cancelLunch = child.doesNotTakeLunch ? true : args.cancelLunch;
+      const cancelLunch = isMakeup ? false : child.doesNotTakeLunch ? true : args.cancelLunch;
+      const dayPart = args.fromDate === args.toDate ? args.dayPart ?? "FULL_DAY" : "FULL_DAY";
       const value = {
         id,
         childId: child.id,
         fromDate: args.fromDate,
         toDate: args.toDate,
         reason: args.reason,
-        dayPart: args.fromDate === args.toDate ? args.dayPart ?? "FULL_DAY" : "FULL_DAY",
+        kind: args.kind ?? "EXCUSE",
+        dayPart,
         cancelLunch,
         submittedById: args.parentId,
         submittedAt: now,
-        lateApprovedAt: child.doesNotTakeLunch || !cancelLunch ? now : null,
+        lateApprovedAt: child.doesNotTakeLunch || (isMakeup ? dayPart === "AFTERNOON" : !cancelLunch) ? now : null,
         lateApprovedById: null,
         createdAt: now,
         updatedAt: now,
@@ -111,6 +149,7 @@ export const createParentExcuses = mutation({
           fromDate: new Date(args.fromDate).toISOString(),
           toDate: new Date(args.toDate).toISOString(),
           reason: args.reason,
+          kind: value.kind,
           dayPart: value.dayPart,
           cancelLunch,
         },

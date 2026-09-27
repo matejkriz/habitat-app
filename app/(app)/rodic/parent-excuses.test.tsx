@@ -55,6 +55,13 @@ describe("ParentExcuses", () => {
 
     expect(screen.getByText("Oběd zůstává přihlášený")).toBeTruthy();
   });
+  it("labels makeup as arrival and uses arrival text in its editor", () => {
+    render(<ParentExcuses excuses={[{ ...excuse, toDate: excuse.fromDate, kind: "MAKEUP" }]} />);
+    expect(screen.getByText("Náhrada")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
+    expect(screen.getByRole("group", { name: "Dítě dorazí" })).toBeTruthy();
+    expect(screen.queryByText("Oběd zůstává přihlášený")).toBeNull();
+  });
 
   it("shows an afternoon-only excuse", () => {
     render(

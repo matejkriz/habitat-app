@@ -26,7 +26,7 @@ vi.mock("@/lib/slack", () => ({
 
 import { saveAttendance } from "../app/actions/teacher";
 import {
-  submitExcuse,
+  submitExcuse, submitMakeup,
   getChildAttendanceHistory,
   getChildCalendarMonth,
   getChildExcuses,
@@ -37,7 +37,7 @@ import {
 } from "../app/actions/parent";
 import {
   createExtraFundPerson, updateExtraFundPerson, setExtraFundExpense, getTripFundOverview,
-  createChild,
+  createChild, updateChild,
   assignParentToChild,
   removeParentFromChild,
   addClosedDay,
@@ -378,4 +378,32 @@ it("persists extra fund people through server actions, adapter and Convex", asyn
   expect(saved.children).toHaveLength(2);
   const audit = await t.run(({ db }) => db.query("auditLogs").collect());
   expect(audit.filter(row => row.entityType.startsWith("ExtraFund"))).toHaveLength(3);
+});
+
+
+describe("regular attendance and makeup through the whole data flow", () => {
+  it("removes a regular off day and restores a timely makeup in calendars and lunches", async () => {
+    vi.setSystemTime(new Date("2026-09-16T06:00:00Z"));
+    transport.user = { id: "director", role: "DIRECTOR" };
+    await updateChild("a", { attendanceDays: [1, 2, 3] });
+    const lunchesBefore = await getLunchOverview("2026-09");
+    const index = lunchesBefore.days.findIndex(item => item.key === day);
+    expect(lunchesBefore.children.find(child => child.id === "a")?.statuses[index]).toBe("not-scheduled");
+    transport.user = { id: "parent", role: "PARENT" };
+    expect((await getChildCalendarMonth("a", "2026-09")).find(item => item.date === day)?.status).toBe("NOT_SCHEDULED");
+    await submitMakeup(excuse("a"));
+    expect((await getChildCalendarMonth("a", "2026-09")).find(item => item.date === day)?.status).toBe("MAKEUP");
+    transport.user = { id: "director", role: "DIRECTOR" };
+    const lunchesAfter = await getLunchOverview("2026-09");
+    expect(lunchesAfter.children.find(child => child.id === "a")?.statuses[index]).toBe("makeup");
+  });
+  it("does not count the teacher's regular off day as an unexcused absence", async () => {
+    transport.user = { id: "director", role: "DIRECTOR" };
+    await updateChild("a", { attendanceDays: [1, 2, 3] });
+    transport.user = { id: "teacher", role: "TEACHER" };
+    await saveAttendance(attendance("a"));
+    transport.user = { id: "parent", role: "PARENT" };
+    expect(await getChildStats("a")).toMatchObject({ unexcused: 0, excused: 1 });
+    expect(await getChildAttendanceHistory("a")).toEqual(expect.arrayContaining([expect.objectContaining({ excuseStatus: "EXCUSED" })]));
+  });
 });

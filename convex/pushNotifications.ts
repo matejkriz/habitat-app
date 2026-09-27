@@ -45,7 +45,9 @@ export async function enqueueExcuseEvent(
   const eventId = await ctx.db.insert("notificationEvents", {
     dedupeKey,
     type,
-    title: type === "EXCUSE_UPDATED" ? "Změna omluvenky" : "Nová omluvenka",
+    title: excuse.kind === "MAKEUP"
+      ? type === "EXCUSE_UPDATED" ? "Změna náhrady" : "Nová náhrada"
+      : type === "EXCUSE_UPDATED" ? "Změna omluvenky" : "Nová omluvenka",
     body: buildExcuseNotificationBody({
       childFirstName: child.firstName,
       childLastName: child.lastName,

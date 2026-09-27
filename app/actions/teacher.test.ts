@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getDbUser: vi.fn(),
   isClosedDay: vi.fn(),
   attendanceList: vi.fn(),
+  childrenList: vi.fn(),
   excusesList: vi.fn(),
   noLunchDayGet: vi.fn(),
   noLunchDaySet: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("@/lib/school-days", () => ({ isClosedDay: mocks.isClosedDay }));
 vi.mock("@/lib/db", () => ({
   db: {
     attendance: { list: mocks.attendanceList },
+    children: { list: mocks.childrenList },
     excuses: { listOverlapping: mocks.excusesList },
     noLunchDays: { get: mocks.noLunchDayGet, set: mocks.noLunchDaySet },
     auditLogs: { create: mocks.auditLogsCreate },
@@ -36,7 +38,29 @@ describe("getAttendanceForDate", () => {
     mocks.getDbUser.mockResolvedValue({ id: "teacher-1", role: "TEACHER" });
     mocks.isClosedDay.mockResolvedValue(false);
     mocks.attendanceList.mockResolvedValue([]);
+    mocks.childrenList.mockResolvedValue([]);
     mocks.noLunchDayGet.mockResolvedValue(null);
+  });
+
+  it("classifies a recorded absence on a regular day off as excused", async () => {
+    mocks.childrenList.mockResolvedValue([{ id: "child-off", attendanceDays: [1, 2, 4] }]);
+    mocks.excusesList.mockResolvedValue([]);
+    mocks.attendanceList.mockResolvedValue([{ childId: "child-off", date: new Date(2026, 7, 19), presence: "ABSENT" }]);
+    await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({ attendance: [
+      { childId: "child-off", presence: "ABSENT", excuseStatus: "EXCUSED" },
+    ] });
+  });
+
+  it("returns regular days off and makeup plans to teachers", async () => {
+    mocks.childrenList.mockResolvedValue([
+      { id: "child-off", attendanceDays: [1, 2, 4] },
+      { id: "child-makeup", attendanceDays: [1, 2, 4] },
+    ]);
+    mocks.excusesList.mockResolvedValue([{ id: "makeup", childId: "child-makeup", kind: "MAKEUP", dayPart: "AFTERNOON", fromDate: new Date(2026, 7, 19), toDate: new Date(2026, 7, 19), submittedAt: new Date(2026, 7, 18, 20), lateApprovedAt: null }]);
+    await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({ excuses: [
+      { childId: "child-off", kind: "NOT_SCHEDULED", dayPart: "FULL_DAY", lunchCancelled: true },
+      { childId: "child-makeup", kind: "MAKEUP", dayPart: "AFTERNOON", lunchCancelled: true },
+    ] });
   });
 
   it("returns excuses covering the selected day with their daily state", async () => {

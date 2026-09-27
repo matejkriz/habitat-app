@@ -5,6 +5,7 @@ import {
   type CoveringExcuse,
 } from "./excuse-coverage";
 import { isDefaultClosedDay, toLocalDateKey } from "./school-calendar";
+import { getChildDayPlan } from "./attendance-schedule";
 import type { Presence } from "./types";
 
 export { toLocalDateKey };
@@ -13,6 +14,7 @@ export type CalendarChild = {
   readonly id: string;
   readonly firstName: string;
   readonly lastName: string;
+  readonly attendanceDays?: readonly number[];
 };
 
 export type CalendarAttendance = {
@@ -143,11 +145,12 @@ function buildOpenDay(
     );
     const childExcuses = excusesByChild.get(child.id) ?? [];
     const coverage = getDayCoverage(childExcuses, date);
+    const plan = getChildDayPlan(child, childExcuses, date);
     const morning = getDayPartCoverage(childExcuses, date, "MORNING");
     const afternoon = getDayPartCoverage(childExcuses, date, "AFTERNOON");
 
-    if (record?.presence !== "ABSENT" && !morning.covered) expectedMorning += 1;
-    if (record?.presence !== "ABSENT" && !afternoon.covered) expectedAfternoon += 1;
+    if (record?.presence !== "ABSENT" && plan.expectedMorning) expectedMorning += 1;
+    if (record?.presence !== "ABSENT" && plan.expectedAfternoon) expectedAfternoon += 1;
 
     if (morning.covered && !afternoon.covered) {
       morningAbsent.push(getChildDetail(child, morning.excuse?.reason));
@@ -156,7 +159,9 @@ function buildOpenDay(
       afternoonAbsent.push(getChildDetail(child, afternoon.excuse?.reason));
     }
 
-    if (record?.presence === "PRESENT") {
+    if (plan.notScheduled && record?.presence !== "PRESENT") {
+      excused.push(getChildDetail(child, "Nechodí"));
+    } else if (record?.presence === "PRESENT") {
       present.push(getChildDetail(child));
     } else if (coverage.excused) {
       excused.push(getChildDetail(child, coverage.excuse?.reason));
@@ -167,9 +172,9 @@ function buildOpenDay(
     } else if (isPast) {
       unknown.push(getChildDetail(child));
     } else if (isFuture) {
-      expected.push(getChildDetail(child));
+      expected.push(getChildDetail(child, plan.makeup ? "Náhrada" : undefined));
     } else {
-      waiting.push(getChildDetail(child));
+      waiting.push(getChildDetail(child, plan.makeup ? "Náhrada" : undefined));
     }
   }
 

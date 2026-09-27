@@ -49,6 +49,7 @@ export default function ChildrenManagementPage() {
   const [editLastName, setEditLastName] = useState("");
   const [editGender, setEditGender] = useState<ChildGender | "">("");
   const [editDoesNotTakeLunch, setEditDoesNotTakeLunch] = useState(false);
+  const [editAttendanceDays, setEditAttendanceDays] = useState<number[]>([1, 2, 3, 4]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Assign parent modal
@@ -116,6 +117,7 @@ export default function ChildrenManagementPage() {
     setEditLastName(child.lastName);
     setEditGender(child.gender ?? "");
     setEditDoesNotTakeLunch(child.doesNotTakeLunch);
+    setEditAttendanceDays([...(child.attendanceDays ?? [1, 2, 3, 4])]);
   };
 
   const handleCancelEdit = () => {
@@ -136,6 +138,7 @@ export default function ChildrenManagementPage() {
         lastName: editLastName,
         gender: editGender,
         doesNotTakeLunch: editDoesNotTakeLunch,
+        attendanceDays: editAttendanceDays,
       });
       setChildren((prev) =>
         prev
@@ -147,6 +150,7 @@ export default function ChildrenManagementPage() {
                   lastName: editLastName,
                   gender: editGender,
                   doesNotTakeLunch: editDoesNotTakeLunch,
+                  attendanceDays: editAttendanceDays,
                 }
               : c
           )
@@ -386,6 +390,8 @@ export default function ChildrenManagementPage() {
                   editLastName={editLastName}
                   editGender={editGender}
                   editDoesNotTakeLunch={editDoesNotTakeLunch}
+                  editAttendanceDays={editAttendanceDays}
+                  setEditAttendanceDays={setEditAttendanceDays}
                   setEditFirstName={setEditFirstName}
                   setEditLastName={setEditLastName}
                   setEditGender={setEditGender}
@@ -425,6 +431,8 @@ export default function ChildrenManagementPage() {
                   editLastName={editLastName}
                   editGender={editGender}
                   editDoesNotTakeLunch={editDoesNotTakeLunch}
+                  editAttendanceDays={editAttendanceDays}
+                  setEditAttendanceDays={setEditAttendanceDays}
                   setEditFirstName={setEditFirstName}
                   setEditLastName={setEditLastName}
                   setEditGender={setEditGender}
@@ -521,6 +529,8 @@ interface ChildRowProps {
   editLastName: string;
   editGender: ChildGender | "";
   editDoesNotTakeLunch: boolean;
+  editAttendanceDays: number[];
+  setEditAttendanceDays: (value: number[]) => void;
   setEditFirstName: (value: string) => void;
   setEditLastName: (value: string) => void;
   setEditGender: (value: ChildGender | "") => void;
@@ -544,6 +554,8 @@ function ChildRow({
   editLastName,
   editGender,
   editDoesNotTakeLunch,
+  editAttendanceDays,
+  setEditAttendanceDays,
   setEditFirstName,
   setEditLastName,
   setEditGender,
@@ -622,6 +634,32 @@ function ChildRow({
               onChange={(event) => setEditDoesNotTakeLunch(event.target.checked)}
               disabled={isSavingEdit}
             />
+            <fieldset>
+              <legend className="mb-2 text-sm font-semibold text-charcoal">Docházka</legend>
+              <div className="flex flex-wrap gap-2">
+                {["Pondělí", "Úterý", "Středa", "Čtvrtek"].map((label, index) => {
+                  const day = index + 1;
+                  const attends = editAttendanceDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      aria-pressed={attends}
+                      disabled={isSavingEdit}
+                      onClick={() => setEditAttendanceDays(attends
+                        ? editAttendanceDays.filter((value) => value !== day)
+                        : [...editAttendanceDays, day].sort())}
+                      className={`min-h-11 rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 ${attends
+                        ? "border-sage bg-sage/15 text-sage-dark"
+                        : "border-sky-200 bg-sky-50 text-sky-700"}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-sm text-charcoal-light">Vyberte dny, kdy dítě pravidelně chodí do Habitatu.</p>
+            </fieldset>
           </div>
         ) : (
           <div className="flex-1">

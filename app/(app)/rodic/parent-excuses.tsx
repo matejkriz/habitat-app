@@ -20,6 +20,7 @@ type ParentExcuse = {
   readonly dayPart: ExcuseDayPart;
   readonly cancelLunch: boolean;
   readonly submittedAt: Date;
+  readonly kind?: "EXCUSE" | "MAKEUP";
 };
 
 export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: ParentExcuse[] }) {
@@ -59,11 +60,12 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
         <article key={excuse.id} className="rounded-lg border border-cream-dark bg-cream p-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
+              {excuse.kind === "MAKEUP" && <p className="text-xs font-semibold text-sage-dark">Náhrada</p>}
               <p className="font-semibold text-charcoal">
                 {formatDateRange(excuse.fromDate, excuse.toDate)}
               </p>
               <p className="text-sm text-charcoal-light">
-                {excuse.reason || "Bez uvedeného důvodu"}
+                {excuse.reason || (excuse.kind === "MAKEUP" ? "Mimořádný příchod" : "Bez uvedeného důvodu")}
               </p>
               {excuse.dayPart !== "FULL_DAY" ? (
                 <p className="text-xs font-semibold text-gold-dark">
@@ -72,7 +74,7 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
                     : "Jen odpoledne"}
                 </p>
               ) : null}
-              {!excuse.cancelLunch ? (
+              {!excuse.cancelLunch && excuse.kind !== "MAKEUP" ? (
                 <p className="text-xs font-medium text-charcoal-light">
                   Oběd zůstává přihlášený
                 </p>

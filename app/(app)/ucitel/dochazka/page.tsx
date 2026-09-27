@@ -41,6 +41,7 @@ interface AttendanceRecord {
 const nativeSwitchAttribute = { switch: "" } as const;
 
 interface DailyExcuse {
+  kind?: "EXCUSE" | "MAKEUP" | "NOT_SCHEDULED";
   childId: string;
   state: "ON_TIME" | "LATE" | "LATE_APPROVED";
   lunchCancelled?: boolean;
@@ -161,7 +162,7 @@ export default function TeacherAttendancePage() {
           attendanceData.excuses
             .filter(
               (excuse) =>
-                !excuse.dayPart || excuse.dayPart === "FULL_DAY",
+                excuse.kind !== "MAKEUP" && (!excuse.dayPart || excuse.dayPart === "FULL_DAY"),
             )
             .map((excuse) => excuse.childId),
         );
@@ -334,10 +335,12 @@ export default function TeacherAttendancePage() {
       : "Uložit změny";
   const expectedMorning = children.filter((child) => {
     const dayPart = excuses[child.id]?.dayPart ?? "FULL_DAY";
+    if (excuses[child.id]?.kind === "MAKEUP") return dayPart !== "AFTERNOON";
     return !excuses[child.id] || dayPart === "AFTERNOON";
   }).length;
   const expectedAfternoon = children.filter((child) => {
     const dayPart = excuses[child.id]?.dayPart ?? "FULL_DAY";
+    if (excuses[child.id]?.kind === "MAKEUP") return dayPart !== "MORNING";
     return !excuses[child.id] || dayPart === "MORNING";
   }).length;
 
@@ -513,7 +516,7 @@ export default function TeacherAttendancePage() {
                 className="rounded-lg border border-sage/20 bg-sage/5 p-4"
               >
                 <p className="mb-3 text-sm font-semibold text-charcoal">
-                  Plán podle omluvenek
+                  Plánovaná docházka
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-white px-3 py-2 text-center">
@@ -555,13 +558,15 @@ export default function TeacherAttendancePage() {
                         <span className="break-words font-medium leading-tight text-charcoal">
                           {child.firstName} {child.lastName}
                         </span>
+                        {excuses[child.id]?.kind === "NOT_SCHEDULED" && <Badge variant="info" className="bg-[#a9c9dc]/35 text-[#436b82]">Nechodí</Badge>}
+                        {excuses[child.id]?.kind === "MAKEUP" && <Badge variant="info">Náhrada</Badge>}
                         {excuses[child.id]?.dayPart &&
                         excuses[child.id].dayPart !== "FULL_DAY" ? (
                           <Badge
                             className="whitespace-normal text-left"
                             variant="info"
                           >
-                            {excuses[child.id].dayPart === "MORNING"
+                            {(excuses[child.id].dayPart === "MORNING") !== (excuses[child.id].kind === "MAKEUP")
                               ? "Jen odpoledne"
                               : "Jen dopoledne"}
                           </Badge>

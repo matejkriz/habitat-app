@@ -20,6 +20,7 @@ type EditableExcuse = {
   readonly toDate: Date | string;
   readonly dayPart: ExcuseDayPart;
   readonly reason: string | null;
+  readonly kind?: "EXCUSE" | "MAKEUP";
 };
 
 type ExcuseEditorProps = {
@@ -37,6 +38,7 @@ const toDateInputValue = (value: Date | string): string => {
 };
 
 export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
+  const isMakeup = excuse.kind === "MAKEUP";
   const [isEditing, setIsEditing] = useState(false);
   const [fromDate, setFromDate] = useState(() => toDateInputValue(excuse.fromDate));
   const [toDate, setToDate] = useState(() => toDateInputValue(excuse.toDate));
@@ -70,7 +72,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
 
   const handleDelete = async () => {
     if (pendingAction) return;
-    if (!window.confirm("Opravdu chcete tuto omluvenku smazat?")) {
+    if (!window.confirm(isMakeup ? "Opravdu chcete tuto náhradu smazat?" : "Opravdu chcete tuto omluvenku smazat?")) {
       return;
     }
 
@@ -79,7 +81,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
     try {
       await onDelete(excuse.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Omluvenku se nepodařilo smazat.");
+      setError(caught instanceof Error ? caught.message : isMakeup ? "Náhradu se nepodařilo smazat." : "Omluvenku se nepodařilo smazat.");
     } finally {
       setPendingAction(null);
     }
@@ -144,10 +146,11 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
         <DayPartSelector
           value={dayPart}
           onChange={setDayPart}
+          label={isMakeup ? "Dítě dorazí" : "Dítě bude chybět"}
         />
       ) : null}
       <Textarea
-        label="Důvod"
+        label={isMakeup ? "Poznámka" : "Důvod"}
         value={reason}
         onChange={(event) => setReason(event.target.value)}
         rows={3}

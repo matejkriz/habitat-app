@@ -61,6 +61,7 @@ describe("legacy excuse rollout", () => {
     expect(excuse.lateApprovedAt).toEqual(new Date(legacyExcuse.updatedAt));
     expect(excuse.cancelLunch).toBe(true);
     expect(excuse.dayPart).toBe("FULL_DAY");
+    expect(excuse.kind).toBe("EXCUSE");
   });
 
   it("preserves an explicit choice to keep lunch", async () => {
@@ -113,6 +114,16 @@ describe("legacy child rollout", () => {
     const [child] = await db.children.list();
 
     expect(child.doesNotTakeLunch).toBe(false);
+    expect(child.attendanceDays).toEqual([1, 2, 3, 4]);
+  });
+
+  it("preserves the regular weekdays through child creation", async () => {
+    mocks.mutation.mockResolvedValue("convex-child");
+    const child = await db.children.create({ data: { firstName: "Anna", lastName: "Malá", attendanceDays: [1, 3] } });
+    expect(child.attendanceDays).toEqual([1, 3]);
+    expect(mocks.mutation).toHaveBeenCalledWith(api.db.insert, expect.objectContaining({
+      table: "children", value: expect.objectContaining({ attendanceDays: [1, 3] }),
+    }));
   });
 });
 

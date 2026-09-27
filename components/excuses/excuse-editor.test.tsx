@@ -86,6 +86,15 @@ describe("ExcuseEditor", () => {
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("excuse-1"));
     expect(confirm).toHaveBeenCalledWith("Opravdu chcete tuto omluvenku smazat?");
   });
+  it("names makeup when confirming deletion", async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal("confirm", confirm);
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    render(<ExcuseEditor excuse={{ id: "makeup", fromDate: "2026-09-10", toDate: "2026-09-10", kind: "MAKEUP", dayPart: "FULL_DAY", reason: null }} onDelete={onDelete} onSave={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Smazat" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("makeup"));
+    expect(confirm).toHaveBeenCalledWith("Opravdu chcete tuto náhradu smazat?");
+  });
 });
 
 it("prevents reopening an editor while deleting its excuse", async () => {

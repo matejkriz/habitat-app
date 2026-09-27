@@ -28,6 +28,16 @@ function getStatusDetails(gender: ChildGender | null): StatusDetails {
   const lateExcuseLabel = gender === "FEMALE" ? "Omluvena pozdě" : gender === "MALE" ? "Omluven pozdě" : "Pozdní omluva";
 
   return {
+  NOT_SCHEDULED: {
+    label: "Nechodí", shortLabel: "Nechodí",
+    className: "bg-[#a9c9dc]/35 text-[#436b82] hover:bg-[#a9c9dc]/50",
+    dotClassName: "bg-[#a9c9dc]",
+  },
+  MAKEUP: {
+    label: "Náhrada", shortLabel: "Náhrada",
+    className: "bg-sage/15 text-sage-dark hover:bg-sage/25",
+    dotClassName: "bg-sage-dark",
+  },
   EXPECTED: {
     label: "Přijde",
     shortLabel: "Přijde",
@@ -110,7 +120,8 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
   );
 
   const openExcuse = (date: string) => {
-    router.push(`/rodic/omluvenka?child=${encodeURIComponent(childId)}&date=${date}`);
+    const kind = days.find(day => day.date === date)?.status === "NOT_SCHEDULED" ? "&kind=MAKEUP" : "";
+    router.push(`/rodic/omluvenka?child=${encodeURIComponent(childId)}&date=${date}${kind}`);
   };
 
   const moveMonth = (offset: number) => {
@@ -222,7 +233,7 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
                 onPointerLeave={cancelLongPress}
                 onPointerCancel={cancelLongPress}
                 onContextMenu={(event) => event.preventDefault()}
-                aria-label={`${fullDateLabel(day.date)}${day.name ? `, ${day.name}` : ""}, ${details.label}${disabled ? "" : ", zadat omluvenku"}`}
+                aria-label={`${fullDateLabel(day.date)}${day.name ? `, ${day.name}` : ""}, ${details.label}${disabled ? "" : day.status === "NOT_SCHEDULED" ? ", zadat náhradu" : ", zadat omluvenku"}`}
                 className={cn(
                   "relative flex h-24 min-w-0 overflow-hidden touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:h-28 sm:items-stretch sm:p-2.5",
                   details.className,

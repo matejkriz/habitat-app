@@ -27,7 +27,7 @@ vi.mock("./slack", () => ({
   sendExcuseNotification: mocks.sendSlack,
 }));
 
-import { createExcuse } from "./excuse";
+import { createExcuse, createMakeup } from "./excuse";
 
 describe("createExcuse push notification", () => {
   beforeEach(() => {
@@ -67,6 +67,27 @@ describe("createExcuse push notification", () => {
     );
 
     expect(mocks.enqueueExcuse).toHaveBeenCalledWith({ excuseId: "excuse-1" });
+  });
+
+  it("creates an arrival record and identifies it in Slack and the durable push outbox", async () => {
+    mocks.createExcuseRecord.mockResolvedValue({
+      id: "makeup-1", childId: "child-1", kind: "MAKEUP", dayPart: "FULL_DAY", cancelLunch: false,
+      fromDate: new Date(2026, 8, 22), toDate: new Date(2026, 8, 22), reason: null,
+      submittedById: "parent-1", submittedAt: new Date(2026, 8, 22, 10),
+      lateApprovedAt: null, lateApprovedById: null, createdAt: new Date(), updatedAt: new Date(),
+    });
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", active: true, attendanceDays: [1, 3, 4] });
+    await createMakeup("child-1", new Date(2026, 8, 22), new Date(2026, 8, 22), null, "parent-1", [new Date(2026, 8, 22)]);
+    expect(mocks.createExcuseRecord).toHaveBeenCalledWith({ data: expect.objectContaining({ kind: "MAKEUP", cancelLunch: false, lateApprovedAt: null }) });
+    expect(mocks.sendSlack).toHaveBeenCalledWith(expect.objectContaining({ kind: "MAKEUP", isOnTime: false }));
+    expect(mocks.enqueueExcuse).toHaveBeenCalledWith({ excuseId: "makeup-1" });
+  });
+
+  it("rejects a makeup for regular attendance days before writing", async () => {
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", active: true });
+    await expect(createMakeup("child-1", new Date(2026, 8, 22), new Date(2026, 8, 22), null, "parent-1", [new Date(2026, 8, 22)]))
+      .rejects.toThrow("nechodí");
+    expect(mocks.createExcuseRecord).not.toHaveBeenCalled();
   });
 
   it("stores a director approval in the initial insert", async () => {

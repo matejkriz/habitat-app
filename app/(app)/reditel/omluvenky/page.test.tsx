@@ -56,6 +56,15 @@ describe("ExcuseManagementPage", () => {
     ]);
   });
 
+  it("identifies a makeup and lets the director approve the lunch registration", async () => {
+    mocks.getExcuses.mockResolvedValue([{ ...lateExcuse, kind: "MAKEUP", cancelLunch: false }]);
+    render(<ExcuseManagementPage />);
+    expect(await screen.findByText("Náhrada")).toBeTruthy();
+    expect(screen.getByText("přihlásit")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Přihlásit oběd" }));
+    await waitFor(() => expect(mocks.updateExcuse).toHaveBeenCalledWith("excuse-1", true));
+  });
+
   it("reloads the derived range state after narrowing an excuse", async () => {
     mocks.getExcuses
       .mockResolvedValueOnce([lateExcuse])

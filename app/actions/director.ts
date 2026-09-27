@@ -1,5 +1,6 @@
 "use server";
 
+import { getAttendanceDays, getChildDayPlan, isRegularAttendanceDay, parseAttendanceDays } from "@/lib/attendance-schedule";
 import { parseDayDate, validateExtraFundPersonPatch, type ExtraFundPersonPatch, validateCrowns, type TripFund, type TripFundOverview } from "@/lib/day-details";
 
 import { loadLunchOverview, type LunchOverview } from "@/lib/lunch-overview";
@@ -65,6 +66,7 @@ type AttendanceWithChild = Attendance & {
     readonly firstName: string;
     readonly lastName: string;
     readonly gender: ChildGender | null;
+    readonly attendanceDays?: ReadonlyArray<number>;
   };
 };
 
@@ -80,6 +82,7 @@ type ExcuseWithChildAndSubmitter = Excuse & {
     readonly firstName: string;
     readonly lastName: string;
     readonly doesNotTakeLunch: boolean;
+    readonly attendanceDays?: ReadonlyArray<number>;
   };
   readonly submittedBy: {
     readonly id: string;
@@ -159,6 +162,15 @@ async function getSchoolDaysCoveringExcuses(
   return getSchoolDaysInRange(new Date(from), new Date(to));
 }
 
+function getRecordSchoolDays(
+  record: Excuse & { readonly child: { readonly attendanceDays?: ReadonlyArray<number> } },
+  schoolDays: ReadonlyArray<Date>,
+): ReadonlyArray<Date> {
+  return record.kind === "MAKEUP"
+    ? schoolDays.filter(day => !isRegularAttendanceDay(record.child, day))
+    : schoolDays;
+}
+
 export async function createExtraFundPerson(name: string): Promise<void> {
   const user = await requireDirector();
   const validated = validateExtraFundPersonPatch({ name });
@@ -230,11 +242,15 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const monthExcuses = groupExcusesByChild(
     await getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
   );
+  const children = await db.children.list({}) as ReadonlyArray<Child>;
+  const childrenById = new Map(children.map(child => [child.id, child]));
   const monthAbsences = monthAttendance
     .filter((a) => a.presence === Presence.ABSENT)
-    .map((a) =>
-      getDayCoverage(monthExcuses.get(a.childId) ?? [], a.date).excused,
-    );
+    .map((a) => {
+      const records = monthExcuses.get(a.childId) ?? [];
+      return getChildDayPlan(childrenById.get(a.childId) ?? {}, records, a.date).notScheduled ||
+        getDayCoverage(records, a.date).excused;
+    });
   const excusedCount = monthAbsences.filter(Boolean).length;
   const unexcusedCount = monthAbsences.length - excusedCount;
 
@@ -250,16 +266,17 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         select: {
           firstName: true,
           lastName: true,
+          attendanceDays: true,
         },
       },
     },
     orderBy: { submittedAt: "desc" },
-  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string } }>;
+  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string; attendanceDays?: ReadonlyArray<number> } }>;
   const recentSchoolDays = await getSchoolDaysCoveringExcuses(
     recentExcuseCandidates,
   );
   const recentExcuses = recentExcuseCandidates
-    .filter((excuse) => !isExcuseSettled(excuse, recentSchoolDays))
+    .filter((excuse) => !isExcuseSettled(excuse, getRecordSchoolDays(excuse, recentSchoolDays)))
     .slice(0, 5);
 
   // Get children count
@@ -312,6 +329,7 @@ export async function getExcuses(options?: {
           firstName: true,
           lastName: true,
           doesNotTakeLunch: true,
+          attendanceDays: true,
         },
       },
       submittedBy: {
@@ -329,14 +347,15 @@ export async function getExcuses(options?: {
   // Whether an excuse still needs a decision is derived, so it cannot be
   // pushed down into the query.
   const filtered = excuses.filter((excuse) => {
-    if (options?.settledOnly) return isExcuseSettled(excuse, schoolDays);
-    if (options?.pendingOnly) return !isExcuseSettled(excuse, schoolDays);
+    const recordDays = getRecordSchoolDays(excuse, schoolDays);
+    if (options?.settledOnly) return isExcuseSettled(excuse, recordDays);
+    if (options?.pendingOnly) return !isExcuseSettled(excuse, recordDays);
     return true;
   });
 
   return filtered.slice(0, 100).map((excuse) => ({
     ...excuse,
-    rangeState: getExcuseRangeState(excuse, schoolDays) satisfies ExcuseRangeState,
+    rangeState: getExcuseRangeState(excuse, getRecordSchoolDays(excuse, schoolDays)) satisfies ExcuseRangeState,
   }));
 }
 
@@ -444,6 +463,8 @@ export async function createDirectorExcuse(
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
+  revalidatePath("/rodic/obedy");
+  revalidatePath("/reditel/obedy");
   revalidatePath("/kalendar");
   revalidatePath("/reditel");
   revalidatePath("/");
@@ -468,7 +489,7 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
   }
 
   if (!approveLate) {
-    if (!excuse.cancelLunch) {
+    if (excuse.kind !== "MAKEUP" && !excuse.cancelLunch) {
       throw new Error("Omluvenku bez odhlášení oběda není potřeba schvalovat");
     }
     const child = await db.children.get({ where: { id: excuse.childId } });
@@ -503,6 +524,8 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
+  revalidatePath("/rodic/obedy");
+  revalidatePath("/reditel/obedy");
   revalidatePath("/kalendar");
   revalidatePath("/reditel");
   revalidatePath("/");
@@ -545,6 +568,8 @@ export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
 
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
+  revalidatePath("/rodic/obedy");
+  revalidatePath("/reditel/obedy");
   revalidatePath("/reditel");
   revalidatePath("/");
   revalidatePath("/kalendar");
@@ -557,6 +582,8 @@ export async function deleteExcuse(excuseId: string): Promise<void> {
   await deleteExcuseRecord(excuseId, user.id);
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/rodic");
+  revalidatePath("/rodic/obedy");
+  revalidatePath("/reditel/obedy");
   revalidatePath("/reditel");
   revalidatePath("/");
   revalidatePath("/kalendar");
@@ -722,6 +749,7 @@ export async function exportAttendanceCSV(
             firstName: true,
             lastName: true,
             gender: true,
+            attendanceDays: true,
           },
         },
       },
@@ -742,6 +770,7 @@ export async function exportAttendanceCSV(
     "Důvod",
   ];
   const rows = attendance.map((a) => {
+    const plan = getChildDayPlan(a.child, excusesByChild.get(a.childId) ?? [], a.date);
     const coverage =
       a.presence === Presence.ABSENT
         ? getDayCoverage(excusesByChild.get(a.childId) ?? [], a.date)
@@ -754,10 +783,10 @@ export async function exportAttendanceCSV(
       getPresenceLabel(a.presence === Presence.PRESENT, a.child.gender),
       a.presence === Presence.PRESENT
         ? ""
-        : coverage.excused
+        : plan.notScheduled || coverage.excused
         ? "Omluveno"
         : "Neomluveno",
-      coverage.excuse?.reason || "",
+      a.presence === Presence.ABSENT && plan.notScheduled ? "Nechodí" : coverage.excuse?.reason || "",
     ];
   });
 
@@ -777,6 +806,7 @@ export async function exportAttendanceCSV(
  * Type for child with parents
  */
 export type ChildWithParents = {
+  attendanceDays?: number[];
   fundSent?: number | null;
   fundSpent?: number;
   fundBalance?: number;
@@ -828,6 +858,7 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
     lastName: child.lastName,
     gender: child.gender,
     doesNotTakeLunch: child.doesNotTakeLunch,
+    attendanceDays: [...getAttendanceDays(child)],
     active: child.active,
     createdAt: child.createdAt,
     parents: child.parents.map((pc) => ({
@@ -920,6 +951,7 @@ export async function updateChild(
     lastName?: string;
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
+    attendanceDays?: number[];
     fundSent?: number | null;
   },
 ) {
@@ -938,6 +970,7 @@ export async function updateChild(
     lastName?: string;
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
+    attendanceDays?: number[];
     fundSent?: number | null;
   } = {};
   if (data.firstName !== undefined) {
@@ -965,6 +998,10 @@ export async function updateChild(
     updateData.doesNotTakeLunch = data.doesNotTakeLunch;
   }
 
+  if (data.attendanceDays !== undefined) {
+    updateData.attendanceDays = parseAttendanceDays(data.attendanceDays);
+  }
+
   if (data.fundSent !== undefined) {
     if (data.fundSent !== null) validateCrowns(data.fundSent);
     updateData.fundSent = data.fundSent;
@@ -982,6 +1019,7 @@ export async function updateChild(
         lastName: child.lastName,
         gender: child.gender,
         doesNotTakeLunch: child.doesNotTakeLunch,
+        attendanceDays: [...getAttendanceDays(child)],
       },
       newValue: updateData,
     },
@@ -1013,6 +1051,8 @@ export async function updateChild(
   }
 
   revalidatePath("/reditel/deti");
+  revalidatePath("/reditel/obedy");
+  revalidatePath("/rodic/omluvenka");
   revalidatePath("/reditel/omluvenky");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/rodic");
