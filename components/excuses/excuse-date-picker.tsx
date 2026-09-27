@@ -14,6 +14,7 @@ type ExcuseDatePickerProps = {
   readonly max?: string;
   readonly required?: boolean;
   readonly disabled?: boolean;
+  readonly getDisabledReason?: (date: Date) => string | null;
 };
 
 const weekdays = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
@@ -84,6 +85,7 @@ export function ExcuseDatePicker({
   max,
   required = false,
   disabled = false,
+  getDisabledReason,
 }: ExcuseDatePickerProps) {
   const generatedId = useId();
   const inputId = `excuse-date-${generatedId.replace(/:/g, "")}`;
@@ -264,16 +266,20 @@ export function ExcuseDatePicker({
                 isDefaultClosedDay(date) ||
                 (availabilityReady && availability.closedDateKeys.has(dateKey));
               const isOutsideRange = Boolean((min && dateKey < min) || (max && dateKey > max));
+              const disabledReason = getDisabledReason?.(date);
+              const isScheduleDisabled = Boolean(disabledReason);
               const unavailable = !availabilityReady || Boolean(loadError);
-              const dayDisabled = isClosed || isOutsideRange || unavailable;
+              const dayDisabled = isClosed || isScheduleDisabled || isOutsideRange || unavailable;
               const dateLabel = fullDateFormatter.format(date);
               const ariaLabel = isClosed
                 ? `${dateLabel}, Habitat je zavřený`
                 : isOutsideRange
                   ? `${dateLabel}, mimo povolený rozsah`
-                  : isSelected
-                    ? `${dateLabel}, vybráno`
-                    : dateLabel;
+                  : disabledReason
+                    ? `${dateLabel}, ${disabledReason}`
+                    : isSelected
+                      ? `${dateLabel}, vybráno`
+                      : dateLabel;
 
               return (
                 <button
@@ -281,6 +287,7 @@ export function ExcuseDatePicker({
                   type="button"
                   aria-label={ariaLabel}
                   aria-pressed={isSelected}
+                  title={dayDisabled ? ariaLabel : undefined}
                   disabled={dayDisabled}
                   onClick={() => {
                     onChange(dateKey);
@@ -291,10 +298,10 @@ export function ExcuseDatePicker({
                     isSelected && !dayDisabled
                       ? "bg-gold font-semibold text-white"
                       : "text-charcoal hover:bg-cream",
-                    isClosed &&
+                    (isClosed || isScheduleDisabled) &&
                       "cursor-not-allowed bg-cream/80 text-charcoal-light/50 line-through decoration-charcoal-light/50 hover:bg-cream/80",
                     (isOutsideRange || unavailable) &&
-                      !isClosed &&
+                      !isClosed && !isScheduleDisabled &&
                       "cursor-not-allowed text-charcoal-light/35 hover:bg-transparent",
                   )}
                 >
@@ -309,7 +316,7 @@ export function ExcuseDatePicker({
               <span className="flex h-5 w-5 items-center justify-center rounded bg-cream text-[11px] line-through opacity-60">
                 7
               </span>
-              Zavřeno
+              {getDisabledReason ? "Nelze vybrat" : "Zavřeno"}
             </span>
             {isLoading ? <span>Načítání…</span> : loadError ? <span className="text-coral">{loadError}</span> : null}
           </div>

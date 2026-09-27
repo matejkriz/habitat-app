@@ -11,6 +11,7 @@ import type {
   ClosedDay,
   Excuse,
   ExcuseDayPart,
+  ExcuseKind,
   NoLunchDay,
   ParentChild,
   Presence,
@@ -47,6 +48,7 @@ type RawChild = {
   readonly lastName: string;
   readonly gender?: ChildGender;
   readonly doesNotTakeLunch?: boolean;
+  readonly attendanceDays?: number[];
   readonly active: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -77,6 +79,7 @@ type RawExcuse = {
   readonly fromDate: number;
   readonly toDate: number;
   readonly reason?: string | null;
+  readonly kind?: ExcuseKind;
   readonly dayPart?: ExcuseDayPart;
   readonly cancelLunch?: boolean;
   readonly submittedById: string;
@@ -266,6 +269,7 @@ const fromRawChild = (raw: RawChild): Child => ({
   lastName: raw.lastName,
   gender: raw.gender ?? null,
   doesNotTakeLunch: raw.doesNotTakeLunch ?? false,
+  attendanceDays: raw.attendanceDays ?? [1, 2, 3, 4],
   active: raw.active,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
@@ -307,6 +311,7 @@ const fromRawExcuse = (raw: RawExcuse): Excuse => {
     fromDate: new Date(raw.fromDate),
     toDate: new Date(raw.toDate),
     reason: raw.reason ?? null,
+    kind: raw.kind ?? "EXCUSE",
     dayPart: raw.dayPart ?? "FULL_DAY",
     cancelLunch: raw.cancelLunch ?? true,
     submittedById: raw.submittedById,
@@ -633,6 +638,7 @@ export const db: any = {
         lastName: String(args.data.lastName ?? ""),
         gender: args.data.gender as ChildGender,
         doesNotTakeLunch: Boolean(args.data.doesNotTakeLunch),
+        attendanceDays: (args.data.attendanceDays as number[] | undefined) ?? [1, 2, 3, 4],
         active: args.data.active === undefined ? true : Boolean(args.data.active),
         createdAt: now,
         updatedAt: now,
@@ -971,7 +977,8 @@ export const db: any = {
     createParentBatch: async (input: {
       parentId: string; requestId: string; childIds: string[];
       fromDate: Date; toDate: Date; reason: string | null; cancelLunch: boolean;
-    dayPart?: "FULL_DAY" | "MORNING" | "AFTERNOON";
+      dayPart?: "FULL_DAY" | "MORNING" | "AFTERNOON";
+      kind?: ExcuseKind;
     }): Promise<{ replayed: boolean; excuses: Excuse[] }> => {
       const result = await convexMutation(api.parentExcuses.createParentExcuses, {
         ...input, secret: getServerSecret(), fromDate: input.fromDate.getTime(), toDate: input.toDate.getTime(),
@@ -1072,6 +1079,7 @@ export const db: any = {
         fromDate: toTimestamp(data.fromDate),
         toDate: toTimestamp(data.toDate),
         reason: data.reason == null ? null : String(data.reason),
+        kind: (data.kind as ExcuseKind | undefined) ?? "EXCUSE",
         dayPart: (data.dayPart as ExcuseDayPart | undefined) ?? "FULL_DAY",
         cancelLunch: data.cancelLunch !== false,
         submittedById: String(data.submittedById),

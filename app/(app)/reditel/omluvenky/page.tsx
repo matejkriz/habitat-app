@@ -30,9 +30,12 @@ import {
 } from "@/components/ui";
 import type { ExcuseRangeState } from "@/lib/excuse-coverage";
 import type { ExcuseDayPart } from "@/lib/types";
+import { getAttendanceDateDisabledReason } from "@/lib/attendance-schedule";
+import { parseExcuseDate } from "@/lib/excuse-rules";
 import { formatDate, formatDateRange } from "@/lib/utils";
 
 interface Excuse {
+  kind?: "EXCUSE" | "MAKEUP";
   id: string;
   fromDate: Date;
   toDate: Date;
@@ -46,6 +49,7 @@ interface Excuse {
     firstName: string;
     lastName: string;
     doesNotTakeLunch: boolean;
+    attendanceDays?: ReadonlyArray<number>;
   };
   submittedBy: {
     id: string;
@@ -73,6 +77,7 @@ export default function ExcuseManagementPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [createChildId, setCreateChildId] = useState("");
   const [createFromDate, setCreateFromDate] = useState("");
   const [createToDate, setCreateToDate] = useState("");
   const [createCancelLunch, setCreateCancelLunch] = useState(true);
@@ -155,6 +160,10 @@ export default function ExcuseManagementPage() {
     await loadExcuses(false);
   };
 
+  const createChild = children.find((child) => child.id === createChildId);
+  const getCreateDisabledReason = (date: Date): string | null =>
+    createChild ? getAttendanceDateDisabledReason(createChild, date) : "Nejprve vyberte dítě.";
+
   const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreateError("");
@@ -176,6 +185,7 @@ export default function ExcuseManagementPage() {
 
       await loadExcuses(false);
       setShowCreateForm(false);
+      setCreateChildId("");
       setCreateFromDate("");
       setCreateToDate("");
       setCreateCancelLunch(true);
@@ -199,7 +209,7 @@ export default function ExcuseManagementPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">Omluvenky</h1>
-          <p className="text-charcoal-light">Správa a schvalování omluvenek</p>
+          <p className="text-charcoal-light">Správa omluvenek, náhrad a obědů</p>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -207,6 +217,7 @@ export default function ExcuseManagementPage() {
             type="button"
             onClick={() => {
               setCreateError("");
+              setCreateChildId("");
               setCreateFromDate("");
               setCreateToDate("");
               setCreateCancelLunch(true);
@@ -260,6 +271,14 @@ export default function ExcuseManagementPage() {
               <Select
                 label="Dítě"
                 name="childId"
+                value={createChildId}
+                onChange={(event) => {
+                  const childId = event.target.value;
+                  const nextChild = children.find((child) => child.id === childId);
+                  setCreateChildId(childId);
+                  if (!nextChild || (createFromDate && getAttendanceDateDisabledReason(nextChild, parseExcuseDate(createFromDate)))) setCreateFromDate("");
+                  if (!nextChild || (createToDate && getAttendanceDateDisabledReason(nextChild, parseExcuseDate(createToDate)))) setCreateToDate("");
+                }}
                 required
                 disabled={isChildrenLoading || children.length === 0}
                 options={[
@@ -282,6 +301,7 @@ export default function ExcuseManagementPage() {
                   label="Od"
                   name="fromDate"
                   value={createFromDate}
+                  getDisabledReason={getCreateDisabledReason}
                   onChange={(nextFromDate) => {
                     const nextToDate =
                       nextFromDate &&
@@ -304,6 +324,7 @@ export default function ExcuseManagementPage() {
                   label="Do"
                   name="toDate"
                   value={createToDate}
+                  getDisabledReason={getCreateDisabledReason}
                   min={createFromDate || undefined}
                   onChange={(nextToDate) => {
                     setCreateToDate(nextToDate);
@@ -364,6 +385,7 @@ export default function ExcuseManagementPage() {
                 onClick={() => {
                   setShowCreateForm(false);
                   setCreateError("");
+                  setCreateChildId("");
                   setCreateFromDate("");
                   setCreateToDate("");
                   setCreateCancelLunch(true);
@@ -426,8 +448,9 @@ export default function ExcuseManagementPage() {
                         <h3 className="font-semibold text-charcoal">
                           {excuse.child.firstName} {excuse.child.lastName}
                         </h3>
+                        {excuse.kind === "MAKEUP" && <Badge variant="info">Náhrada</Badge>}
                         <Badge variant={rangeStateBadge[excuse.rangeState].variant}>
-                          {!excuse.cancelLunch &&
+                          {excuse.kind !== "MAKEUP" && !excuse.cancelLunch &&
                           excuse.rangeState === "LATE_APPROVED"
                             ? "Bez schválení"
                             : rangeStateBadge[excuse.rangeState].label}
@@ -455,6 +478,8 @@ export default function ExcuseManagementPage() {
                         <span className="font-medium">Požadavek na oběd:</span>{" "}
                         {excuse.child.doesNotTakeLunch
                           ? "dítě obědy neodebírá"
+                          : excuse.kind === "MAKEUP"
+                            ? excuse.dayPart === "AFTERNOON" ? "bez oběda (jen odpoledne)" : "přihlásit"
                           : excuse.cancelLunch
                             ? "odhlásit"
                             : "ponechat přihlášený"}
@@ -474,12 +499,12 @@ export default function ExcuseManagementPage() {
                             onClick={() => handleApprove(excuse.id, true)}
                             isLoading={updatingIds.has(excuse.id)}
                           >
-                            Schválit
+                            {excuse.kind === "MAKEUP" ? "Přihlásit oběd" : "Schválit"}
                           </Button>
                         )}
                         {excuse.rangeState === "LATE_APPROVED" &&
                           !excuse.child.doesNotTakeLunch &&
-                          excuse.cancelLunch && (
+                          (excuse.cancelLunch || excuse.kind === "MAKEUP") && (
                           <Button
                             variant="outline"
                             size="sm"

@@ -15,6 +15,7 @@
  *    adding an excuse can never downgrade a day.
  */
 
+import { isMakeupLunchOnTime } from "./makeup-rules";
 import { isAutoApproved } from "./excuse-rules";
 import { isDefaultClosedDay, toLocalDateKey } from "./school-calendar";
 import {
@@ -27,6 +28,7 @@ import {
 } from "./types";
 
 export type CoveringExcuse = {
+  readonly kind?: "EXCUSE" | "MAKEUP";
   readonly id: string;
   readonly childId: string;
   readonly fromDate: Date;
@@ -70,18 +72,20 @@ export function coversDay(excuse: CoveringExcuse, day: Date): boolean {
 
 /** The preceding-weekday 9:00 deadline is evaluated against the day itself. */
 export function isLateForDay(excuse: CoveringExcuse, day: Date): boolean {
-  return !isAutoApproved(excuse.submittedAt, day);
+  return excuse.kind === "MAKEUP"
+    ? !isMakeupLunchOnTime(excuse.submittedAt, day)
+    : !isAutoApproved(excuse.submittedAt, day);
 }
 
 export function excusesDay(excuse: CoveringExcuse, day: Date): boolean {
-  return !isLateForDay(excuse, day) || excuse.lateApprovedAt !== null;
+  return excuse.kind !== "MAKEUP" && (!isLateForDay(excuse, day) || excuse.lateApprovedAt !== null);
 }
 
 export function getExcuseDayState(
   excuses: ReadonlyArray<CoveringExcuse>,
   day: Date,
 ): ExcuseDayState | null {
-  const covering = excuses.filter((excuse) => coversDay(excuse, day));
+  const covering = excuses.filter((excuse) => excuse.kind !== "MAKEUP" && coversDay(excuse, day));
   if (covering.length === 0) return null;
   if (covering.some((excuse) => !isLateForDay(excuse, day))) return "ON_TIME";
   if (covering.some((excuse) => excuse.lateApprovedAt !== null)) {
@@ -105,7 +109,7 @@ export function getDayCoverage(
   const afternoon = getDayPartCoverage(excuses, day, ExcuseDayPart.AFTERNOON);
   if (!morning.covered || !afternoon.covered) return NO_COVERAGE;
 
-  const covering = excuses.filter((excuse) => coversDay(excuse, day));
+  const covering = excuses.filter((excuse) => excuse.kind !== "MAKEUP" && coversDay(excuse, day));
   const excusing = covering.filter((excuse) => excusesDay(excuse, day));
   const lunchCancelling = excusing.filter((excuse) => excuse.cancelLunch !== false);
   const fullyExcused = morning.excused && afternoon.excused;
@@ -137,7 +141,7 @@ export function getDayPartCoverage(
   dayPart: Exclude<ExcuseDayPartValue, "FULL_DAY">,
 ): DayCoverage {
   const covering = excuses.filter(
-    (excuse) => coversDay(excuse, day) && coversDayPart(excuse, dayPart),
+    (excuse) => excuse.kind !== "MAKEUP" && coversDay(excuse, day) && coversDayPart(excuse, dayPart),
   );
   if (covering.length === 0) return NO_COVERAGE;
 

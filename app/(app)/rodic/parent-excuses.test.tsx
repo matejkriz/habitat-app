@@ -8,6 +8,7 @@ const actions = vi.hoisted(() => ({
 }));
 
 vi.mock("@/app/actions/parent", () => actions);
+vi.mock("@/app/actions/calendar", () => ({ getExcuseCalendarMonth: vi.fn() }));
 
 const excuse = {
   id: "excuse-1",
@@ -54,6 +55,13 @@ describe("ParentExcuses", () => {
     render(<ParentExcuses excuses={[{ ...excuse, cancelLunch: false }]} />);
 
     expect(screen.getByText("Oběd zůstává přihlášený")).toBeTruthy();
+  });
+  it("labels makeup as arrival and uses arrival text in its editor", () => {
+    render(<ParentExcuses excuses={[{ ...excuse, toDate: excuse.fromDate, kind: "MAKEUP" }]} />);
+    expect(screen.getByText("Náhrada")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
+    expect(screen.getByRole("group", { name: "Dítě dorazí" })).toBeTruthy();
+    expect(screen.queryByText("Oběd zůstává přihlášený")).toBeNull();
   });
 
   it("shows an afternoon-only excuse", () => {
@@ -107,7 +115,7 @@ describe("ParentExcuses", () => {
     fireEvent.change(screen.getByLabelText("Do"), { target: { value: "2024-01-04" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
     expect((await screen.findByRole("alert")).textContent).toBe(error);
-    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("2024-01-04");
+    expect((screen.getByLabelText("Do") as HTMLInputElement).value).toBe("4. 1. 2024");
     expect(screen.getByText("2. 1. – 3. 1.")).toBeTruthy();
   });
 });

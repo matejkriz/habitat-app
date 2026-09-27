@@ -1,8 +1,20 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExcuseEditor } from "./excuse-editor";
 
+const getExcuseCalendarMonth = vi.hoisted(() => vi.fn());
+vi.mock("@/app/actions/calendar", () => ({ getExcuseCalendarMonth }));
+
 describe("ExcuseEditor", () => {
+  beforeEach(() => getExcuseCalendarMonth.mockResolvedValue({ monthKey: "2026-09", closedDateKeys: [] }));
+  it.each(["EXCUSE", "MAKEUP"] as const)("filters edited %s endpoints by the child's schedule", async (kind) => {
+    render(<ExcuseEditor excuse={{ id: "record", kind, fromDate: "2026-09-09", toDate: "2026-09-09", dayPart: "FULL_DAY", reason: null, child: { attendanceDays: [1, 3] } }} onSave={vi.fn()} onDelete={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
+    fireEvent.click(screen.getByLabelText("Od"));
+    expect(await screen.findByRole("button", { name: /středa 9\. září 2026/i })).toHaveProperty("disabled", kind === "MAKEUP");
+    expect(screen.getByRole("button", { name: /úterý 8\. září 2026/i })).toHaveProperty("disabled", kind === "EXCUSE");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -85,6 +97,15 @@ describe("ExcuseEditor", () => {
 
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("excuse-1"));
     expect(confirm).toHaveBeenCalledWith("Opravdu chcete tuto omluvenku smazat?");
+  });
+  it("names makeup when confirming deletion", async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal("confirm", confirm);
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    render(<ExcuseEditor excuse={{ id: "makeup", fromDate: "2026-09-10", toDate: "2026-09-10", kind: "MAKEUP", dayPart: "FULL_DAY", reason: null }} onDelete={onDelete} onSave={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Smazat" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("makeup"));
+    expect(confirm).toHaveBeenCalledWith("Opravdu chcete tuto náhradu smazat?");
   });
 });
 

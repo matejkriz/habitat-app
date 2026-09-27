@@ -51,9 +51,23 @@ describe("ChildrenManagementPage", () => {
         lastName: "Malá",
         gender: "FEMALE",
         doesNotTakeLunch: true,
+        attendanceDays: [1, 2, 3, 4],
       }),
     );
     expect(await screen.findByText("Bez obědů")).toBeTruthy();
+  });
+  it("defaults to all school days and saves deselected attendance days", async () => {
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upravit Anna Malá" }));
+    for (const name of ["Pondělí", "Úterý", "Středa", "Čtvrtek"]) {
+      expect(screen.getByRole("button", { name }).getAttribute("aria-pressed")).toBe("true");
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Úterý" }));
+    expect(screen.getByRole("button", { name: "Úterý" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
+    await waitFor(() => expect(mocks.updateChild).toHaveBeenCalledWith("anna", expect.objectContaining({ attendanceDays: [1, 3, 4] })));
+    fireEvent.click(await screen.findByRole("button", { name: "Upravit Anna Malá" }));
+    expect(screen.getByRole("button", { name: "Úterý" }).getAttribute("aria-pressed")).toBe("false");
   });
   it("edits a child's fund contribution", async () => {
     render(<ChildrenManagementPage />);

@@ -2,6 +2,9 @@ import { toDayKey, type DayCoverage } from "./excuse-coverage";
 import { Presence, type Presence as PresenceValue } from "./types";
 
 export const LunchStatus = {
+  NOT_SCHEDULED: "not-scheduled",
+  MAKEUP: "makeup",
+  MAKEUP_NO_LUNCH: "makeup-no-lunch",
   NO_LUNCH: "no-lunch",
   PRESENT: "present",
   EXCUSED: "excused",
@@ -53,6 +56,7 @@ export function getLunchStatus(
 
 export function isPayableLunch(status: LunchStatus | null): boolean {
   return (
+    status === LunchStatus.MAKEUP ||
     status === LunchStatus.PRESENT ||
     status === LunchStatus.KEPT ||
     status === LunchStatus.LATE ||

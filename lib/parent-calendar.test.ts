@@ -101,3 +101,10 @@ describe("buildParentCalendarMonth", () => {
     expect(days.find((day) => day.date === "2026-08-20")?.status).toBe("EXPECTED");
   });
 });
+
+
+it("shows the regular day off and turns a makeup into expected attendance", () => {
+  const base = { month: new Date(2026, 7, 1), attendanceDays: [1, 3, 4], attendance: [], closedDays: [], today: new Date(2026, 7, 3) };
+  expect(buildParentCalendarMonth({ ...base, excuses: [] }).find(day => day.date === "2026-08-04")?.status).toBe("NOT_SCHEDULED");
+  expect(buildParentCalendarMonth({ ...base, excuses: [{ id: "makeup", childId: "child", kind: "MAKEUP", fromDate: new Date(2026, 7, 4), toDate: new Date(2026, 7, 4), submittedAt: new Date(2026, 7, 3, 20), lateApprovedAt: null }] }).find(day => day.date === "2026-08-04")?.status).toBe("MAKEUP");
+});

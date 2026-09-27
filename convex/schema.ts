@@ -40,6 +40,7 @@ export default defineSchema({
     gender: v.optional(childGender),
     // Optional during rollout; existing children continue to receive lunches.
     doesNotTakeLunch: v.optional(v.boolean()),
+    attendanceDays: v.optional(v.array(v.number())),
     fundSent: v.optional(v.union(v.number(), v.null())),
     active: v.boolean(),
     createdAt: v.number(),
@@ -84,6 +85,7 @@ export default defineSchema({
     fromDate: v.number(),
     toDate: v.number(),
     reason: v.optional(v.union(v.string(), v.null())),
+    kind: v.optional(v.union(v.literal("EXCUSE"), v.literal("MAKEUP"))),
     // Optional during rollout; legacy excuses cover the whole day.
     dayPart: v.optional(excuseDayPart),
     // Optional during rollout; legacy excuses keep cancelling lunches.

@@ -55,6 +55,8 @@ vi.mock("@/lib/slack", () => ({
 import {
   createExtraFundPerson, updateExtraFundPerson, setExtraFundExpense,
   createDirectorExcuse,
+  exportAttendanceCSV,
+  getDashboardStats,
   getExcuseChildren,
   getExcuses,
   getLunchOverview,
@@ -113,6 +115,51 @@ describe("getLunchOverview", () => {
       { id: "a-20", childId: "tobias", date: AUG(20), presence: "ABSENT" },
     ]);
     mocks.noLunchDaysList.mockResolvedValue([]);
+  });
+
+  it("does not bill a regular day off even with recorded presence", async () => {
+    mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2, 3] }]);
+    mocks.excusesList.mockResolvedValue([]);
+    mocks.attendanceList.mockResolvedValue([{ childId: "tobias", date: AUG(20), presence: "PRESENT" }]);
+    const overview = await getLunchOverview("2026-08");
+    expect(overview.children[0].statuses).toEqual([null, "not-scheduled"]);
+    expect(overview.children[0].payableLunches).toBe(0);
+  });
+
+  it("registers a timely makeup lunch and keeps a late makeup without lunch", async () => {
+    mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2] }]);
+    mocks.excusesList.mockResolvedValue([
+      { ...spanningLate, kind: "MAKEUP", fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
+      { ...spanningLate, id: "late-makeup", kind: "MAKEUP", fromDate: AUG(20), toDate: AUG(20), submittedAt: AUG(19, 12) },
+    ]);
+    mocks.attendanceList.mockResolvedValue([{ childId: "tobias", date: AUG(20), presence: "PRESENT" }]);
+    const overview = await getLunchOverview("2026-08");
+    expect(overview.children[0].statuses).toEqual(["makeup", "makeup-no-lunch"]);
+    expect(overview.children[0].payableLunches).toBe(1);
+  });
+
+  it("does not charge a timely canceled makeup lunch even before attendance is recorded", async () => {
+    mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2] }]);
+    mocks.attendanceList.mockResolvedValue([]);
+    mocks.excusesList.mockResolvedValue([
+      { ...spanningLate, kind: "MAKEUP", fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
+      { ...approvedSingleDay, fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
+    ]);
+    const overview = await getLunchOverview("2026-08");
+    expect(overview.children[0].statuses).toEqual(["excused", "not-scheduled"]);
+    expect(overview.children[0].payableLunches).toBe(0);
+  });
+
+  it("bills a director approved late makeup and never an afternoon makeup", async () => {
+    mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2] }]);
+    mocks.attendanceList.mockResolvedValue([]);
+    mocks.excusesList.mockResolvedValue([
+      { ...approvedSingleDay, kind: "MAKEUP", fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(19, 8) },
+      { ...approvedSingleDay, id: "afternoon-makeup", kind: "MAKEUP", dayPart: "AFTERNOON", fromDate: AUG(20), toDate: AUG(20), submittedAt: AUG(18, 8) },
+    ]);
+    const overview = await getLunchOverview("2026-08");
+    expect(overview.children[0].statuses).toEqual(["makeup", "makeup-no-lunch"]);
+    expect(overview.children[0].payableLunches).toBe(1);
   });
 
   it("shows an approved day as excused even when a late excuse also covers it", async () => {
@@ -222,6 +269,12 @@ describe("updateExcuse", () => {
     );
   });
 
+  it("can revoke a makeup lunch registration while keeping the planned arrival", async () => {
+    mocks.excusesGet.mockResolvedValue({ ...spanningLate, kind: "MAKEUP", cancelLunch: false, lateApprovedAt: AUG(19, 14) });
+    await updateExcuse("excuse-old", false);
+    expect(mocks.excusesUpdate).toHaveBeenCalledWith({ where: { id: "excuse-old" }, data: { lateApprovedAt: null, lateApprovedById: null } });
+  });
+
   it("records who forgave the late submission and when", async () => {
     await updateExcuse("excuse-old", true);
 
@@ -284,6 +337,22 @@ describe("updateChild", () => {
     mocks.auditLogsCreate.mockResolvedValue(undefined);
   });
 
+  it("stores the selected regular attendance weekdays", async () => {
+    await updateChild("tobias", { attendanceDays: [4, 1] });
+    expect(mocks.childrenUpdate).toHaveBeenCalledWith({ where: { id: "tobias" }, data: { attendanceDays: [1, 4] } });
+  });
+
+  it("rejects an invalid regular attendance weekday before writing", async () => {
+    await expect(updateChild("tobias", { attendanceDays: [5] })).rejects.toThrow("Neplatné dny");
+    expect(mocks.childrenUpdate).not.toHaveBeenCalled();
+    expect(mocks.auditLogsCreate).not.toHaveBeenCalled();
+  });
+
+  it("allows clearing all regular attendance weekdays", async () => {
+    await updateChild("tobias", { attendanceDays: [] });
+    expect(mocks.childrenUpdate).toHaveBeenCalledWith({ where: { id: "tobias" }, data: { attendanceDays: [] } });
+  });
+
   it("stores and clears the amount sent to a child's fund", async () => {
     await updateChild("tobias", { fundSent: 1500 });
     expect(mocks.childrenUpdate).toHaveBeenCalledWith({ where: { id: "tobias" }, data: { fundSent: 1500 } });
@@ -328,6 +397,24 @@ describe("getExcuses", () => {
     mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
   });
 
+  it("reviews a makeup range only on the child's regular days off", async () => {
+    const makeup = {
+      ...spanningLate, kind: "MAKEUP", fromDate: AUG(17), toDate: AUG(18), submittedAt: AUG(17, 8),
+      child: { ...tobias, attendanceDays: [1, 3, 4] },
+      submittedBy: { id: "parent-1", name: "Rodič", email: null },
+    };
+    mocks.excusesList.mockResolvedValue([makeup]);
+    mocks.getSchoolDaysInRange.mockResolvedValue([AUG(17), AUG(18)]);
+
+    await expect(getExcuses({ pendingOnly: true })).resolves.toEqual([]);
+    await expect(getExcuses({ settledOnly: true })).resolves.toEqual([
+      expect.objectContaining({ id: makeup.id, rangeState: "ON_TIME" }),
+    ]);
+    await expect(getExcuses()).resolves.toEqual([
+      expect.objectContaining({ id: makeup.id, rangeState: "ON_TIME" }),
+    ]);
+  });
+
   it("does not put an excuse for a configured closure into the pending queue", async () => {
     mocks.excusesList.mockResolvedValue([
       {
@@ -365,7 +452,7 @@ describe("getExcuseChildren", () => {
     ]);
     expect(mocks.childrenList).toHaveBeenCalledWith({
       where: { active: true },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, attendanceDays: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
   });
@@ -479,6 +566,16 @@ describe("createDirectorExcuse", () => {
     await expect(createDirectorExcuse(formData)).resolves.toEqual({
       success: false,
       error: "Začátek i konec omluvenky musí být v den, kdy je Habitat otevřený.",
+    });
+    expect(mocks.excusesCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects an excuse endpoint on a regular day off", async () => {
+    mocks.childrenGet.mockResolvedValue({ id: "tobias", active: true, attendanceDays: [1, 2, 4] });
+    const formData = new FormData();
+    formData.set("childId", "tobias"); formData.set("fromDate", "2026-08-19"); formData.set("toDate", "2026-08-19");
+    await expect(createDirectorExcuse(formData)).resolves.toEqual({
+      success: false, error: "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.",
     });
     expect(mocks.excusesCreate).not.toHaveBeenCalled();
   });
@@ -598,5 +695,39 @@ describe("director-only extra fund people", () => {
     await expect(createExtraFundPerson(" ")).rejects.toThrow();
     await expect(updateExtraFundPerson("p", { fundSent: -5 })).rejects.toThrow();
     await expect(setExtraFundExpense("p", "2026-02-30", 80)).rejects.toThrow();
+  });
+});
+
+
+describe("attendance schedule reporting", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
+    mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2, 3] }]);
+    mocks.excusesList.mockResolvedValue([]);
+    mocks.getSchoolDaysInRange.mockResolvedValue([AUG(19), AUG(20)]);
+    mocks.attendanceList.mockResolvedValue([
+      { childId: "tobias", date: AUG(19), presence: "ABSENT", child: { ...tobias, gender: "MALE", attendanceDays: [1, 2, 3] } },
+      { childId: "tobias", date: AUG(20), presence: "ABSENT", child: { ...tobias, gender: "MALE", attendanceDays: [1, 2, 3] } },
+    ]);
+  });
+
+  it("does not put a timely day-off makeup into the dashboard's pending queue", async () => {
+    mocks.excusesList.mockResolvedValue([{
+      ...spanningLate, kind: "MAKEUP", fromDate: AUG(17), toDate: AUG(18), submittedAt: AUG(17, 8),
+      child: { ...tobias, attendanceDays: [1, 3, 4] },
+    }]);
+    mocks.getSchoolDaysInRange.mockResolvedValue([AUG(17), AUG(18)]);
+    expect((await getDashboardStats()).recentExcuses).toEqual([]);
+  });
+
+  it("counts a stored absence on a regular day off as excused in the dashboard", async () => {
+    expect((await getDashboardStats()).month).toMatchObject({ absentCount: 2, excusedCount: 1, unexcusedCount: 1 });
+  });
+
+  it("exports a regular day off as excused with the reason Nechodí", async () => {
+    const csv = await exportAttendanceCSV("2026-08-01", "2026-08-31");
+    expect(csv).toContain('"19. 8. 2026";"Tobiáš";"Tornádo";"Nepřítomen";"Neomluveno";""');
+    expect(csv).toContain('"20. 8. 2026";"Tobiáš";"Tornádo";"Nepřítomen";"Omluveno";"Nechodí"');
   });
 });

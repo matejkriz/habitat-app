@@ -23,6 +23,7 @@ import {
   groupExcusesByChild,
   type ExcuseDayState,
 } from "@/lib/excuse-coverage";
+import { getChildDayPlan } from "@/lib/attendance-schedule";
 import { parseExcuseDate } from "@/lib/excuse-rules";
 import { revalidatePath } from "next/cache";
 
@@ -33,6 +34,7 @@ type AttendanceRecord = {
 };
 
 type DailyExcuse = {
+  readonly kind?: "EXCUSE" | "MAKEUP" | "NOT_SCHEDULED";
   readonly childId: string;
   readonly state: ExcuseDayState;
   readonly lunchCancelled: boolean;
@@ -91,7 +93,7 @@ export const getAttendanceForDate = async (
     };
   }
 
-  const [attendance, excuses, noLunchDay] = await Promise.all([
+  const [attendance, excuses, noLunchDay, children] = await Promise.all([
     db.attendance.list({
       where: { date },
       include: {
@@ -106,9 +108,11 @@ export const getAttendanceForDate = async (
     }) as Promise<ReadonlyArray<Attendance>>,
     getExcusesOverlapping({ from: date, to: date }),
     db.noLunchDays.get({ where: { date } }),
+    db.children.list({ where: { active: true } }) as Promise<ReadonlyArray<Child>>,
   ]);
 
   const excusesByChild = groupExcusesByChild(excuses);
+  const childrenById = new Map(children.map(child => [child.id, child]));
   const coverageFor = (childId: string) =>
     getDayCoverage(excusesByChild.get(childId) ?? [], date);
 
@@ -118,10 +122,21 @@ export const getAttendanceForDate = async (
     attendance: attendance.map((a) => ({
       childId: a.childId,
       presence: a.presence,
-      excuseStatus: getExcuseStatusForDay(a.presence, coverageFor(a.childId)),
+      excuseStatus: a.presence === Presence.ABSENT &&
+        getChildDayPlan(childrenById.get(a.childId) ?? {}, excusesByChild.get(a.childId) ?? [], date).notScheduled
+          ? ExcuseStatus.EXCUSED
+          : getExcuseStatusForDay(a.presence, coverageFor(a.childId)),
     })),
-    excuses: [...excusesByChild.keys()].map((childId) => {
+    excuses: [...new Set([...children.map(child => child.id), ...excusesByChild.keys()])].flatMap((childId): DailyExcuse[] => {
       const childExcuses = excusesByChild.get(childId) ?? [];
+      const child = childrenById.get(childId);
+      const plan = getChildDayPlan(child ?? {}, childExcuses, date);
+      if (plan.notScheduled) return [{ childId, kind: "NOT_SCHEDULED", dayPart: "FULL_DAY", state: "ON_TIME", lunchCancelled: true }];
+      if (plan.makeup && (plan.expectedMorning || plan.expectedAfternoon)) return [{
+        childId, kind: "MAKEUP",
+        dayPart: plan.expectedMorning && plan.expectedAfternoon ? "FULL_DAY" : plan.expectedMorning ? "MORNING" : "AFTERNOON",
+        state: plan.makeupLate ? "LATE" : "ON_TIME", lunchCancelled: !plan.lunchEnrolled,
+      }];
       const coverage = getDayCoverage(childExcuses, date);
       const morning = getDayPartCoverage(childExcuses, date, "MORNING");
       const afternoon = getDayPartCoverage(childExcuses, date, "AFTERNOON");
@@ -135,6 +150,7 @@ export const getAttendanceForDate = async (
         date,
         "AFTERNOON",
       );
+      if (!morning.covered && !afternoon.covered) return [];
       const dayPart =
         morning.covered && afternoon.covered
           ? "FULL_DAY"
@@ -152,7 +168,7 @@ export const getAttendanceForDate = async (
         : applicableStates.includes("LATE_APPROVED")
           ? "LATE_APPROVED"
           : "ON_TIME";
-      return {
+      return [{
         childId,
         dayPart,
         state,
@@ -160,7 +176,7 @@ export const getAttendanceForDate = async (
           coverage.lunchCancelled ||
           morning.lunchCancelled ||
           afternoon.lunchCancelled,
-      };
+      }];
     }),
     noLunch: noLunchDay !== null,
     canManageLunch: user.role === UserRole.DIRECTOR,

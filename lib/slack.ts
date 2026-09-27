@@ -3,10 +3,11 @@
  * Sends notifications to #omluvenky when excuses are submitted or edited
  */
 
-import type { ExcuseDayPart } from "./types";
+import type { ExcuseDayPart, ExcuseKind } from "./types";
 
 export interface ExcuseNotificationData {
   change?: "UPDATED";
+  kind?: ExcuseKind;
   childName: string;
   parentName: string;
   fromDate: Date;
@@ -16,6 +17,7 @@ export interface ExcuseNotificationData {
   dayPart?: ExcuseDayPart;
   isOnTime: boolean; // true = "včas", false = "pozdní"
   automaticallyApproved?: boolean;
+  doesNotTakeLunch?: boolean;
 }
 
 /**
@@ -46,7 +48,13 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
   } = data;
 
   const statusEmoji = isOnTime || automaticallyApproved ? "✅" : "⚠️";
-  const statusText = automaticallyApproved
+  const statusText = data.kind === "MAKEUP"
+    ? data.doesNotTakeLunch || dayPart === "AFTERNOON"
+      ? "dítě dorazí, bez oběda"
+      : isOnTime || automaticallyApproved
+        ? "dítě dorazí, oběd zajištěný"
+        : "dítě dorazí, oběd není zajištěný"
+    : automaticallyApproved
     ? cancelLunch
       ? "automaticky schválená (bez obědů)"
       : "bez nutnosti schválení (oběd ponechán)"
@@ -64,7 +72,9 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
       : dayPart === "AFTERNOON"
         ? "Jen odpoledne"
         : "Celý den";
-  const title = data.change === "UPDATED" ? "Změna omluvenky" : "Nová omluvenka";
+  const title = data.kind === "MAKEUP"
+    ? data.change === "UPDATED" ? "Změna náhrady" : "Nová náhrada"
+    : data.change === "UPDATED" ? "Změna omluvenky" : "Nová omluvenka";
 
   const blocks = [
     {

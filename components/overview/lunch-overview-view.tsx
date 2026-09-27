@@ -6,6 +6,9 @@ import { cn } from "@/lib/utils";
 import { LunchStatus, type LunchStatus as LunchStatusValue } from "@/lib/lunches";
 
 const statusStyles: Record<LunchStatusValue, string> = {
+  [LunchStatus.NOT_SCHEDULED]: "bg-[#a9c9dc]",
+  [LunchStatus.MAKEUP]: "bg-[#588966]",
+  [LunchStatus.MAKEUP_NO_LUNCH]: "bg-[#c2dce5]",
   [LunchStatus.NO_LUNCH]: "bg-[#b8b8b3]",
   [LunchStatus.PRESENT]: "bg-[#7fa173]",
   [LunchStatus.EXCUSED]: "bg-[#70a3bf]",
@@ -15,6 +18,9 @@ const statusStyles: Record<LunchStatusValue, string> = {
 };
 
 const statusLabels: Record<LunchStatusValue, string> = {
+  [LunchStatus.NOT_SCHEDULED]: "Nechodí",
+  [LunchStatus.MAKEUP]: "Náhrada, oběd přihlášen",
+  [LunchStatus.MAKEUP_NO_LUNCH]: "Náhrada bez oběda",
   [LunchStatus.NO_LUNCH]: "Oběd se nepodával",
   [LunchStatus.PRESENT]: "Přišel/a",
   [LunchStatus.EXCUSED]: "Včas omluven/a",

@@ -46,6 +46,26 @@ describe("TeacherAttendancePage", () => {
     cleanup();
   });
 
+  it("defaults a regular day off to absent and an afternoon makeup to present", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "off", firstName: "Anna", lastName: "Malá", gender: "FEMALE" },
+      { id: "makeup", firstName: "Petr", lastName: "Nový", gender: "MALE" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({ isClosed: false, attendance: [], excuses: [
+      { childId: "off", kind: "NOT_SCHEDULED", state: "ON_TIME", dayPart: "FULL_DAY", lunchCancelled: true },
+      { childId: "makeup", kind: "MAKEUP", state: "LATE", dayPart: "AFTERNOON", lunchCancelled: true },
+    ] });
+    render(<TeacherAttendancePage />);
+    expect(await screen.findByText("Nechodí")).toBeTruthy();
+    expect(screen.getByText("Náhrada")).toBeTruthy();
+    expect(screen.getByRole<HTMLInputElement>("checkbox", { name: "Docházka: Anna Malá" }).checked).toBe(false);
+    expect(screen.getByRole<HTMLInputElement>("checkbox", { name: "Docházka: Petr Nový" }).checked).toBe(true);
+    const plan = screen.getByRole("region", { name: "Plánovaná účast" });
+    expect(within(plan).getByText("0")).toBeTruthy();
+    expect(within(plan).getByText("1")).toBeTruthy();
+    expect(screen.getByText("Jen odpoledne")).toBeTruthy();
+  });
+
   it("uses each child's gender in attendance labels", async () => {
     mocks.getAllChildren.mockResolvedValue([
       {

@@ -3,10 +3,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AppShell } from "./app-shell";
 
 const signOut = vi.fn();
-const navigation = vi.hoisted(() => ({ pathname: "/reditel" }));
+const navigation = vi.hoisted(() => ({ pathname: "/reditel", search: "" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigation.pathname,
+  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 vi.mock("@/lib/workos-client", () => ({
@@ -62,12 +63,26 @@ afterEach(() => {
   cleanup();
   signOut.mockClear();
   navigation.pathname = "/reditel";
+  navigation.search = "";
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(navigator, "standalone");
 });
 
 describe("AppShell", () => {
+  it("shows makeup navigation only for a parent whose child has a reduced schedule", () => {
+    const { rerender } = render(<AppShell user={{ ...director, role: "PARENT" }}><div>Obsah</div></AppShell>);
+    expect(screen.queryByRole("link", { name: "Náhrada" })).toBeNull();
+    rerender(<AppShell user={{ ...director, role: "PARENT" }} canSubmitMakeup><div>Obsah</div></AppShell>);
+    expect(screen.getAllByRole("link", { name: "Náhrada" }).map(link => link.getAttribute("href"))).toEqual(["/rodic/omluvenka?kind=makeup", "/rodic/omluvenka?kind=makeup"]);
+  });
+  it("marks makeup as active when its query is selected", () => {
+    navigation.pathname = "/rodic/omluvenka";
+    navigation.search = "kind=MAKEUP";
+    render(<AppShell user={{ ...director, role: "PARENT" }} canSubmitMakeup><div>Obsah</div></AppShell>);
+    expect(screen.getAllByRole("link", { name: "Náhrada" }).every(link => link.getAttribute("aria-current") === "page")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "Omluvenka" }).every(link => !link.hasAttribute("aria-current"))).toBe(true);
+  });
   it("shows only primary director destinations in navigation", () => {
     const { container } = render(
       <AppShell user={director}>

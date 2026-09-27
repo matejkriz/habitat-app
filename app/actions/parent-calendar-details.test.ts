@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), details: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.user }));
 vi.mock("@/lib/excuse", () => ({ canSubmitExcuse: mocks.access, getExcusesOverlapping: async () => [] }));
-vi.mock("@/lib/db", () => ({ db: {
+vi.mock("@/lib/db", () => ({ db: { children: { get: vi.fn().mockResolvedValue({ attendanceDays: [1, 2, 3, 4] }) },
   attendance: { list: async () => [] },
   closedDays: { list: async () => [] },
   dayDetails: { list: mocks.details },

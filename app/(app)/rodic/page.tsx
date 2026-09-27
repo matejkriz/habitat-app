@@ -71,6 +71,16 @@ async function TodayCard({
               <p className="text-sm text-charcoal-light">Dnes neprobíhá výuka</p>
             </div>
           </div>
+        ) : status.notScheduled && status.attendance?.presence !== "PRESENT" ? (
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+            <p className="font-semibold text-sky-700">Nechodí</p>
+            <p className="mt-1 text-sm text-charcoal-light">Dnes dítě podle pravidelné docházky do Habitatu nechodí.</p>
+          </div>
+        ) : status.makeup && !status.attendance ? (
+          <div className="rounded-lg border border-sage/20 bg-sage/10 p-4">
+            <p className="font-semibold text-sage-dark">Náhrada</p>
+            <p className="mt-1 text-sm text-charcoal-light">Dítě dnes mimořádně dorazí. Čeká se na zápis učitele.</p>
+          </div>
         ) : status.attendance ? (
           <div className="flex items-center justify-between p-4 bg-white rounded-lg">
             <div className="flex items-center gap-3">
@@ -166,7 +176,7 @@ async function ExcusesCard({ childId }: { childId: string }) {
           <svg className="h-5 w-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          Omluvenky
+          {excuses.some((excuse) => excuse.kind === "MAKEUP") ? "Omluvenky a náhrady" : "Omluvenky"}
         </CardTitle>
       </CardHeader>
       <CardContent>

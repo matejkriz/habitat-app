@@ -46,6 +46,12 @@ describe("AttendanceCalendar", () => {
     vi.useRealTimers();
   });
 
+  it("offers a makeup from a regular day off", () => {
+    render(<AttendanceCalendar childId="child-1" childName="Žofie" childGender="FEMALE" month="2026-08" days={[{ date: "2026-08-25", dayNumber: 25, status: "NOT_SCHEDULED", isToday: false }]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Nechodí, zadat náhradu/ }));
+    expect(mocks.push).toHaveBeenCalledWith("/rodic/omluvenka?child=child-1&date=2026-08-25&kind=MAKEUP");
+  });
+
   it("adds a period to the day number", () => {
     render(
       <AttendanceCalendar

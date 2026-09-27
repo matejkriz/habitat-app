@@ -52,7 +52,7 @@ export function resolveExcuseChildIds(
 ): string[] {
   const selected = [...new Set(selectedChildIds.filter(Boolean))];
   if (selected.length === 0) {
-    throw new Error("Vyberte alespoň jedno dítě.");
+    throw new ExcuseValidationError("Vyberte alespoň jedno dítě.");
   }
 
   return selected;

@@ -1,9 +1,10 @@
+import { getChildDayPlan } from "@/lib/attendance-schedule";
 import { db } from "@/lib/db";
 import type { Attendance, Child, NoLunchDay } from "@/lib/types";
 import { getSchoolDaysInRange } from "@/lib/school-days";
 import { getExcusesOverlapping } from "@/lib/excuse";
 import { getDayCoverage, getDayPartCoverage, groupExcusesByChild } from "@/lib/excuse-coverage";
-import { getLocalDateKey, getLunchStatus, isPayableLunch, sortChildrenWithSiblings, type LunchStatus } from "@/lib/lunches";
+import { LunchStatus, getLocalDateKey, getLunchStatus, isPayableLunch, sortChildrenWithSiblings, type LunchStatus as LunchStatusValue } from "@/lib/lunches";
 
 type LunchChildWithParentsRow = Child & {
   readonly parents: ReadonlyArray<{
@@ -25,7 +26,7 @@ export type LunchOverview = {
     readonly id: string;
     readonly firstName: string;
     readonly lastName: string;
-    readonly statuses: ReadonlyArray<LunchStatus | null>;
+    readonly statuses: ReadonlyArray<LunchStatusValue | null>;
     readonly payableLunches: number;
   }>;
   readonly childrenWithoutLunch: ReadonlyArray<{
@@ -122,21 +123,27 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
     children: childrenWithLunch.map((child) => {
       const childExcuses = excusesByChild.get(child.id) ?? [];
       const statuses = days.map((day) => {
+        const plan = getChildDayPlan(child, childExcuses, day.date);
+        if (plan.notScheduled) return LunchStatus.NOT_SCHEDULED;
         const wholeDayCoverage = getDayCoverage(childExcuses, day.date);
         const morningCoverage = getDayPartCoverage(
           childExcuses,
           day.date,
           "MORNING",
         );
+        if (plan.makeup && morningCoverage.lunchCancelled) return LunchStatus.EXCUSED;
+        if (plan.makeup && !plan.lunchEnrolled) return LunchStatus.MAKEUP_NO_LUNCH;
         const usesMorningCancellation =
           !wholeDayCoverage.covered && morningCoverage.covered;
 
-        return getLunchStatus(
+        const status = getLunchStatus(
           attendanceByChildAndDate.get(`${child.id}:${day.key}`),
           usesMorningCancellation ? morningCoverage : wholeDayCoverage,
           noLunchDateKeys.has(day.key),
           usesMorningCancellation,
         );
+        if (plan.makeup && status !== LunchStatus.EXCUSED) return LunchStatus.MAKEUP;
+        return status;
       });
 
       return {
@@ -154,4 +161,3 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
     })),
   };
 }
-

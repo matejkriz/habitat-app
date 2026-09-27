@@ -26,7 +26,7 @@ vi.mock("@/lib/slack", () => ({
 
 import { saveAttendance } from "../app/actions/teacher";
 import {
-  submitExcuse,
+  submitExcuse, submitMakeup,
   getChildAttendanceHistory,
   getChildCalendarMonth,
   getChildExcuses,
@@ -37,7 +37,7 @@ import {
 } from "../app/actions/parent";
 import {
   createExtraFundPerson, updateExtraFundPerson, setExtraFundExpense, getTripFundOverview,
-  createChild,
+  createChild, updateChild,
   assignParentToChild,
   removeParentFromChild,
   addClosedDay,
@@ -184,6 +184,7 @@ describe("parent isolation at the server action boundary", () => {
     async (action) => {
       transport.user = { id: "parent", role: "PARENT" };
       const created = await submitExcuse(excuse("a"));
+      if (!created.success) throw new Error(created.error);
       transport.user = { id: "other-parent", role: "PARENT" };
       const id = created.excuses[0].id;
       await expect(
@@ -226,7 +227,9 @@ describe("parent excuse submission recovery", () => {
   });
   it("retries the same submission without duplicate excuses or audit entries", async () => {
     const first = await submitExcuse(excuse("a", "b"));
+    if (!first.success) throw new Error(first.error);
     const second = await submitExcuse(excuse("a", "b"));
+    if (!second.success) throw new Error(second.error);
     expect(second.excuses).toEqual(first.excuses);
     expect(await rows("excuses")).toHaveLength(2);
     expect(await rows("auditLogs")).toHaveLength(2);
@@ -254,6 +257,7 @@ describe("parent excuse submission recovery", () => {
           data: { doesNotTakeLunch: true },
         });
       const result = await submitExcuse(form);
+      if (!result.success) throw new Error(result.error);
       expect(result.summary.lateDayCount).toBe(0);
       expect(result.summary.automaticallyApprovedDayCount).toBe(1);
       expect(await rows("excuses")).toEqual([
@@ -329,6 +333,7 @@ describe("director workflows", () => {
     await saveAttendance(attendance("a"));
     transport.user = { id: "parent", role: "PARENT" };
     const created = await submitExcuse(excuse("a"));
+    if (!created.success) throw new Error(created.error);
     transport.user = { id: "director", role: "DIRECTOR" };
     expect(
       (await getLunchOverview("2026-09")).children.find(
@@ -378,4 +383,32 @@ it("persists extra fund people through server actions, adapter and Convex", asyn
   expect(saved.children).toHaveLength(2);
   const audit = await t.run(({ db }) => db.query("auditLogs").collect());
   expect(audit.filter(row => row.entityType.startsWith("ExtraFund"))).toHaveLength(3);
+});
+
+
+describe("regular attendance and makeup through the whole data flow", () => {
+  it("removes a regular off day and restores a timely makeup in calendars and lunches", async () => {
+    vi.setSystemTime(new Date("2026-09-16T06:00:00Z"));
+    transport.user = { id: "director", role: "DIRECTOR" };
+    await updateChild("a", { attendanceDays: [1, 2, 3] });
+    const lunchesBefore = await getLunchOverview("2026-09");
+    const index = lunchesBefore.days.findIndex(item => item.key === day);
+    expect(lunchesBefore.children.find(child => child.id === "a")?.statuses[index]).toBe("not-scheduled");
+    transport.user = { id: "parent", role: "PARENT" };
+    expect((await getChildCalendarMonth("a", "2026-09")).find(item => item.date === day)?.status).toBe("NOT_SCHEDULED");
+    await submitMakeup(excuse("a"));
+    expect((await getChildCalendarMonth("a", "2026-09")).find(item => item.date === day)?.status).toBe("MAKEUP");
+    transport.user = { id: "director", role: "DIRECTOR" };
+    const lunchesAfter = await getLunchOverview("2026-09");
+    expect(lunchesAfter.children.find(child => child.id === "a")?.statuses[index]).toBe("makeup");
+  });
+  it("does not count the teacher's regular off day as an unexcused absence", async () => {
+    transport.user = { id: "director", role: "DIRECTOR" };
+    await updateChild("a", { attendanceDays: [1, 2, 3] });
+    transport.user = { id: "teacher", role: "TEACHER" };
+    await saveAttendance(attendance("a"));
+    transport.user = { id: "parent", role: "PARENT" };
+    expect(await getChildStats("a")).toMatchObject({ unexcused: 0, excused: 1 });
+    expect(await getChildAttendanceHistory("a")).toEqual(expect.arrayContaining([expect.objectContaining({ excuseStatus: "EXCUSED" })]));
+  });
 });

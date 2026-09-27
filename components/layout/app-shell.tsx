@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/workos-client";
@@ -15,6 +15,7 @@ import type { UserRole } from "@/lib/types";
 
 interface AppShellProps {
   children: React.ReactNode;
+  canSubmitMakeup?: boolean;
   user: {
     name?: string | null;
     email?: string | null;
@@ -184,15 +185,25 @@ const roleLabels: Record<UserRole, string> = {
 
 const GITHUB_REPOSITORY_URL = "https://github.com/matejkriz/habitat-app";
 
-export function AppShell({ children, user }: AppShellProps) {
+export function AppShell({ children, user, canSubmitMakeup = false }: AppShellProps) {
   const pathname = usePathname();
-  const navItems = roleNavItems[user.role];
-  const visiblePathname = pathname === "/" ? navItems[0].href : pathname;
+  const searchParams = useSearchParams();
+  const navItems = user.role === "PARENT" && canSubmitMakeup
+    ? [...roleNavItems.PARENT, {
+        href: "/rodic/omluvenka?kind=makeup",
+        label: "Náhrada",
+        icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+      }]
+    : roleNavItems[user.role];
+  const navigationPath = pathname === "/rodic/omluvenka" && searchParams.get("kind")?.toLowerCase() === "makeup"
+    ? "/rodic/omluvenka?kind=makeup"
+    : pathname;
+  const visiblePathname = pathname === "/" ? navItems[0].href : navigationPath;
   const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "vývoj";
   const appCommitSha = process.env.NEXT_PUBLIC_APP_COMMIT_SHA;
   const { signOut } = useAuth();
   const [navigationState, setNavigationState] = useState<NavigationState>({
-    pathname,
+    pathname: navigationPath,
     pendingHref: null,
   });
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -200,11 +211,11 @@ export function AppShell({ children, user }: AppShellProps) {
   const [signOutError, setSignOutError] = useState("");
   const userMenuRef = useRef<HTMLDivElement>(null);
   const pendingHref =
-    navigationState.pathname === pathname ? navigationState.pendingHref : null;
+    navigationState.pathname === navigationPath ? navigationState.pendingHref : null;
   const selectedHref = pendingHref ?? visiblePathname;
 
-  if (navigationState.pathname !== pathname) {
-    setNavigationState({ pathname, pendingHref: null });
+  if (navigationState.pathname !== navigationPath) {
+    setNavigationState({ pathname: navigationPath, pendingHref: null });
   }
 
   useEffect(() => {
@@ -241,8 +252,8 @@ export function AppShell({ children, user }: AppShellProps) {
   };
 
   const startNavigation = (href: string) => {
-    if (href === pathname) return;
-    setNavigationState({ pathname, pendingHref: href });
+    if (href === visiblePathname) return;
+    setNavigationState({ pathname: navigationPath, pendingHref: href });
   };
 
   return (

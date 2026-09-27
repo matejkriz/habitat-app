@@ -213,3 +213,23 @@ describe("getAttendanceCalendarStartMonthKey", () => {
     expect(getAttendanceCalendarStartMonthKey("2026-02-30")).toBeNull();
   });
 });
+
+
+describe("regular attendance schedules", () => {
+  it("does not expect children on their regular day off", () => {
+    const day = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3),
+      children: [{ ...children[0], attendanceDays: [1, 3, 4] }], attendance: [], excuses: [], closedDays: [], noLunchDays: [],
+    }).find((day) => day.dateKey === "2026-08-04")!;
+    expect(day.counts).toMatchObject({ expected: 0, expectedMorning: 0, expectedAfternoon: 0, waiting: 0 });
+    expect(day.children.excused).toEqual([expect.objectContaining({ childId: "ada", reason: "Nechodí" })]);
+  });
+  it("expects an afternoon makeup despite a late submission", () => {
+    const day = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3),
+      children: [{ ...children[0], attendanceDays: [1, 3, 4] }], attendance: [],
+      excuses: [{ ...excuse({ id: "makeup", childId: "ada", fromDate: new Date(2026, 7, 4), toDate: new Date(2026, 7, 4), submittedAt: new Date(2026, 7, 3, 12), dayPart: "AFTERNOON" }), kind: "MAKEUP" }],
+      closedDays: [], noLunchDays: [],
+    }).find((day) => day.dateKey === "2026-08-04")!;
+    expect(day.counts).toMatchObject({ expected: 1, expectedMorning: 0, expectedAfternoon: 1, pending: 0 });
+    expect(day.children.expected[0]).toMatchObject({ childId: "ada", reason: "Náhrada" });
+  });
+});

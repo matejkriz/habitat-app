@@ -6,6 +6,7 @@ type DayPartSelectorProps = {
   readonly onChange: (value: ExcuseDayPartValue) => void;
   readonly name?: string;
   readonly className?: string;
+  readonly label?: string;
 };
 
 const dayPartOptions = [
@@ -34,11 +35,12 @@ export function DayPartSelector({
   onChange,
   name = "dayPart",
   className,
+  label = "Dítě bude chybět",
 }: DayPartSelectorProps) {
   return (
     <fieldset className={cn("min-w-0", className)}>
       <legend className="mb-2 block text-sm font-medium text-charcoal">
-        Dítě bude chybět
+        {label}
       </legend>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {dayPartOptions.map((option, index) => (

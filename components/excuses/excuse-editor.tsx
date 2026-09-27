@@ -3,7 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { DayPartSelector } from "@/components/excuses/day-part-selector";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ExcuseDatePicker } from "@/components/excuses/excuse-date-picker";
+import { getAttendanceDateDisabledReason, type AttendanceSchedule } from "@/lib/attendance-schedule";
 import { Textarea } from "@/components/ui/textarea";
 import type { ExcuseDayPart } from "@/lib/types";
 
@@ -20,6 +21,8 @@ type EditableExcuse = {
   readonly toDate: Date | string;
   readonly dayPart: ExcuseDayPart;
   readonly reason: string | null;
+  readonly kind?: "EXCUSE" | "MAKEUP";
+  readonly child?: AttendanceSchedule;
 };
 
 type ExcuseEditorProps = {
@@ -37,6 +40,7 @@ const toDateInputValue = (value: Date | string): string => {
 };
 
 export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
+  const isMakeup = excuse.kind === "MAKEUP";
   const [isEditing, setIsEditing] = useState(false);
   const [fromDate, setFromDate] = useState(() => toDateInputValue(excuse.fromDate));
   const [toDate, setToDate] = useState(() => toDateInputValue(excuse.toDate));
@@ -70,7 +74,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
 
   const handleDelete = async () => {
     if (pendingAction) return;
-    if (!window.confirm("Opravdu chcete tuto omluvenku smazat?")) {
+    if (!window.confirm(isMakeup ? "Opravdu chcete tuto náhradu smazat?" : "Opravdu chcete tuto omluvenku smazat?")) {
       return;
     }
 
@@ -79,7 +83,7 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
     try {
       await onDelete(excuse.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Omluvenku se nepodařilo smazat.");
+      setError(caught instanceof Error ? caught.message : isMakeup ? "Náhradu se nepodařilo smazat." : "Omluvenku se nepodařilo smazat.");
     } finally {
       setPendingAction(null);
     }
@@ -111,13 +115,13 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
     <form className="mt-4 space-y-4 border-t border-cream-dark pt-4" onSubmit={handleSubmit}>
       {error ? <p className="text-sm text-coral" role="alert">{error}</p> : null}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input
+        <ExcuseDatePicker
           label="Od"
-          type="date"
+          name="fromDate"
           value={fromDate}
           max={toDate}
-          onChange={(event) => {
-            const nextFromDate = event.target.value;
+          getDisabledReason={(date) => getAttendanceDateDisabledReason(excuse.child ?? {}, date, excuse.kind)}
+          onChange={(nextFromDate) => {
             setFromDate(nextFromDate);
             if (nextFromDate && toDate && nextFromDate !== toDate) {
               setDayPart("FULL_DAY");
@@ -125,13 +129,13 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
           }}
           required
         />
-        <Input
+        <ExcuseDatePicker
           label="Do"
-          type="date"
+          name="toDate"
           value={toDate}
           min={fromDate}
-          onChange={(event) => {
-            const nextToDate = event.target.value;
+          getDisabledReason={(date) => getAttendanceDateDisabledReason(excuse.child ?? {}, date, excuse.kind)}
+          onChange={(nextToDate) => {
             setToDate(nextToDate);
             if (fromDate && nextToDate && fromDate !== nextToDate) {
               setDayPart("FULL_DAY");
@@ -144,10 +148,11 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
         <DayPartSelector
           value={dayPart}
           onChange={setDayPart}
+          label={isMakeup ? "Dítě dorazí" : "Dítě bude chybět"}
         />
       ) : null}
       <Textarea
-        label="Důvod"
+        label={isMakeup ? "Poznámka" : "Důvod"}
         value={reason}
         onChange={(event) => setReason(event.target.value)}
         rows={3}

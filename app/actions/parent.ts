@@ -1,5 +1,6 @@
 "use server";
 
+import { getAttendanceDays, getAttendanceDateDisabledReason, getChildDayPlan, hasPartialAttendance, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import type { DaySummary } from "@/lib/day-details";
 import { randomUUID } from "node:crypto";
 import { getDbUser } from "@/lib/auth";
@@ -41,6 +42,7 @@ import {
   ExcuseValidationError,
   parseExcuseDate,
   resolveExcuseChildIds,
+  validateExcuseDates,
 } from "@/lib/excuse-rules";
 import { buildParentCalendarMonth, parseMonth } from "@/lib/parent-calendar";
 import { revalidatePath } from "next/cache";
@@ -50,6 +52,7 @@ type ParentChildWithChild = {
 };
 
 export type ParentVisibleChild = {
+  readonly attendanceDays?: ReadonlyArray<number>;
   readonly id: string;
   readonly firstName: string;
   readonly gender: ChildGender | null;
@@ -57,6 +60,8 @@ export type ParentVisibleChild = {
 };
 
 type ChildTodayStatus = {
+  readonly notScheduled?: boolean;
+  readonly makeup?: boolean;
   readonly date: Date;
   readonly isSchoolDay: boolean;
   readonly isClosed: boolean;
@@ -75,6 +80,8 @@ type AttendanceHistoryItem = {
 };
 
 type ChildExcuseItem = {
+  readonly child: { readonly attendanceDays: ReadonlyArray<number> };
+  readonly kind?: "EXCUSE" | "MAKEUP";
   readonly id: string;
   readonly fromDate: Date;
   readonly toDate: Date;
@@ -107,6 +114,7 @@ export const getParentChildren = async (): Promise<
     firstName: child.firstName,
     gender: child.gender,
     doesNotTakeLunch: child.doesNotTakeLunch,
+    attendanceDays: [...getAttendanceDays(child)],
   }));
 };
 
@@ -143,7 +151,7 @@ export const getChildTodayStatus = async (
     };
   }
 
-  const [attendance, excuses] = await Promise.all([
+  const [attendance, excuses, child] = await Promise.all([
     db.attendance.get({
       where: {
         childId_date: {
@@ -153,12 +161,15 @@ export const getChildTodayStatus = async (
       },
     }) as Promise<Attendance | null>,
     getExcusesOverlapping({ childId, from: today, to: today }),
+    db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
   return {
     date: today,
     isSchoolDay: true,
     isClosed: false,
+    notScheduled: getChildDayPlan(child ?? {}, excuses, today).notScheduled,
+    makeup: getChildDayPlan(child ?? {}, excuses, today).makeup,
     attendance: attendance
       ? {
           presence: attendance.presence,
@@ -198,7 +209,7 @@ export const getChildAttendanceHistory = async (
   startDate.setDate(startDate.getDate() - limit);
   startDate.setHours(0, 0, 0, 0);
 
-  const [attendance, excuses] = await Promise.all([
+  const [attendance, excuses, child] = await Promise.all([
     db.attendance.list({
       where: {
         childId,
@@ -210,6 +221,7 @@ export const getChildAttendanceHistory = async (
       orderBy: { date: "desc" },
     }) as Promise<ReadonlyArray<Attendance>>,
     getExcusesOverlapping({ childId, from: startDate, to: today }),
+    db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
   return attendance.map((a) => {
@@ -219,7 +231,9 @@ export const getChildAttendanceHistory = async (
       id: a.id,
       date: a.date,
       presence: a.presence,
-      excuseStatus: getExcuseStatusForDay(a.presence, coverage),
+      excuseStatus: a.presence === Presence.ABSENT && getChildDayPlan(child ?? {}, excuses, a.date).notScheduled
+        ? ExcuseStatus.EXCUSED
+        : getExcuseStatusForDay(a.presence, coverage),
       excuse: coverage.excuse
         ? { id: coverage.excuse.id, reason: coverage.excuse.reason ?? null }
         : null,
@@ -247,14 +261,18 @@ export const getChildExcuses = async (
     }
   }
 
-  const excuses = (await db.excuses.list({
+  const [excuses, child] = await Promise.all([db.excuses.list({
     where: { childId },
     orderBy: { submittedAt: "desc" },
     take: limit,
-  })) as ReadonlyArray<Excuse>;
+  }) as Promise<ReadonlyArray<Excuse>>, db.children.get({
+    where: { id: childId }, select: { attendanceDays: true },
+  })]);
 
   return excuses.map((e) => ({
     id: e.id,
+    child: { attendanceDays: [...getAttendanceDays(child ?? {})] },
+    kind: e.kind ?? "EXCUSE",
     fromDate: e.fromDate,
     toDate: e.toDate,
     reason: e.reason,
@@ -291,7 +309,7 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     999,
   );
 
-  const [attendance, excuses, closedDays, dayDetails] = await Promise.all([
+  const [attendance, excuses, closedDays, dayDetails, child] = await Promise.all([
     db.attendance.list({
       where: { childId, date: { gte: monthStart, lte: monthEnd } },
     }) as Promise<ReadonlyArray<Attendance>>,
@@ -300,11 +318,13 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
       where: { date: { gte: monthStart, lte: monthEnd } },
     }) as Promise<ReadonlyArray<ClosedDay>>,
     db.dayDetails.list(monthStart, monthEnd) as Promise<DaySummary[]>,
+    db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
   const namesByDate = new Map(dayDetails.map(day => [day.date, day.name]));
   return buildParentCalendarMonth({
     month: monthStart,
+    attendanceDays: child?.attendanceDays,
     attendance,
     excuses,
     closedDays: closedDays.map((day) => day.date),
@@ -317,7 +337,22 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
 /**
  * Submit a new excuse for a child
  */
-export const submitExcuse = async (formData: FormData) => {
+export const submitExcuse = async (formData: FormData) => submitParentRecord(formData, "EXCUSE");
+
+export const submitMakeup = async (formData: FormData) => submitParentRecord(formData, "MAKEUP");
+
+async function submitParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP") {
+  try {
+    return await createParentRecord(formData, kind);
+  } catch (error) {
+    if (error instanceof ExcuseValidationError) {
+      return { success: false as const, error: error.message };
+    }
+    throw error;
+  }
+}
+
+async function createParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP") {
   const user = await getDbUser();
   if (!user || user.role !== UserRole.PARENT) {
     throw new Error("Unauthorized");
@@ -327,13 +362,13 @@ export const submitExcuse = async (formData: FormData) => {
   const toDateStr = formData.get("toDate");
   const reasonValue = formData.get("reason");
   const requestedDayPart = parseExcuseDayPart(formData.get("dayPart"));
-  const cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
+  const cancelLunch = kind === "MAKEUP" ? false : parseCancelLunchChoice(formData.get("cancelLunch"));
 
   if (
     typeof fromDateStr !== "string" ||
     typeof toDateStr !== "string"
   ) {
-    throw new Error("Missing required fields");
+    throw new ExcuseValidationError("Zadejte datum začátku a konce.");
   }
 
   const requestedChildIds = formData
@@ -347,6 +382,10 @@ export const submitExcuse = async (formData: FormData) => {
 
   const fromDate = parseExcuseDate(fromDateStr);
   const toDate = parseExcuseDate(toDateStr);
+  const validation = validateExcuseDates(fromDate, toDate);
+  if (!validation.valid) {
+    throw new ExcuseValidationError(validation.error);
+  }
   const dayPart = getExcuseDayPartForRange(
     requestedDayPart,
     fromDate,
@@ -355,38 +394,62 @@ export const submitExcuse = async (formData: FormData) => {
   const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
   if (!areExcuseEndpointsOpen(fromDate, toDate, schoolDays)) {
-    throw new ExcuseValidationError(CLOSED_EXCUSE_ENDPOINT_ERROR);
+    throw new ExcuseValidationError(kind === "MAKEUP" ? "Začátek i konec náhrady musí být v den, kdy je Habitat otevřený." : CLOSED_EXCUSE_ENDPOINT_ERROR);
   }
 
+  const makeupChildren: Child[] = [];
+  const links = await db.parentLinks.list({ where: { parentId: user.id }, include: { child: true } }) as ParentChildWithChild[];
+  for (const childId of childIds) {
+    const child = links.find(link => link.child.id === childId)?.child;
+    if (!child?.active) throw new ExcuseValidationError("Dítě nebylo nalezeno nebo není aktivní.");
+    if (kind === "MAKEUP") {
+      if (!hasPartialAttendance(child)) {
+        throw new ExcuseValidationError("Náhradu lze zadat pouze dítěti, které nechodí každý den.");
+      }
+      makeupChildren.push(child);
+    }
+    if ([fromDate, toDate].some(day => getAttendanceDateDisabledReason(child, day, kind))) {
+      throw new ExcuseValidationError(kind === "MAKEUP"
+        ? "Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí."
+        : "Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.");
+    }
+  }
   const requestId = formData.get("requestId");
   const excuses = await createParentExcuses({
     parentId: user.id,
     // Compatibility with forms opened before the new version was deployed.
     requestId: typeof requestId === "string" ? requestId : randomUUID(),
     childIds, fromDate, toDate, reason, cancelLunch, dayPart,
+    ...(kind === "MAKEUP" ? { kind } : {}),
   }, schoolDays);
-  const automaticallyApprovedDayCount = excuses.reduce(
-    (count, excuse) =>
-      count + (excuse.lateApprovedAt === null ? 0 : schoolDays.length),
-    0,
-  );
-  const lateDayCount = excuses.reduce(
-    (count, excuse) =>
-      count +
-      (excuse.lateApprovedAt === null ? getLateDays(excuse, schoolDays).length : 0),
-    0,
-  );
-  const schoolDayCount = schoolDays.length * excuses.length;
+  const daysForRecord = (excuse: Excuse) => kind === "MAKEUP"
+    ? schoolDays.filter(day => !isRegularAttendanceDay(makeupChildren.find(child => child.id === excuse.childId)!, day))
+    : schoolDays;
+  const schoolDayCount = excuses.reduce((count, excuse) => count + daysForRecord(excuse).length, 0);
+  const automaticallyApprovedDayCount = excuses.reduce((count, excuse) => {
+    if (kind === "MAKEUP") {
+      const child = makeupChildren.find(child => child.id === excuse.childId);
+      return count + (child?.doesNotTakeLunch || dayPart === "AFTERNOON" ? daysForRecord(excuse).length : 0);
+    }
+    return count + (excuse.lateApprovedAt === null ? 0 : schoolDays.length);
+  }, 0);
+  const lateDayCount = excuses.reduce((count, excuse) => {
+    const child = makeupChildren.find(child => child.id === excuse.childId);
+    if (excuse.lateApprovedAt !== null || (kind === "MAKEUP" && (child?.doesNotTakeLunch || dayPart === "AFTERNOON"))) return count;
+    return count + getLateDays(excuse, daysForRecord(excuse)).length;
+  }, 0);
 
   revalidatePath("/rodic");
   revalidatePath("/rodic/omluvenka");
+  revalidatePath("/reditel/obedy");
+  revalidatePath("/reditel/omluvenky");
   revalidatePath("/kalendar");
   revalidatePath("/ucitel/dochazka");
   revalidatePath("/reditel");
   revalidatePath("/");
 
   return {
-    success: true,
+    success: true as const,
     excuses: excuses.map((excuse) => ({
       id: excuse.id,
       childId: excuse.childId,
@@ -512,7 +575,7 @@ export const getChildStats = async (
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  const [attendance, excuses] = await Promise.all([
+  const [attendance, excuses, child] = await Promise.all([
     db.attendance.list({
       where: {
         childId,
@@ -523,11 +586,12 @@ export const getChildStats = async (
       },
     }) as Promise<ReadonlyArray<Attendance>>,
     getExcusesOverlapping({ childId, from: startOfMonth, to: endOfMonth }),
+    db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
   const absences = attendance
     .filter((a) => a.presence === Presence.ABSENT)
-    .map((a) => getDayCoverage(excuses, a.date).excused);
+    .map((a) => getChildDayPlan(child ?? {}, excuses, a.date).notScheduled || getDayCoverage(excuses, a.date).excused);
   const excused = absences.filter(Boolean).length;
 
   return {
