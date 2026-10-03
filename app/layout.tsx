@@ -28,7 +28,11 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Habitat Docházka",
-    startupImage: IOS_STARTUP_IMAGES,
+    // Preview experiment: reproduce the confirmed working launch-image declaration
+    // on the iPhone 15 Pro while keeping the full application startup unchanged.
+    startupImage: IOS_STARTUP_IMAGES.filter(
+      ({ url }) => url === "/startup/ios/habitat-v1-1179x2556.png",
+    ).map(({ url }) => ({ url })),
   },
   // iOS launch images still require the Apple tag; Next emits only the generic one.
   other: {
