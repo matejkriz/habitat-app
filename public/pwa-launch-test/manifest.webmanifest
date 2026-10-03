@@ -1,0 +1,15 @@
+{
+  "id": "/pwa-launch-test/",
+  "name": "Habitat launch test",
+  "short_name": "Habitat test",
+  "start_url": "/pwa-launch-test/index.html",
+  "scope": "/pwa-launch-test/",
+  "display": "standalone",
+  "background_color": "#FDF8F3",
+  "theme_color": "#186546",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
