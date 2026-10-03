@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Habitat bez podmínky">
+    <meta name="theme-color" content="#186546">
+    <title>Habitat bez podmínky</title>
+    <link rel="manifest" href="/pwa-plain-image-test/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-startup-image" href="/startup/ios/habitat-v1-1179x2556.png">
+    <style>
+      html { background: #186546; color: white; font: 17px/1.5 system-ui, sans-serif; }
+      body { margin: 0; padding: calc(28px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom)); }
+      main { max-width: 520px; margin: auto; }
+      h1 { font-size: 28px; line-height: 1.2; }
+      pre { background: #104730; padding: 16px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.6 ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Habitat bez podmínky</h1>
+      <p>V Safari přidej tuto stránku na plochu jako webovou aplikaci „Habitat bez podmínky“. Potom ji otevři novou ikonou.</p>
+      <p>Startovací obrázek je krémový s logem Habitatu. Tato načtená stránka je zelená. Sleduj, zda se před zelenou stránkou objeví krémový obrázek, nebo bílá obrazovka.</p>
+      <pre id="diagnostics">Načítám údaje…</pre>
+      <p>Údaje zůstávají na tomto zařízení. Test nic neodesílá a nepoužívá přihlášení.</p>
+    </main>
+    <script>
+      const habitatMedia = '(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)';
+      function showDiagnostics() {
+        const navigation = performance.getEntriesByType('navigation')[0];
+        const yesNo = value => value ? 'ano' : 'ne';
+        document.getElementById('diagnostics').textContent = [
+          `Spuštěno z plochy: ${yesNo(navigator.standalone === true || matchMedia('(display-mode: standalone)').matches)}`,
+          `Rozměry obrazovky: ${screen.width} × ${screen.height} CSS px`,
+          `DPR: ${devicePixelRatio}`,
+          `Pravidlo obrázku pro iPhone 15 Pro odpovídá: ${yesNo(matchMedia(habitatMedia).matches)}`,
+          `Service worker řídí stránku: ${yesNo(Boolean(navigator.serviceWorker?.controller))}`,
+          ...(navigation ? [
+            `První byte HTML: ${Math.round(navigation.responseStart)} ms od začátku navigace`,
+            `HTML staženo: ${Math.round(navigation.responseEnd)} ms od začátku navigace`,
+          ] : []),
+          'Časy nezahrnují čekání iOS před začátkem navigace.',
+        ].join('\n');
+      }
+      showDiagnostics();
+      window.addEventListener('load', showDiagnostics);
+      window.addEventListener('pageshow', showDiagnostics);
+    </script>
+  </body>
+</html>

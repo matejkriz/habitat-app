@@ -1,0 +1,23 @@
+{
+  "id": "/pwa-plain-image-test/",
+  "name": "Habitat bez podmínky",
+  "short_name": "Habitat bez podmínky",
+  "start_url": "/pwa-plain-image-test/index.html",
+  "scope": "/pwa-plain-image-test/",
+  "display": "standalone",
+  "background_color": "#FDF8F3",
+  "theme_color": "#186546",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
