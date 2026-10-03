@@ -30,6 +30,10 @@ export const metadata: Metadata = {
     title: "Habitat Docházka",
     startupImage: IOS_STARTUP_IMAGES,
   },
+  // iOS launch images still require the Apple tag; Next emits only the generic one.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
   formatDetection: {
     telephone: false,
   },
