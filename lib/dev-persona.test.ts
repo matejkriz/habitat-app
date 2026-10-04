@@ -16,6 +16,20 @@ const allow = policy.isDevPersonaModeAllowed as (
 ) => boolean;
 
 describe("development persona policy", () => {
+  it("allows this PWA preview only with the existing staging and opt-in gates", () => {
+    const preview = {
+      DEV_PERSONA_SWITCHER: "true",
+      WORKOS_API_KEY: "sk_test_example",
+      VERCEL_TARGET_ENV: "preview",
+      VERCEL_GIT_COMMIT_REF: "fix/pwa-static-launch",
+      NODE_ENV: "production",
+    };
+    expect(allow(preview)).toBe(true);
+    expect(allow({ ...preview, VERCEL_TARGET_ENV: "production" })).toBe(false);
+    expect(allow({ ...preview, WORKOS_API_KEY: "sk_live_example" })).toBe(false);
+    expect(allow({ ...preview, DEV_PERSONA_SWITCHER: undefined })).toBe(false);
+  });
+
   it("allows local development and selected previews with WorkOS staging keys", () => {
     const shared = {
       DEV_PERSONA_SWITCHER: "true",
