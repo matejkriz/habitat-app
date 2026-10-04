@@ -85,13 +85,15 @@ describe("PWA launch screens", () => {
     }
   });
 
-  it("wires the iOS launch images through the Next.js Metadata API", () => {
+  it("selects the iOS launch image before hydration without conditional metadata links", () => {
     const layout = readFileSync(resolve("app/layout.tsx"), "utf8");
 
     expect(layout).toContain(
-      'import { IOS_STARTUP_IMAGES } from "@/app/pwa-startup-images";',
+      'import { IOS_STARTUP_IMAGE_SCRIPT } from "@/app/pwa-startup-images";',
     );
-    expect(layout).toContain("startupImage: IOS_STARTUP_IMAGES");
+    expect(layout).toContain('strategy="beforeInteractive"');
+    expect(layout).toContain("{IOS_STARTUP_IMAGE_SCRIPT}");
+    expect(layout).not.toContain("startupImage:");
   });
 
   it("renders the Habitat wordmark into the launch header", async () => {

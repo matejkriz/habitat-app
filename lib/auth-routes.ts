@@ -4,6 +4,7 @@ export const UNAUTHENTICATED_PATHS = [
   "/sw.js",
   "/offline.html",
   "/api/version",
+  "/pwa-launch-check",
   "/login",
   "/callback",
   "/api/webhooks/:path*",

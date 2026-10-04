@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Nunito, Geist_Mono } from "next/font/google";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
-import { IOS_STARTUP_IMAGES } from "@/app/pwa-startup-images";
+import { IOS_STARTUP_IMAGE_SCRIPT } from "@/app/pwa-startup-images";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import "./globals.css";
 
@@ -28,7 +29,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Habitat Docházka",
-    startupImage: IOS_STARTUP_IMAGES,
   },
   // iOS launch images still require the Apple tag; Next emits only the generic one.
   other: {
@@ -55,6 +55,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="cs" style={{ backgroundColor: "#FDF8F3" }}>
+      <Script id="habitat-ios-startup-selection" strategy="beforeInteractive">
+        {IOS_STARTUP_IMAGE_SCRIPT}
+      </Script>
       <body
         style={{ backgroundColor: "#FDF8F3" }}
         className={`${nunito.variable} ${geistMono.variable} antialiased min-h-screen bg-cream`}

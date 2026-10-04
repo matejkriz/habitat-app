@@ -65,3 +65,18 @@ export const IOS_STARTUP_IMAGES = [
       "(device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)",
   },
 ] satisfies Array<{ url: string; media: string }>;
+
+// Safari can match these queries in JS but ignore them on startup-image links.
+// Select the asset ourselves and give the home-screen installer one plain link.
+export const IOS_STARTUP_IMAGE_SCRIPT = `(() => {
+  const images = ${JSON.stringify(IOS_STARTUP_IMAGES)};
+  const image = images.find(({ media }) => window.matchMedia(media).matches);
+  if (!image) return;
+  const id = "habitat-ios-startup-image";
+  const link = document.getElementById(id) || document.createElement("link");
+  link.id = id;
+  link.rel = "apple-touch-startup-image";
+  link.setAttribute("href", image.url);
+  link.removeAttribute("media");
+  if (!link.isConnected) document.head.appendChild(link);
+})();`;
