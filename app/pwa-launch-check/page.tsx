@@ -1,16 +1,24 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { LaunchDiagnostics } from "./diagnostics";
 
 // This route belongs only to the diagnostic preview branch.
 export const metadata: Metadata = {
-  title: "Habitat výběr JS",
+  title: "Habitat výběr HTML",
   manifest: "/pwa-launch-check.webmanifest",
   robots: { index: false, follow: false },
   appleWebApp: {
     capable: true,
-    title: "Habitat výběr JS",
+    title: "Habitat výběr HTML",
     statusBarStyle: "default",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  colorScheme: "dark",
+  themeColor: "#186546",
 };
 
 export default function LaunchCheckPage() {
@@ -23,9 +31,10 @@ export default function LaunchCheckPage() {
         padding: "calc(28px + env(safe-area-inset-top)) 24px 28px",
       }}
     >
-      <h1 className="text-2xl font-bold">Habitat — automatický výběr obrázku</h1>
+      <style>{"html, body { background: #186546 !important; }"}</style>
+      <h1 className="text-2xl font-bold">Habitat — obrázek v původním HTML</h1>
       <p className="my-6">
-        Přidej tuto stránku v Safari na plochu jako „Habitat výběr JS“.
+        Přidej tuto stránku v Safari na plochu jako „Habitat výběr HTML“.
         Po otevření nové ikony by se před zelenou stránkou měl objevit
         krémový obrázek s logem Habitatu.
       </p>

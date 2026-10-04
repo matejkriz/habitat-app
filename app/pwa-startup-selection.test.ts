@@ -1,43 +1,55 @@
 import { Window } from "happy-dom";
-import { describe, expect, it } from "vitest";
-import { IOS_STARTUP_IMAGE_SCRIPT, IOS_STARTUP_IMAGES } from "./pwa-startup-images";
+import { describe, expect, it, vi } from "vitest";
+import {
+  getIosStartupImage,
+  IOS_STARTUP_IMAGE_SCRIPT,
+  IOS_STARTUP_IMAGES,
+  IOS_STARTUP_PROFILE_COOKIE,
+} from "./pwa-startup-images";
 
-function runSelection(window: Window, matchingUrl?: string) {
+function createBrowser(matchingProfile?: string) {
+  const window = new Window({ url: "https://habitat.example/" });
   window.matchMedia = ((media: string) => ({
     matches: IOS_STARTUP_IMAGES.some(
-      (image) => image.url === matchingUrl && image.media === media,
+      (image) => image.url === getIosStartupImage(matchingProfile)?.url && image.media === media,
     ),
   })) as typeof window.matchMedia;
-  window.eval(IOS_STARTUP_IMAGE_SCRIPT);
+  const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+  return { window, reload };
 }
 
 describe("iOS launch image selection", () => {
-  it.each([
-    "/startup/ios/habitat-v1-1179x2556.png",
-    "/startup/ios/habitat-v1-1170x2532.png",
-    "/startup/ios/habitat-v1-750x1334.png",
-  ])("installs one unconditional link for %s", (url) => {
-    const window = new Window();
-    runSelection(window, url);
-    const links = window.document.head.querySelectorAll(
-      'link[rel="apple-touch-startup-image"]',
-    );
-    expect(links).toHaveLength(1);
-    expect(links[0].getAttribute("href")).toBe(url);
-    expect(links[0].hasAttribute("media")).toBe(false);
+  it.each(["1179x2556", "1170x2532", "750x1334"])(
+    "persists profile %s and reloads once for server HTML", (profile) => {
+      const { window, reload } = createBrowser(profile);
+      window.eval(IOS_STARTUP_IMAGE_SCRIPT);
+      expect(window.document.cookie).toContain(`${IOS_STARTUP_PROFILE_COOKIE}=${profile}`);
+      expect(reload).toHaveBeenCalledTimes(1);
+      window.eval(IOS_STARTUP_IMAGE_SCRIPT);
+      expect(reload).toHaveBeenCalledTimes(1);
+      // The installer needs the link from the server, not a DOM mutation.
+      expect(window.document.head.querySelector('link[rel="apple-touch-startup-image"]')).toBeNull();
+      expect(getIosStartupImage(profile)?.url).toBe(`/startup/ios/habitat-v1-${profile}.png`);
+    },
+  );
+
+  it("does not reload an unknown device", () => {
+    const { window, reload } = createBrowser();
+    window.eval(IOS_STARTUP_IMAGE_SCRIPT);
+    expect(window.document.cookie).toBe("");
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it("does not declare an image with the wrong dimensions for an unknown device", () => {
-    const window = new Window();
-    runSelection(window);
-    expect(window.document.head.querySelector('link[rel="apple-touch-startup-image"]')).toBeNull();
+  it("does not create a reload loop when cookies cannot be stored", () => {
+    const { window, reload } = createBrowser("1179x2556");
+    vi.spyOn(window.document, "cookie", "set").mockImplementation(() => {});
+    window.eval(IOS_STARTUP_IMAGE_SCRIPT);
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it("does not duplicate the link when selection runs again", () => {
-    const window = new Window();
-    const url = "/startup/ios/habitat-v1-1179x2556.png";
-    runSelection(window, url);
-    runSelection(window, url);
-    expect(window.document.head.querySelectorAll('link[rel="apple-touch-startup-image"]')).toHaveLength(1);
-  });
+  it.each([undefined, "1x1", "https://other.example/image.png", "../1179x2556"])(
+    "ignores unsupported cookie profile %s", (profile) => {
+      expect(getIosStartupImage(profile)).toBeUndefined();
+    },
+  );
 });

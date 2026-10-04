@@ -1,7 +1,7 @@
 {
   "id": "/pwa-launch-check",
-  "name": "Habitat výběr JS",
-  "short_name": "Habitat výběr JS",
+  "name": "Habitat výběr HTML",
+  "short_name": "Habitat výběr HTML",
   "start_url": "/pwa-launch-check",
   "scope": "/pwa-launch-check",
   "display": "standalone",

@@ -85,12 +85,11 @@ describe("PWA launch screens", () => {
     }
   });
 
-  it("selects the iOS launch image before hydration without conditional metadata links", () => {
+  it("renders the selected launch image in server HTML and remembers the device before hydration", () => {
     const layout = readFileSync(resolve("app/layout.tsx"), "utf8");
 
-    expect(layout).toContain(
-      'import { IOS_STARTUP_IMAGE_SCRIPT } from "@/app/pwa-startup-images";',
-    );
+    expect(layout).toContain("getIosStartupImage(");
+    expect(layout).toContain('<link rel="apple-touch-startup-image" href={startupImage.url} />');
     expect(layout).toContain('strategy="beforeInteractive"');
     expect(layout).toContain("{IOS_STARTUP_IMAGE_SCRIPT}");
     expect(layout).not.toContain("startupImage:");

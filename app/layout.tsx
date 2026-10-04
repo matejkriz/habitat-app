@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { cookies } from "next/headers";
 import { Nunito, Geist_Mono } from "next/font/google";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
-import { IOS_STARTUP_IMAGE_SCRIPT } from "@/app/pwa-startup-images";
+import { getIosStartupImage, IOS_STARTUP_IMAGE_SCRIPT, IOS_STARTUP_PROFILE_COOKIE } from "@/app/pwa-startup-images";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import "./globals.css";
 
@@ -48,13 +49,22 @@ export const viewport: Viewport = {
   themeColor: "#D4A84B",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const startupImage = getIosStartupImage(
+    cookieStore.get(IOS_STARTUP_PROFILE_COOKIE)?.value,
+  );
   return (
     <html lang="cs" style={{ backgroundColor: "#FDF8F3" }}>
+      <head>
+        {startupImage && (
+          <link rel="apple-touch-startup-image" href={startupImage.url} />
+        )}
+      </head>
       <Script id="habitat-ios-startup-selection" strategy="beforeInteractive">
         {IOS_STARTUP_IMAGE_SCRIPT}
       </Script>

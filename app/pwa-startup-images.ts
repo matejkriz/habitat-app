@@ -66,17 +66,24 @@ export const IOS_STARTUP_IMAGES = [
   },
 ] satisfies Array<{ url: string; media: string }>;
 
-// Safari can match these queries in JS but ignore them on startup-image links.
-// Select the asset ourselves and give the home-screen installer one plain link.
+export const IOS_STARTUP_PROFILE_COOKIE = "habitat-startup-size";
+
+export function getIosStartupImage(profile?: string) {
+  return IOS_STARTUP_IMAGES.find(
+    ({ url }) => url === `/startup/ios/habitat-v1-${profile}.png`,
+  );
+}
+
+// The home-screen installer needs the unconditional link in server-rendered HTML.
+// Persist the supported screen profile, then reload once so the server can emit it.
 export const IOS_STARTUP_IMAGE_SCRIPT = `(() => {
   const images = ${JSON.stringify(IOS_STARTUP_IMAGES)};
   const image = images.find(({ media }) => window.matchMedia(media).matches);
   if (!image) return;
-  const id = "habitat-ios-startup-image";
-  const link = document.getElementById(id) || document.createElement("link");
-  link.id = id;
-  link.rel = "apple-touch-startup-image";
-  link.setAttribute("href", image.url);
-  link.removeAttribute("media");
-  if (!link.isConnected) document.head.appendChild(link);
+  const profile = image.url.match(/(\\d+x\\d+)\\.png$/)[1];
+  const cookie = "${IOS_STARTUP_PROFILE_COOKIE}=" + profile;
+  const hasProfile = () => document.cookie.split(";").some(part => part.trim() === cookie);
+  if (hasProfile()) return;
+  document.cookie = cookie + "; Path=/; Max-Age=31536000; SameSite=Lax; Secure";
+  if (hasProfile()) window.location.reload();
 })();`;
