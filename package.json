@@ -8,6 +8,7 @@
     "build": "next build --webpack",
     "build:vercel": "if [ -n \"$CONVEX_DEPLOY_KEY\" ]; then convex deploy --cmd 'pnpm build' --cmd-url-env-var-name CONVEX_URL; else pnpm build; fi",
     "generate:pwa-startup": "node scripts/generate-ios-startup-images.mjs",
+    "generate:pwa-launch": "node scripts/generate-pwa-launch.mjs",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

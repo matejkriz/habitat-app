@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 const ORIGIN = "https://habitat.example";
-const PUBLIC_CACHE = "habitat-public-v1";
+const PUBLIC_CACHE = "habitat-public-v2";
 const STATIC_CACHE = "habitat-static-v1";
 const PRECACHE_URLS = [
   "/offline.html",
+  "/launch.html",
   "/habitat-logo.webp",
   "/manifest.json",
   "/icons/icon-192x192.png",
@@ -147,6 +148,30 @@ function request(
 }
 
 describe("service worker cache policy", () => {
+  it("serves launch navigations from cache before the generic navigation handler", async () => {
+    const runtime = createRuntime();
+    const cache = await runtime.cacheStorage.open(PUBLIC_CACHE);
+    await cache.put("/launch.html", new Response("public launch shell"));
+    runtime.network.mockRejectedValue(new Error("server unavailable"));
+
+    const response = runtime.dispatchFetch(
+      request("/launch.html?measure=1", { mode: "navigate" }),
+    );
+    await expect(response?.then((value) => value.text())).resolves.toBe(
+      "public launch shell",
+    );
+    expect(runtime.network).not.toHaveBeenCalled();
+  });
+
+  it("fetches the public launch document when its cache is empty", async () => {
+    const runtime = createRuntime();
+    runtime.network.mockResolvedValueOnce(new Response("fresh launch shell"));
+
+    const response = runtime.dispatchFetch(request("/launch.html", { mode: "navigate" }));
+    await expect(response?.then((value) => value.text())).resolves.toBe("fresh launch shell");
+    expect(await runtime.stores.get(PUBLIC_CACHE)?.match("/launch.html")).toBeDefined();
+  });
+
   it("precaches only the explicit public shell", async () => {
     const runtime = createRuntime();
 

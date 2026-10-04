@@ -1,12 +1,14 @@
 "use strict";
 
-const PUBLIC_CACHE_NAME = "habitat-public-v1";
+const PUBLIC_CACHE_NAME = "habitat-public-v2";
 const STATIC_CACHE_NAME = "habitat-static-v1";
 const OFFLINE_URL = "/offline.html";
+const LAUNCH_URL = "/launch.html";
 const NEXT_STATIC_PREFIX = "/_next/static/";
 const MAX_STATIC_ENTRIES = 128;
 const PUBLIC_ASSETS = [
   OFFLINE_URL,
+  LAUNCH_URL,
   "/habitat-logo.webp",
   "/manifest.json",
   "/icons/icon-192x192.png",
@@ -162,6 +164,12 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
+    if (url.pathname === LAUNCH_URL) {
+      event.respondWith(
+        handlePublicAsset(request, url).catch(() => handleNavigation(event)),
+      );
+      return;
+    }
     event.respondWith(handleNavigation(event));
     return;
   }
