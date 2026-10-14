@@ -63,4 +63,28 @@ describe("parent read-only overviews", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Zavřít" }));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+
+  it("shows daily, monthly and money totals for a parent with multiple children", async () => {
+    mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 6550,
+      days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }, { key: "2026-09-11", day: 11, weekday: "Pá" }], children: [
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present", "excused"], payableLunches: 1 },
+        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["kept", "late"], payableLunches: 2 },
+      ], childrenWithoutLunch: [],
+    });
+    render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-08" }));
+    const row = screen.getByRole("rowheader", { name: "Součet" }).closest("tr")!;
+    expect(within(row).getAllByRole("cell").map(cell => cell.textContent?.replaceAll(/\s/g, " "))).toEqual(["2", "1", "3", "196,50 Kč"]);
+    expect(screen.queryByLabelText("Cena jednoho obědu (Kč)")).toBeNull();
+  });
+
+  it("keeps the family total when one of the parent's children does not take lunches", async () => {
+    mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
+      days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1 },
+      ], childrenWithoutLunch: [{ id: "jan", firstName: "Jan", lastName: "Malý" }],
+    });
+    render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));
+    const row = screen.getByRole("rowheader", { name: "Součet" }).closest("tr")!;
+    expect(within(row).getAllByRole("cell").map(cell => cell.textContent?.replaceAll(/\s/g, " "))).toEqual(["1", "1", "55 Kč"]);
+  });
 });

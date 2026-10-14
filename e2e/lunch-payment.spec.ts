@@ -28,6 +28,9 @@ test("parent payment totals siblings and its branded QR and clipboard contain th
   expect(counts).toHaveLength(2);
   expect(counts.every(count => count > 0)).toBe(true);
   const amount = counts.reduce((total, count) => total + count, 0) * 55;
+  const totalRow = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Součet", exact: true }) });
+  await expect(totalRow.getByRole("cell").nth(-2)).toHaveText(String(counts.reduce((total, count) => total + count, 0)));
+  await expect(totalRow.getByRole("cell").last()).toHaveText(money(amount));
   const trigger = page.getByRole("button", { name: `Platba ${monthName}` });
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: `Platba ${monthName}` });

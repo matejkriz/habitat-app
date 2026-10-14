@@ -131,12 +131,17 @@ describe("LunchOverviewSection", () => {
     expect(within(eva).getByText(/131\s*Kč/)).toBeTruthy();
   });
 
-  it("shows amounts to parents without a price editor or totals row", () => {
-    render(<LunchOverviewView overview={lunchOverview()} basePath="/rodic" />);
+  it("shows amounts to a parent with one child without a price editor or totals row", () => {
+    render(<LunchOverviewView overview={{ ...lunchOverview(), childrenWithoutLunch: [] }} basePath="/rodic" />);
     expect(screen.getByRole("columnheader", { name: "K úhradě" })).toBeTruthy();
     expect(within(screen.getByRole("table")).getByText(/55\s*KČ/i)).toBeTruthy();
     expect(screen.queryByLabelText("Cena jednoho obědu (Kč)")).toBeNull();
     expect(screen.queryByRole("rowheader", { name: "Součet" })).toBeNull();
+  });
+
+  it("keeps the director total visible even with only one child", () => {
+    render(<LunchOverviewView overview={{ ...lunchOverview(), childrenWithoutLunch: [] }} showDirectorControls />);
+    expect(screen.getByRole("rowheader", { name: "Součet" })).toBeTruthy();
   });
 
   it("saves the selected month's price with pending and success feedback", async () => {
