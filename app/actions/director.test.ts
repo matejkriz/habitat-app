@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getDbUser: vi.fn(),
+  lunchPriceGet: vi.fn(),
+  lunchPriceSet: vi.fn(),
   tripFundOverview: vi.fn(),
   createExtraPerson: vi.fn(), updateExtraPerson: vi.fn(), setExtraExpense: vi.fn(),
   childrenList: vi.fn(),
@@ -23,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
 vi.mock("@/lib/db", () => ({
   db: {
+    lunchPrice: { get: mocks.lunchPriceGet, set: mocks.lunchPriceSet },
     tripFunds: { overview: mocks.tripFundOverview, createExtraPerson: mocks.createExtraPerson, updateExtraPerson: mocks.updateExtraPerson, setExtraExpense: mocks.setExtraExpense },
     children: {
       list: mocks.childrenList,
@@ -60,6 +63,7 @@ import {
   getExcuseChildren,
   getExcuses,
   getLunchOverview,
+  updateLunchPrice,
   getTripFundOverview,
   updateChild,
   updateExcuse,
@@ -115,6 +119,12 @@ describe("getLunchOverview", () => {
       { id: "a-20", childId: "tobias", date: AUG(20), presence: "ABSENT" },
     ]);
     mocks.noLunchDaysList.mockResolvedValue([]);
+    mocks.lunchPriceGet.mockResolvedValue(6550);
+  });
+
+  it("includes the saved monthly price in the director overview", async () => {
+    mocks.excusesList.mockResolvedValue([]);
+    expect((await getLunchOverview("2026-08")).priceCents).toBe(6550);
   });
 
   it("does not bill a regular day off even with recorded presence", async () => {
@@ -729,5 +739,37 @@ describe("attendance schedule reporting", () => {
     const csv = await exportAttendanceCSV("2026-08-01", "2026-08-31");
     expect(csv).toContain('"19. 8. 2026";"Tobiáš";"Tornádo";"Nepřítomen";"Neomluveno";""');
     expect(csv).toContain('"20. 8. 2026";"Tobiáš";"Tornádo";"Nepřítomen";"Omluveno";"Nechodí"');
+  });
+});
+
+
+describe("updateLunchPrice", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
+  });
+
+  it("saves the selected month's price and refreshes both overviews", async () => {
+    await updateLunchPrice("2026-10", "65,50");
+    expect(mocks.lunchPriceSet).toHaveBeenCalledWith("2026-10", 6550, "director-1");
+    const { revalidatePath } = await import("next/cache");
+    expect(revalidatePath).toHaveBeenCalledWith("/reditel");
+    expect(revalidatePath).toHaveBeenCalledWith("/rodic");
+  });
+
+  it.each([null, { role: "PARENT" }, { role: "TEACHER" }])("rejects non-directors (%j)", async user => {
+    mocks.getDbUser.mockResolvedValue(user);
+    await expect(updateLunchPrice("2026-10", "55")).rejects.toThrow("Unauthorized");
+    expect(mocks.lunchPriceSet).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "-1", "55.001", "1e3"])("rejects invalid prices (%s) before writing", async price => {
+    await expect(updateLunchPrice("2026-10", price)).rejects.toThrow();
+    expect(mocks.lunchPriceSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid months before writing", async () => {
+    await expect(updateLunchPrice("2026-13", "55")).rejects.toThrow("Neplatný měsíc");
+    expect(mocks.lunchPriceSet).not.toHaveBeenCalled();
   });
 });

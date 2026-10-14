@@ -17,6 +17,13 @@ const excuseStatus = v.union(
 const auditAction = v.union(v.literal("CREATE"), v.literal("UPDATE"), v.literal("DELETE"));
 
 export default defineSchema({
+  lunchSettings: defineTable({
+    month: v.string(),
+    priceCents: v.number(),
+    updatedById: v.string(),
+    updatedAt: v.number(),
+  }).index("by_month", { fields: ["month"] }),
+
   users: defineTable({
     id: v.string(),
     workosId: v.optional(v.string()),

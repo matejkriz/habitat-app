@@ -3,7 +3,9 @@ import { NavigationFeedback } from "@/components/ui/navigation-feedback";
 import type { LunchOverview } from "@/lib/lunch-overview";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { LunchStatus, type LunchStatus as LunchStatusValue } from "@/lib/lunches";
+import { isPayableLunch, LunchStatus, type LunchStatus as LunchStatusValue } from "@/lib/lunches";
+import { formatLunchAmount } from "@/lib/lunch-price";
+import { LunchPriceEditor } from "./lunch-price-editor";
 
 const statusStyles: Record<LunchStatusValue, string> = {
   [LunchStatus.NOT_SCHEDULED]: "bg-[#a9c9dc]",
@@ -50,10 +52,14 @@ function adjacentMonth(month: string, offset: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function LunchOverviewView({ overview, basePath = "/reditel", monthParam = "month", extraParams = {} }: {
-  overview: LunchOverview; basePath?: string; monthParam?: string; extraParams?: Record<string, string>;
+export function LunchOverviewView({ overview, basePath = "/reditel", monthParam = "month", extraParams = {}, showDirectorControls = false }: {
+  overview: LunchOverview; basePath?: string; monthParam?: string; extraParams?: Record<string, string>; showDirectorControls?: boolean;
 }) {
   const month = overview.month;
+  const dailyTotals = showDirectorControls ? overview.days.map((_, index) =>
+    overview.children.reduce((total, child) => total + Number(isPayableLunch(child.statuses[index])), 0),
+  ) : [];
+  const payableTotal = overview.children.reduce((total, child) => total + child.payableLunches, 0);
   const monthHref = (value: string) => {
     const params = new URLSearchParams(extraParams);
     params.set(monthParam, value);
@@ -100,12 +106,17 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
         </div>
       </div>
 
+      {showDirectorControls && (
+        <LunchPriceEditor key={month} month={month} priceCents={overview.priceCents} />
+      )}
+
       <Card className="overflow-hidden p-0 ring-1 ring-charcoal/5">
         <div className="border-b border-cream-dark bg-[#fdfaf6] px-5 py-4">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-charcoal">{monthLabel}</h3>
               <p className="text-sm text-charcoal-light">Volné dny a dny bez oběda jsou automaticky vynechané</p>
+              <p className="mt-1 text-sm text-charcoal-light">Cena oběda: {formatLunchAmount(1, overview.priceCents)}</p>
             </div>
             {month !== currentMonth() && (
               <Link
@@ -150,8 +161,11 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                       </span>
                     </th>
                   ))}
-                  <th className="sticky right-0 top-0 z-30 min-w-16 border-b border-l border-cream-dark bg-[#f8f1e7] px-1.5 py-2 text-center font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:min-w-24 md:px-3">
+                  <th scope="col" className="sticky top-0 z-20 min-w-16 border-b border-l border-cream-dark bg-[#f8f1e7] px-1.5 py-2 text-center font-bold leading-tight text-charcoal md:min-w-24 md:px-3">
                     Celkem
+                  </th>
+                  <th scope="col" className="sticky right-0 top-0 z-30 min-w-28 border-b border-l border-cream-dark bg-[#f8f1e7] px-3 py-2 text-right font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]">
+                    K úhradě
                   </th>
                 </tr>
               </thead>
@@ -197,7 +211,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                     })}
                     <td
                       className={cn(
-                        "sticky right-0 z-10 border-b border-l border-cream-dark px-1.5 py-2 text-center shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:px-3",
+                        "border-b border-l border-cream-dark px-1.5 py-2 text-center md:px-3",
                         rowIndex % 2 === 0 ? "bg-[#fcf7ef]" : "bg-[#f8f1e7]",
                       )}
                     >
@@ -205,9 +219,35 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                         {child.payableLunches}
                       </span>
                     </td>
+                    <td className={cn(
+                      "sticky right-0 z-10 whitespace-nowrap border-b border-l border-cream-dark px-3 py-2 text-right font-bold tabular-nums text-gold-dark shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]",
+                      rowIndex % 2 === 0 ? "bg-[#fcf7ef]" : "bg-[#f8f1e7]",
+                    )}>
+                      {formatLunchAmount(child.payableLunches, overview.priceCents)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
+              {showDirectorControls && (
+                <tfoot>
+                  <tr className="font-bold tabular-nums text-charcoal">
+                    <th scope="row" className="border-r border-t-2 border-cream-dark bg-[#f8f1e7] px-4 py-3 text-left md:sticky md:left-0 md:z-10">
+                      Součet
+                    </th>
+                    {dailyTotals.map((total, index) => (
+                      <td key={overview.days[index].key} className="border-r border-t-2 border-cream-dark bg-[#f8f1e7] px-1 py-3 text-center">
+                        {total}
+                      </td>
+                    ))}
+                    <td className="border-l border-t-2 border-cream-dark bg-[#f8f1e7] px-1.5 py-3 text-center md:px-3">
+                      {payableTotal}
+                    </td>
+                    <td className="sticky right-0 z-10 whitespace-nowrap border-l border-t-2 border-cream-dark bg-[#f8f1e7] px-3 py-3 text-right text-gold-dark shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]">
+                      {formatLunchAmount(payableTotal, overview.priceCents)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

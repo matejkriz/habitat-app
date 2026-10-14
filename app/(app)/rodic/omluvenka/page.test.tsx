@@ -75,9 +75,11 @@ describe("NewExcusePage", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.useRealTimers();
   });
 
   it.each([false, true])("filters date endpoints by the child's schedule (makeup=%s)", async (makeup) => {
+    vi.setSystemTime(new Date(2026, 8, 1, 10));
     mocks.searchParams = `child=child-1&date=2026-09-09${makeup ? "&kind=makeup" : ""}`;
     mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 3] }]);
     render(<NewExcusePage />);
@@ -94,6 +96,7 @@ describe("NewExcusePage", () => {
   });
 
   it("keeps only dates valid for all selected children", async () => {
+    vi.setSystemTime(new Date(2026, 8, 1, 10));
     mocks.searchParams = "child=child-1&date=2026-09-09";
     mocks.getParentChildren.mockResolvedValueOnce([
       { ...children[0], attendanceDays: [1, 3] },
@@ -118,6 +121,7 @@ describe("NewExcusePage", () => {
   });
 
   it("blocks all days until a child is selected", async () => {
+    vi.setSystemTime(new Date(2026, 8, 1, 10));
     mocks.searchParams = "child=child-1&date=2026-09-09";
     render(<NewExcusePage />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "Anna" }));

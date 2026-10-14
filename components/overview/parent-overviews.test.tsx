@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ParentLunchSection, ParentTripFundSection } from "./parent-overviews";
 const mocks = vi.hoisted(() => ({ lunch: vi.fn(), fund: vi.fn() }));
 vi.mock("@/app/actions/parent-overviews", () => ({ getParentLunchOverview: mocks.lunch, getParentTripFundOverview: mocks.fund }));
+vi.mock("@/app/actions/director", () => ({ updateLunchPrice: vi.fn() }));
 
 describe("parent read-only overviews", () => {
   it("shows fund values without edit buttons, inputs, or staff-only day links", async () => {
@@ -19,7 +20,7 @@ describe("parent read-only overviews", () => {
   });
 
   it("shows lunches with month navigation that stays on the parent overview and retains the selected child", async () => {
-    mocks.lunch.mockResolvedValue({ month: "2026-08", monthLabel: "srpen 2026", days: [{ key: "2026-08-19", day: 19, weekday: "St" }], children: [
+    mocks.lunch.mockResolvedValue({ month: "2026-08", monthLabel: "srpen 2026", priceCents: 5500, days: [{ key: "2026-08-19", day: 19, weekday: "St" }], children: [
       { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1 },
     ], childrenWithoutLunch: [] });
     render(await ParentLunchSection({ month: "2026-08", childId: "anna", calendarMonth: "2026-09" }));
@@ -31,6 +32,9 @@ describe("parent read-only overviews", () => {
     expect(url.hash).toBe("#obedy");
     expect(mocks.lunch).toHaveBeenCalledWith("2026-08");
     expect(within(screen.getByRole("table")).queryByRole("button")).toBeNull();
+    expect(within(screen.getByRole("table")).getByRole("cell", { name: /55\s*Kč/ })).toBeTruthy();
+    expect(screen.queryByRole("rowheader", { name: "Součet" })).toBeNull();
+    expect(screen.queryByLabelText("Cena jednoho obědu (Kč)")).toBeNull();
     expect(screen.queryByRole("spinbutton")).toBeNull();
   });
 });

@@ -440,6 +440,13 @@ const applyUserSelect = (user: User, select?: Record<string, unknown>) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const db: any = {
+  lunchPrice: {
+    get: async (month: string): Promise<number> =>
+      await convexQuery(api.db.getLunchPrice, { secret: getServerSecret(), month }),
+    set: async (month: string, priceCents: number, recordedById: string): Promise<void> => {
+      await convexMutation(api.db.setLunchPrice, { secret: getServerSecret(), month, priceCents, recordedById });
+    },
+  },
   users: {
     get: async (args: GetArgs) => {
       const where = args.where;

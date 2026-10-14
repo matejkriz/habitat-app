@@ -17,6 +17,7 @@ type LunchChildWithParentsRow = Child & {
 export type LunchOverview = {
   readonly month: string;
   readonly monthLabel: string;
+  readonly priceCents: number;
   readonly days: ReadonlyArray<{
     readonly key: string;
     readonly day: number;
@@ -56,7 +57,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
   const startOfMonth = new Date(year, monthIndex, 1);
   const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [schoolDays, children, attendance, excuses, noLunchDays] = await Promise.all([
+  const [schoolDays, children, attendance, excuses, noLunchDays, priceCents] = await Promise.all([
     getSchoolDaysInRange(startOfMonth, endOfMonth),
     (parentId === undefined ? db.children.list({
       where: { active: true },
@@ -84,6 +85,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
     db.noLunchDays.list({
       where: { date: { gte: startOfMonth, lte: endOfMonth } },
     }) as Promise<ReadonlyArray<NoLunchDay>>,
+    db.lunchPrice.get(month) as Promise<number>,
   ]);
 
   const excusesByChild = groupExcusesByChild(excuses);
@@ -115,6 +117,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
 
   return {
     month,
+    priceCents,
     monthLabel: new Intl.DateTimeFormat("cs-CZ", {
       month: "long",
       year: "numeric",
