@@ -56,7 +56,8 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
   overview: LunchOverview; basePath?: string; monthParam?: string; extraParams?: Record<string, string>; showDirectorControls?: boolean;
 }) {
   const month = overview.month;
-  const dailyTotals = showDirectorControls ? overview.days.map((_, index) =>
+  const showTotals = showDirectorControls || overview.children.length + overview.childrenWithoutLunch.length > 1;
+  const dailyTotals = showTotals ? overview.days.map((_, index) =>
     overview.children.reduce((total, child) => total + Number(isPayableLunch(child.statuses[index])), 0),
   ) : [];
   const payableTotal = overview.children.reduce((total, child) => total + child.payableLunches, 0);
@@ -228,7 +229,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                   </tr>
                 ))}
               </tbody>
-              {showDirectorControls && (
+              {showTotals && (
                 <tfoot>
                   <tr className="font-bold tabular-nums text-charcoal">
                     <th scope="row" className="border-r border-t-2 border-cream-dark bg-[#f8f1e7] px-4 py-3 text-left md:sticky md:left-0 md:z-10">

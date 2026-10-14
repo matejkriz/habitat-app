@@ -72,5 +72,9 @@ test("monthly lunch pricing persists, carries forward, and reaches the parent ov
   const parentRow = parentTable.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Oskar Okurka", exact: true }) });
   await expect(parentRow.getByRole("cell").last()).toHaveText(money(count * 65.5));
   await expect(price).toHaveCount(0);
-  await expect(parentTable.getByRole("rowheader", { name: "Součet" })).toHaveCount(0);
+  const parentCounts = await parentTable.locator("tbody tr").evaluateAll(rows => rows.map(row => Number(row.querySelector("td:nth-last-child(2)")?.textContent)));
+  const parentTotal = parentCounts.reduce((total, count) => total + count, 0);
+  const parentFooter = parentTable.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Součet", exact: true }) });
+  await expect(parentFooter.getByRole("cell").nth(-2)).toHaveText(String(parentTotal));
+  await expect(parentFooter.getByRole("cell").last()).toHaveText(money(parentTotal * 65.5));
 });
