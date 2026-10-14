@@ -22,46 +22,42 @@ function billingOverview(month: string, paid = false, payableLunches = 2) {
 }
 
 describe("parent read-only overviews", () => {
-  it("keeps the current overview but opens the previous month's unpaid payment directly", async () => {
+  it("shows only the retrospective payment explanation for an unfinished month", async () => {
     mocks.lunch.mockImplementation(async month => ({ ...billingOverview(month), priceCents: month === "2026-09" ? 6550 : 5500 }));
     render(await ParentLunchSection({ month: "2026-10", childId: "anna", calendarMonth: "2026-10" }));
     expect(screen.getByRole("table", { name: "Obědy – Říjen 2026" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Platba říjen" })).toBeNull();
-    expect(screen.getByText("Obědy za říjen 2026 se platí až po posledním otevřeném dni měsíce.")).toBeTruthy();
-    expect(mocks.lunch).toHaveBeenCalledWith("2026-09");
-    fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("Obědy září: Anna Malá")).toBeTruthy();
-    expect(within(dialog).getByText(/131\s*Kč/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Platba/ })).toBeNull();
+    expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
+    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-10");
   });
 
-  it("does not offer a previous month's payment when it is already paid", async () => {
-    mocks.lunch.mockImplementation(async month => billingOverview(month, month === "2026-09"));
+  it("keeps the unfinished month explanation independent of manual paid marks", async () => {
+    mocks.lunch.mockImplementation(async month => billingOverview(month, true));
     render(await ParentLunchSection({ month: "2026-10", childId: "anna", calendarMonth: "2026-10" }));
     expect(screen.queryByRole("button", { name: /^Platba/ })).toBeNull();
-    expect(screen.getByRole("status").textContent).toBe("Obědy za září 2026 máte zaplacené.");
+    expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
+    expect(screen.queryByText(/máte zaplacené/)).toBeNull();
+    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-10");
   });
 
-  it("offers the previous calendar month even when browsing a future overview", async () => {
+  it("does not offer payment or load another month when browsing a future overview", async () => {
     mocks.lunch.mockImplementation(async month => month === "2026-11"
       ? { ...billingOverview(month), monthLabel: "listopad 2026", lastOpenDay: "2026-11-30" }
       : billingOverview(month));
     render(await ParentLunchSection({ month: "2026-11", childId: "anna", calendarMonth: "2026-10" }));
-    expect(screen.queryByRole("button", { name: "Platba listopad" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Platba říjen" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Platba září" })).toBeTruthy();
-    expect(mocks.lunch).toHaveBeenCalledWith("2026-09");
-    expect(mocks.lunch).not.toHaveBeenCalledWith("2026-10");
-  });
-
-  it("does not offer a previous month's payment when nothing is owed", async () => {
-    mocks.lunch.mockImplementation(async month => billingOverview(month, false, month === "2026-09" ? 0 : 2));
-    render(await ParentLunchSection({ month: "2026-10", childId: "anna", calendarMonth: "2026-10" }));
     expect(screen.queryByRole("button", { name: /^Platba/ })).toBeNull();
-    expect(screen.getByText("Za září 2026 nemáte žádné obědy k úhradě.")).toBeTruthy();
+    expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
+    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-11");
   });
 
-  it("replaces payment with a monthly paid confirmation without exposing staff controls", async () => {
+  it("keeps a zero amount payment disabled for the selected closed month", async () => {
+    mocks.lunch.mockResolvedValue(billingOverview("2026-09", false, 0));
+    render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-10" }));
+    expect(screen.getByRole("button", { name: "Platba září" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("V tomto měsíci nemáte žádné obědy k úhradě.")).toBeTruthy();
+  });
+
+  it("offers the full selected month payment even when all children are marked paid", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
       days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
         { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: true },
@@ -69,14 +65,19 @@ describe("parent read-only overviews", () => {
       ], childrenWithoutLunch: [],
     });
     render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));
-    expect(screen.getByRole("status").textContent).toBe("Obědy za září 2026 máte zaplacené.");
-    expect(screen.queryByRole("button", { name: "Platba září" })).toBeNull();
+    expect(screen.queryByText(/máte zaplacené/)).toBeNull();
+    expect(screen.queryByText("Obědy se platí za předchozí měsíc zpětně.")).toBeNull();
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Zaplaceno" })).toBeNull();
     expect(within(screen.getByRole("table")).getByText(/165\s*Kč/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/165\s*Kč/)).toBeTruthy();
+    expect(within(dialog).getByText("Obědy září: Anna Malá, Jan Malý")).toBeTruthy();
+    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-09");
   });
 
-  it("keeps a payment for the outstanding sibling when only one child is paid", async () => {
+  it("includes all siblings in the selected month payment regardless of partial paid marks", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
       days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
         { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: true },
@@ -86,8 +87,9 @@ describe("parent read-only overviews", () => {
     render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));
     fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/110\s*Kč/)).toBeTruthy();
-    expect(within(dialog).getByText("Obědy září: Jan Malý")).toBeTruthy();
+    expect(within(dialog).getByText(/165\s*Kč/)).toBeTruthy();
+    expect(within(dialog).getByText("Obědy září: Anna Malá, Jan Malý")).toBeTruthy();
+    expect(screen.queryByText(/Zaplaceno za:/)).toBeNull();
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
