@@ -170,7 +170,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                   <th scope="col" className={cn("sticky top-0 z-30 min-w-24 border-b border-l border-cream-dark bg-[#f8f1e7] px-1.5 py-2 text-right font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:min-w-28 md:px-3", amountPosition)}>
                     K úhradě
                   </th>
-                  {showDirectorControls && <th scope="col" className="sticky right-0 top-0 z-30 w-[var(--lunch-paid-width)] min-w-[var(--lunch-paid-width)] max-w-[var(--lunch-paid-width)] border-b border-l border-cream-dark bg-[#f8f1e7] py-2 text-center text-xs font-bold text-charcoal md:px-1 md:text-sm">
+                  {showDirectorControls && <th scope="col" className="sticky right-0 top-0 z-30 w-[var(--lunch-paid-width)] min-w-[var(--lunch-paid-width)] max-w-[var(--lunch-paid-width)] border-b border-l border-cream-dark bg-[#f8f1e7] py-2 text-center text-xs font-bold text-charcoal [overflow-wrap:anywhere] md:px-1 md:text-sm">
                     Zaplaceno
                   </th>}
                 </tr>

@@ -41,16 +41,21 @@ test("director records monthly sibling payments and both final columns stay fixe
     return { amount: amount.x, paid: paid.x, gap: paid.x - amount.right, edge: container.right - paid.right,
       rowGap: paidCell.x - amountCell.right, paidWidth: paid.width };
   });
-  await table.evaluate(element => { element.parentElement!.scrollLeft = 0; });
-  const before = await positions();
-  await table.evaluate(element => { element.parentElement!.scrollLeft = element.parentElement!.scrollWidth; });
-  const after = await positions();
-  expect(after.paidWidth).toBe(64);
-  expect(Math.abs(after.amount - before.amount), JSON.stringify({ before, after })).toBeLessThan(1);
-  expect(Math.abs(after.paid - before.paid)).toBeLessThan(1);
-  expect(Math.abs(after.gap)).toBeLessThan(1);
-  expect(Math.abs(after.rowGap)).toBeLessThan(1);
-  expect(Math.abs(after.edge)).toBeLessThan(2);
+  const paidHeading = table.getByRole("columnheader", { name: "Zaplaceno" });
+  for (const font of ["", "monospace"]) {
+    await paidHeading.evaluate((element, font) => { element.style.fontFamily = font; element.style.fontSize = font ? "14px" : ""; }, font);
+    await table.evaluate(element => { element.parentElement!.scrollLeft = 0; });
+    const before = await positions();
+    await table.evaluate(element => { element.parentElement!.scrollLeft = element.parentElement!.scrollWidth; });
+    const after = await positions();
+    expect(after.paidWidth).toBe(64);
+    expect(Math.abs(after.amount - before.amount), JSON.stringify({ before, after })).toBeLessThan(1);
+    expect(Math.abs(after.paid - before.paid)).toBeLessThan(1);
+    expect(Math.abs(after.gap)).toBeLessThan(1);
+    expect(Math.abs(after.rowGap)).toBeLessThan(1);
+    expect(Math.abs(after.edge)).toBeLessThan(2);
+  }
+  await paidHeading.evaluate(element => { element.style.fontFamily = ""; element.style.fontSize = ""; });
   await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-paid-mobile.png" });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-paid-desktop.png" });
