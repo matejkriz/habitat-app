@@ -45,7 +45,9 @@ import {
   exportAttendanceCSV,
   updateExcuse,
   getLunchOverview,
+  updateLunchPrice,
 } from "../app/actions/director";
+import { getParentLunchOverview } from "../app/actions/parent-overviews";
 import { db } from "../lib/db";
 import { getDayReports, saveDayReport } from "../app/actions/day-details";
 
@@ -112,6 +114,21 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+});
+
+it("shares monthly prices with the parent and keeps saved months independent", async () => {
+  transport.user = { id: "director", role: "DIRECTOR" };
+  expect((await getLunchOverview("2026-09")).priceCents).toBe(5500);
+  await updateLunchPrice("2026-09", "65,50");
+  transport.user = { id: "parent", role: "PARENT" };
+  expect((await getParentLunchOverview("2026-09")).priceCents).toBe(6550);
+  expect((await getParentLunchOverview("2026-10")).priceCents).toBe(6550);
+  await expect(updateLunchPrice("2026-09", "1")).rejects.toThrow("Unauthorized");
+  transport.user = { id: "director", role: "DIRECTOR" };
+  await updateLunchPrice("2026-10", "65,50");
+  await updateLunchPrice("2026-09", "70");
+  expect((await getLunchOverview("2026-09")).priceCents).toBe(7000);
+  expect((await getLunchOverview("2026-10")).priceCents).toBe(6550);
 });
 
 it("lets a teacher publish a report but rejects a parent's write without changing it", async () => {

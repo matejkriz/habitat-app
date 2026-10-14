@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { validateCrowns, validateDayDetails, validateExtraFundPersonPatch, type TripFundOverview } from "../lib/day-details";
 import { requireServerSecret } from "./serverSecret";
+import { validateLunchPriceCents, validateLunchPriceMonth } from "../lib/lunch-price";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
 
@@ -25,6 +26,47 @@ const tableName = v.union(
 );
 
 const documentValue = v.any();
+
+export const getLunchPrice = query({
+  args: { secret: v.string(), month: v.string() },
+  returns: v.number(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    validateLunchPriceMonth(args.month);
+    const settings = await db.query("lunchSettings")
+      .withIndex("by_month", query => query.lte("month", args.month))
+      .order("desc")
+      .first();
+    return settings?.priceCents ?? 5500;
+  },
+});
+
+export const setLunchPrice = mutation({
+  args: { secret: v.string(), month: v.string(), priceCents: v.number(), recordedById: v.string() },
+  returns: v.null(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const user = await db.query("users")
+      .withIndex("by_app_id", query => query.eq("id", args.recordedById))
+      .unique();
+    if (user?.role !== "DIRECTOR") throw new Error("Unauthorized");
+    validateLunchPriceMonth(args.month);
+    validateLunchPriceCents(args.priceCents);
+    const current = await db.query("lunchSettings")
+      .withIndex("by_month", query => query.eq("month", args.month))
+      .unique();
+    const value = { month: args.month, priceCents: args.priceCents, updatedById: user.id, updatedAt: Date.now() };
+    if (current) await db.patch(current._id, value);
+    else await db.insert("lunchSettings", value);
+    await db.insert("auditLogs", {
+      id: `lunch_price_${args.month}_${value.updatedAt}`, userId: user.id,
+      action: current ? "UPDATE" : "CREATE", entityType: "LunchSettings", entityId: args.month,
+      previousValue: { priceCents: current?.priceCents ?? null }, newValue: { priceCents: args.priceCents }, createdAt: value.updatedAt,
+    });
+    return null;
+  },
+});
+
 const excuseDayPart = v.union(
   v.literal("FULL_DAY"),
   v.literal("MORNING"),

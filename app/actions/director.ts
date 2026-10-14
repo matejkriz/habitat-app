@@ -4,6 +4,7 @@ import { getAttendanceDays, getChildDayPlan, isRegularAttendanceDay, parseAttend
 import { parseDayDate, validateExtraFundPersonPatch, type ExtraFundPersonPatch, validateCrowns, type TripFund, type TripFundOverview } from "@/lib/day-details";
 
 import { loadLunchOverview, type LunchOverview } from "@/lib/lunch-overview";
+import { parseLunchPrice, validateLunchPriceMonth } from "@/lib/lunch-price";
 export type { LunchOverview } from "@/lib/lunch-overview";
 
 import { getDbUser, type SessionUser } from "@/lib/auth";
@@ -177,6 +178,15 @@ export async function createExtraFundPerson(name: string): Promise<void> {
   if (!validated.name) throw new Error("Zadejte jméno osoby.");
   await db.tripFunds.createExtraPerson(validated.name, user.id);
   revalidatePath("/reditel");
+}
+
+export async function updateLunchPrice(month: string, price: string): Promise<void> {
+  const user = await requireDirector();
+  validateLunchPriceMonth(month);
+  const priceCents = parseLunchPrice(price);
+  await db.lunchPrice.set(month, priceCents, user.id);
+  revalidatePath("/reditel");
+  revalidatePath("/rodic");
 }
 
 export async function updateExtraFundPerson(personId: string, patch: ExtraFundPersonPatch): Promise<void> {

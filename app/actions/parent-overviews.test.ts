@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), parentLinks: vi.fn(), children: vi.fn(), attendance: vi.fn(), excuses: vi.fn(), schoolDays: vi.fn(), noLunchDays: vi.fn(), parentFunds: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), parentLinks: vi.fn(), children: vi.fn(), attendance: vi.fn(), excuses: vi.fn(), schoolDays: vi.fn(), noLunchDays: vi.fn(), parentFunds: vi.fn(), lunchPrice: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.user }));
 vi.mock("@/lib/db", () => ({ db: {
+  lunchPrice: { get: mocks.lunchPrice },
   parentLinks: { list: mocks.parentLinks }, children: { list: mocks.children }, attendance: { list: mocks.attendance }, noLunchDays: { list: mocks.noLunchDays }, tripFunds: { parentOverview: mocks.parentFunds },
 } }));
 vi.mock("@/lib/excuse", () => ({ getExcusesOverlapping: mocks.excuses }));
@@ -21,6 +22,7 @@ beforeEach(() => {
   mocks.excuses.mockResolvedValue([]);
   mocks.schoolDays.mockResolvedValue([date]);
   mocks.noLunchDays.mockResolvedValue([]);
+  mocks.lunchPrice.mockResolvedValue(5500);
   mocks.parentFunds.mockResolvedValue({ days: [], children: [] });
 });
 
@@ -37,6 +39,8 @@ describe("parent overview actions", () => {
     const data = await getParentLunchOverview("2026-09");
     expect(mocks.parentLinks).toHaveBeenCalledWith(expect.objectContaining({ where: { parentId: "parent" } }));
     expect(mocks.children).not.toHaveBeenCalled();
+    expect(data.priceCents).toBe(5500);
+    expect(mocks.lunchPrice).toHaveBeenCalledWith("2026-09");
     expect(data.children).toEqual([expect.objectContaining({ id: "own", payableLunches: 1 })]);
     expect(data.childrenWithoutLunch.map(child => child.id)).toEqual(["sibling"]);
     expect(JSON.stringify(data)).not.toContain("stranger");
