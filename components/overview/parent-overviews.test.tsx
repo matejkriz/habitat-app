@@ -1,9 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ParentLunchSection, ParentTripFundSection } from "./parent-overviews";
 const mocks = vi.hoisted(() => ({ lunch: vi.fn(), fund: vi.fn() }));
 vi.mock("@/app/actions/parent-overviews", () => ({ getParentLunchOverview: mocks.lunch, getParentTripFundOverview: mocks.fund }));
 vi.mock("@/app/actions/director", () => ({ updateLunchPrice: vi.fn() }));
+
+beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+});
 
 describe("parent read-only overviews", () => {
   it("shows fund values without edit buttons, inputs, or staff-only day links", async () => {
@@ -36,5 +41,26 @@ describe("parent read-only overviews", () => {
     expect(screen.queryByRole("rowheader", { name: "Součet" })).toBeNull();
     expect(screen.queryByLabelText("Cena jednoho obědu (Kč)")).toBeNull();
     expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
+  it("opens the month payment below the lunch table with a combined sibling amount", async () => {
+    mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 6550,
+      days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 3 },
+        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["present"], payableLunches: 2 },
+      ], childrenWithoutLunch: [{ id: "petr", firstName: "Petr", lastName: "Malý" }],
+    });
+    render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-08" }));
+    const button = screen.getByRole("button", { name: "Platba září" });
+    expect(screen.getByRole("table").compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog", { name: "Platba září" });
+    expect(within(dialog).getByText("2802518214 / 2010")).toBeTruthy();
+    expect(within(dialog).getByText(/327,50\s*Kč/)).toBeTruthy();
+    expect(within(dialog).getByText("Obědy září: Anna Malá, Jan Malý")).toBeTruthy();
+    expect(within(dialog).queryByText(/Petr/)).toBeNull();
+    expect(within(dialog).getByRole("img", { name: "QR kód pro platbu obědů" })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Zavřít" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
