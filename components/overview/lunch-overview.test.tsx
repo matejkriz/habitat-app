@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { describe, expect, it, vi } from "vitest";
 import { LunchOverviewSection } from "./lunch-overview";
 import { LunchOverviewView } from "./lunch-overview-view";
+import { LunchPriceEditor } from "./lunch-price-editor";
 import type { LunchOverview } from "@/lib/lunch-overview";
 
 const mocks = vi.hoisted(() => ({
@@ -186,6 +187,36 @@ describe("LunchOverviewSection", () => {
     expect((screen.getByRole("button", { name: "Uložit cenu" }) as HTMLButtonElement).disabled).toBe(true);
     finish();
     expect(await screen.findByRole("status")).toHaveProperty("textContent", "Cena byla uložena.");
+  });
+
+  it("hides save for an unchanged price, including equivalent formatting and a reverted edit", () => {
+    mocks.updateLunchPrice.mockClear();
+    render(<LunchPriceEditor month="2026-08" priceCents={5500} />);
+    const input = screen.getByLabelText("Cena jednoho obědu (Kč)");
+    expect(screen.queryByRole("button", { name: "Uložit cenu" })).toBeNull();
+    fireEvent.change(input, { target: { value: "55,00" } });
+    expect(screen.queryByRole("button", { name: "Uložit cenu" })).toBeNull();
+    fireEvent.change(input, { target: { value: "60" } });
+    expect(screen.getByRole("button", { name: "Uložit cenu" })).toBeTruthy();
+    fireEvent.change(input, { target: { value: "55" } });
+    expect(screen.queryByRole("button", { name: "Uložit cenu" })).toBeNull();
+    fireEvent.submit(input.closest("form")!);
+    expect(mocks.updateLunchPrice).not.toHaveBeenCalled();
+  });
+
+  it("keeps save visible while pending, then hides it when the updated saved price arrives", async () => {
+    let finish!: () => void;
+    mocks.updateLunchPrice.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+    const { rerender } = render(<LunchPriceEditor month="2026-08" priceCents={5500} />);
+    const input = screen.getByLabelText("Cena jednoho obědu (Kč)");
+    fireEvent.change(input, { target: { value: "65,50" } });
+    fireEvent.submit(input.closest("form")!);
+    rerender(<LunchPriceEditor month="2026-08" priceCents={6550} />);
+    expect(screen.getByRole("button", { name: "Uložit cenu" })).toHaveProperty("disabled", true);
+    await act(async () => finish());
+    expect(screen.queryByRole("button", { name: "Uložit cenu" })).toBeNull();
+    fireEvent.change(input, { target: { value: "65.5" } });
+    expect(screen.queryByRole("button", { name: "Uložit cenu" })).toBeNull();
   });
 
   it("shows a save error and keeps the entered price available for retry", async () => {

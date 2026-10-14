@@ -12,9 +12,15 @@ export function LunchPriceEditor({ month, priceCents }: { month: string; priceCe
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
   const saving = useRef(false);
+  let changed: boolean;
+  try {
+    changed = parseLunchPrice(value) !== priceCents;
+  } catch {
+    changed = true;
+  }
 
   function save() {
-    if (saving.current) return;
+    if (saving.current || !changed) return;
     setError("");
     setSaved(false);
     try {
@@ -44,7 +50,7 @@ export function LunchPriceEditor({ month, priceCents }: { month: string; priceCe
             value={value} disabled={pending} aria-describedby="lunch-price-hint"
             onChange={event => { setValue(event.target.value); setSaved(false); setError(""); }} />
         </div>
-        <Button type="submit" isLoading={pending}>Uložit cenu</Button>
+        {(changed || pending) && <Button type="submit" isLoading={pending}>Uložit cenu</Button>}
       </div>
       <p id="lunch-price-hint" className="text-sm text-charcoal-light">
         Cena platí pro všechny děti v tomto měsíci. Další měsíc ji převezme, pokud nemá vlastní uloženou cenu.

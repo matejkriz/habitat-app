@@ -29,9 +29,14 @@ test("monthly lunch pricing persists, carries forward, and reaches the parent ov
   await page.goto(`/reditel?month=${month}#obedy`);
   const price = page.getByLabel("Cena jednoho obědu (Kč)");
   await expect(price).toHaveValue("55");
+  const savePrice = page.getByRole("button", { name: "Uložit cenu" });
+  await expect(savePrice).toHaveCount(0);
+  await price.fill("55,00");
+  await expect(savePrice).toHaveCount(0);
   await price.fill("65,50");
   await page.getByRole("button", { name: "Uložit cenu" }).click();
   await expect(page.getByText("Cena byla uložena.", { exact: true })).toBeVisible();
+  await expect(savePrice).toHaveCount(0);
   await page.reload();
   await expect(price).toHaveValue("65.5");
 
@@ -60,7 +65,7 @@ test("monthly lunch pricing persists, carries forward, and reaches the parent ov
   await price.fill("70");
   await page.getByRole("button", { name: "Uložit cenu" }).click();
   await expect(page.getByText("Cena byla uložena.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Uložit cenu" })).toBeEnabled();
+  await expect(savePrice).toHaveCount(0);
   await page.getByRole("link", { name: "Předchozí měsíc" }).click();
   await expect(page).toHaveURL(new RegExp(`month=${month}`));
   await expect(page.getByRole("heading", { name: monthLabel(month), exact: true })).toBeVisible();
