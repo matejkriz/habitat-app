@@ -37,18 +37,18 @@ test("monthly lunch pricing persists, carries forward, and reaches the parent ov
 
   const table = page.getByRole("table", { name: /^Obědy/ });
   const oskar = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Oskar Okurka", exact: true }) });
-  const count = Number(await oskar.getByRole("cell").nth(-2).textContent());
+  const count = Number(await oskar.getByRole("cell").nth(-3).textContent());
   expect(count).toBeGreaterThan(0);
-  await expect(oskar.getByRole("cell").last()).toHaveText(money(count * 65.5));
-  const rowCounts = await table.locator("tbody tr").evaluateAll(rows => rows.map(row => Number(row.querySelector("td:nth-last-child(2)")?.textContent)));
+  await expect(oskar.getByRole("cell").nth(-2)).toHaveText(money(count * 65.5));
+  const rowCounts = await table.locator("tbody tr").evaluateAll(rows => rows.map(row => Number(row.querySelector("td:nth-last-child(3)")?.textContent)));
   const total = rowCounts.reduce((sum, value) => sum + value, 0);
   const footer = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Součet", exact: true }) });
-  await expect(footer.getByRole("cell").nth(-2)).toHaveText(String(total));
-  await expect(footer.getByRole("cell").last()).toHaveText(money(total * 65.5));
+  await expect(footer.getByRole("cell").nth(-3)).toHaveText(String(total));
+  await expect(footer.getByRole("cell").nth(-2)).toHaveText(money(total * 65.5));
 
   await page.setViewportSize({ width: 390, height: 844 });
   await table.evaluate(element => { element.parentElement!.scrollLeft = element.parentElement!.scrollWidth; });
-  await expect(oskar.getByRole("cell").last()).toBeVisible();
+  await expect(oskar.getByRole("cell").nth(-2)).toBeVisible();
   await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-mobile.png" });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-desktop.png" });

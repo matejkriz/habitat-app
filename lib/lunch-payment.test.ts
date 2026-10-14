@@ -4,8 +4,8 @@ import type { LunchOverview } from "./lunch-overview";
 
 const overview: LunchOverview = {
   month: "2026-09", monthLabel: "září 2026", priceCents: 6550, days: [], children: [
-    { id: "anna", firstName: "Anna", lastName: "Malá", statuses: [], payableLunches: 3 },
-    { id: "jan", firstName: "Jan", lastName: "Malý", statuses: [], payableLunches: 2 },
+    { id: "anna", firstName: "Anna", lastName: "Malá", statuses: [], payableLunches: 3, paid: false },
+    { id: "jan", firstName: "Jan", lastName: "Malý", statuses: [], payableLunches: 2, paid: false },
   ], childrenWithoutLunch: [{ id: "petr", firstName: "Petr", lastName: "Malý" }],
 };
 
@@ -17,6 +17,13 @@ function fields(payload: string) {
 }
 
 describe("lunch payment details", () => {
+  it("charges only unpaid siblings and includes only their names in the payment note", () => {
+    const payment = getLunchPayment({ ...overview, children: overview.children.map((child, index) => ({ ...child, paid: index === 0 })) });
+    expect(payment.amountCents).toBe(13100);
+    expect(payment.note).toBe("Obědy září: Jan Malý");
+    expect(fields(payment.payload!).AM).toBe("131.00");
+  });
+
   it("encodes the correct account, exact sibling total, currency and Czech note", () => {
     const payment = getLunchPayment(overview);
     expect(payment).toMatchObject({ monthName: "září", account: "2802518214 / 2010", amountCents: 32750, note: "Obědy září: Anna Malá, Jan Malý" });

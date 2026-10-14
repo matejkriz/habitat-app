@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { isPayableLunch, LunchStatus, type LunchStatus as LunchStatusValue } from "@/lib/lunches";
 import { formatLunchAmount } from "@/lib/lunch-price";
 import { LunchPriceEditor } from "./lunch-price-editor";
+import { LunchPaidCheckbox } from "./lunch-paid-checkbox";
 
 const statusStyles: Record<LunchStatusValue, string> = {
   [LunchStatus.NOT_SCHEDULED]: "bg-[#a9c9dc]",
@@ -56,6 +57,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
   overview: LunchOverview; basePath?: string; monthParam?: string; extraParams?: Record<string, string>; showDirectorControls?: boolean;
 }) {
   const month = overview.month;
+  const amountPosition = showDirectorControls ? "right-[var(--lunch-paid-width)]" : "right-0";
   const showTotals = showDirectorControls || overview.children.length + overview.childrenWithoutLunch.length > 1;
   const dailyTotals = showTotals ? overview.days.map((_, index) =>
     overview.children.reduce((total, child) => total + Number(isPayableLunch(child.statuses[index])), 0),
@@ -143,7 +145,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
           </div>
         ) : (
           <div className="overflow-x-auto overscroll-x-contain max-md:max-h-[calc(100dvh-8rem)] max-md:overflow-y-auto max-md:overscroll-y-contain">
-            <table aria-label={`Obědy – ${monthLabel}`} className="w-max min-w-full border-separate border-spacing-0 text-sm">
+            <table aria-label={`Obědy – ${monthLabel}`} className="w-max min-w-full border-separate border-spacing-0 text-sm [--lunch-paid-width:4rem] md:[--lunch-paid-width:5.5rem]">
               <thead>
                 <tr>
                   <th className="sticky top-0 z-30 min-w-48 border-b border-r border-cream-dark bg-[#fbf7f1] px-4 py-3 text-left font-bold text-charcoal shadow-[6px_0_12px_-12px_rgba(61,61,61,0.8)] md:left-0">
@@ -165,9 +167,12 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                   <th scope="col" className="sticky top-0 z-20 min-w-16 border-b border-l border-cream-dark bg-[#f8f1e7] px-1.5 py-2 text-center font-bold leading-tight text-charcoal md:min-w-24 md:px-3">
                     Celkem
                   </th>
-                  <th scope="col" className="sticky right-0 top-0 z-30 min-w-28 border-b border-l border-cream-dark bg-[#f8f1e7] px-3 py-2 text-right font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]">
+                  <th scope="col" className={cn("sticky top-0 z-30 min-w-24 border-b border-l border-cream-dark bg-[#f8f1e7] px-1.5 py-2 text-right font-bold leading-tight text-charcoal shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:min-w-28 md:px-3", amountPosition)}>
                     K úhradě
                   </th>
+                  {showDirectorControls && <th scope="col" className="sticky right-0 top-0 z-30 w-[var(--lunch-paid-width)] min-w-[var(--lunch-paid-width)] max-w-[var(--lunch-paid-width)] border-b border-l border-cream-dark bg-[#f8f1e7] py-2 text-center text-xs font-bold text-charcoal md:px-1 md:text-sm">
+                    Zaplaceno
+                  </th>}
                 </tr>
               </thead>
               <tbody>
@@ -221,11 +226,18 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                       </span>
                     </td>
                     <td className={cn(
-                      "sticky right-0 z-10 whitespace-nowrap border-b border-l border-cream-dark px-3 py-2 text-right font-bold tabular-nums text-gold-dark shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]",
+                      "sticky z-10 whitespace-nowrap border-b border-l border-cream-dark px-1.5 py-2 text-right font-bold tabular-nums text-gold-dark shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:px-3",
+                      amountPosition,
                       rowIndex % 2 === 0 ? "bg-[#fcf7ef]" : "bg-[#f8f1e7]",
                     )}>
                       {formatLunchAmount(child.payableLunches, overview.priceCents)}
                     </td>
+                    {showDirectorControls && <td className={cn(
+                      "sticky right-0 z-10 w-[var(--lunch-paid-width)] min-w-[var(--lunch-paid-width)] max-w-[var(--lunch-paid-width)] border-b border-l border-cream-dark px-1 py-1 text-center",
+                      rowIndex % 2 === 0 ? "bg-[#fcf7ef]" : "bg-[#f8f1e7]",
+                    )}>
+                      <LunchPaidCheckbox key={`${month}:${child.id}:${child.paid}`} childId={child.id} childName={`${child.firstName} ${child.lastName}`} month={month} paid={child.paid} />
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -243,9 +255,10 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                     <td className="border-l border-t-2 border-cream-dark bg-[#f8f1e7] px-1.5 py-3 text-center md:px-3">
                       {payableTotal}
                     </td>
-                    <td className="sticky right-0 z-10 whitespace-nowrap border-l border-t-2 border-cream-dark bg-[#f8f1e7] px-3 py-3 text-right text-gold-dark shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)]">
+                    <td className={cn("sticky z-10 whitespace-nowrap border-l border-t-2 border-cream-dark bg-[#f8f1e7] px-1.5 py-3 text-right text-gold-dark shadow-[-6px_0_12px_-12px_rgba(61,61,61,0.8)] md:px-3", amountPosition)}>
                       {formatLunchAmount(payableTotal, overview.priceCents)}
                     </td>
+                    {showDirectorControls && <td className="sticky right-0 z-10 border-l border-t-2 border-cream-dark bg-[#f8f1e7]" />}
                   </tr>
                 </tfoot>
               )}

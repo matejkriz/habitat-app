@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), parentLinks: vi.fn(), children: vi.fn(), attendance: vi.fn(), excuses: vi.fn(), schoolDays: vi.fn(), noLunchDays: vi.fn(), parentFunds: vi.fn(), lunchPrice: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), parentLinks: vi.fn(), children: vi.fn(), attendance: vi.fn(), excuses: vi.fn(), schoolDays: vi.fn(), noLunchDays: vi.fn(), parentFunds: vi.fn(), lunchPrice: vi.fn(), lunchPayments: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.user }));
 vi.mock("@/lib/db", () => ({ db: {
   lunchPrice: { get: mocks.lunchPrice },
+  lunchPayments: { list: mocks.lunchPayments },
   parentLinks: { list: mocks.parentLinks }, children: { list: mocks.children }, attendance: { list: mocks.attendance }, noLunchDays: { list: mocks.noLunchDays }, tripFunds: { parentOverview: mocks.parentFunds },
 } }));
 vi.mock("@/lib/excuse", () => ({ getExcusesOverlapping: mocks.excuses }));
@@ -23,10 +24,21 @@ beforeEach(() => {
   mocks.schoolDays.mockResolvedValue([date]);
   mocks.noLunchDays.mockResolvedValue([]);
   mocks.lunchPrice.mockResolvedValue(5500);
+  mocks.lunchPayments.mockResolvedValue([]);
   mocks.parentFunds.mockResolvedValue({ days: [], children: [] });
 });
 
 describe("parent overview actions", () => {
+  it("loads the selected month's paid state only for the parent's own children", async () => {
+    mocks.lunchPayments.mockResolvedValue([{ childId: "own", paid: true }, { childId: "stranger", paid: true }]);
+    const data = await getParentLunchOverview("2026-09");
+    expect(mocks.lunchPayments).toHaveBeenCalledWith("2026-09");
+    expect(data.children[0].paid).toBe(true);
+    expect(JSON.stringify(data)).not.toContain("stranger");
+    mocks.lunchPayments.mockResolvedValue([]);
+    expect((await getParentLunchOverview("2026-10")).children[0].paid).toBe(false);
+  });
+
   it.each([null, { role: "TEACHER" }, { role: "DIRECTOR" }])("rejects unauthenticated and non-parent reads (%j)", async user => {
     mocks.user.mockResolvedValue(user);
     await expect(getParentLunchOverview("2026-09")).rejects.toThrow("Unauthorized");

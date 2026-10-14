@@ -8,9 +8,23 @@ export async function ParentLunchSection({ month, childId, calendarMonth }: {
   month?: string; childId: string; calendarMonth: string;
 }) {
   const overview = await getParentLunchOverview(safeLunchMonth(month));
+  const paidChildren = overview.children.filter(child => child.paid);
+  const allPaid = paidChildren.length > 0 && overview.children.every(child => child.paid || child.payableLunches === 0);
   return <div className="space-y-4">
     <LunchOverviewView overview={overview} basePath="/rodic" monthParam="lunchMonth" extraParams={{ child: childId, month: calendarMonth }} />
-    <LunchPayment key={overview.month} payment={getLunchPayment(overview)} />
+    {allPaid ? (
+      <p role="status" className="flex items-center gap-2 rounded-xl border border-sage/30 bg-sage/10 px-4 py-3 font-semibold text-sage-dark">
+        <svg aria-hidden="true" className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" />
+        </svg>
+        Obědy za {overview.monthLabel} máte zaplacené.
+      </p>
+    ) : <div className="space-y-2">
+      {paidChildren.length > 0 && <p className="text-sm text-sage-dark">
+        Zaplaceno za: {paidChildren.map(child => `${child.firstName} ${child.lastName}`).join(", ")}. Platba zahrnuje pouze nezaplacené obědy.
+      </p>}
+      <LunchPayment key={overview.month} payment={getLunchPayment(overview)} />
+    </div>}
   </div>;
 }
 

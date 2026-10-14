@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { LunchOverviewSection } from "./lunch-overview";
 import { LunchOverviewView } from "./lunch-overview-view";
@@ -7,11 +7,13 @@ import type { LunchOverview } from "@/lib/lunch-overview";
 const mocks = vi.hoisted(() => ({
   getLunchOverview: vi.fn(),
   updateLunchPrice: vi.fn(),
+  updateLunchPaid: vi.fn(),
 }));
 
 vi.mock("@/app/actions/director", () => ({
   getLunchOverview: mocks.getLunchOverview,
   updateLunchPrice: mocks.updateLunchPrice,
+  updateLunchPaid: mocks.updateLunchPaid,
 }));
 
 function lunchOverview(): LunchOverview {
@@ -26,7 +28,7 @@ function lunchOverview(): LunchOverview {
         firstName: "Tobiáš",
         lastName: "Tornádo",
         statuses: ["present"],
-        payableLunches: 1,
+        payableLunches: 1, paid: false,
       },
     ],
     childrenWithoutLunch: [
@@ -48,6 +50,33 @@ async function renderLunchesPage() {
 }
 
 describe("LunchOverviewSection", () => {
+  it("saves a child's paid status for the displayed month and disables it while saving", async () => {
+    let finish!: () => void;
+    mocks.updateLunchPaid.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+    await renderLunchesPage();
+    const checkbox = screen.getByRole("checkbox", { name: "Zaplaceno: Tobiáš Tornádo" }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(mocks.updateLunchPaid).toHaveBeenCalledWith("tobias", "2026-08", true);
+    expect(checkbox.disabled).toBe(true);
+    expect(checkbox.checked).toBe(true);
+    await act(async () => finish());
+    await waitFor(() => expect(checkbox.disabled).toBe(false));
+    expect(checkbox.checked).toBe(true);
+    await act(async () => fireEvent.click(checkbox));
+    expect(mocks.updateLunchPaid).toHaveBeenLastCalledWith("tobias", "2026-08", false);
+  });
+
+  it("keeps the previous paid state and allows retry after a failed save", async () => {
+    mocks.updateLunchPaid.mockRejectedValueOnce(new Error("Failed"));
+    await renderLunchesPage();
+    const checkbox = screen.getByRole("checkbox", { name: "Zaplaceno: Tobiáš Tornádo" }) as HTMLInputElement;
+    fireEvent.click(checkbox);
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Platbu se nepodařilo uložit.");
+    expect(checkbox.checked).toBe(false);
+    expect(checkbox.disabled).toBe(false);
+  });
+
   it("keeps month navigation on the overview tab", async () => {
     await renderLunchesPage();
     expect(screen.getByRole("link", { name: "Předchozí měsíc" }).getAttribute("href")).toBe("/reditel?month=2026-07#obedy");
@@ -92,8 +121,9 @@ describe("LunchOverviewSection", () => {
     expect(childRow.className).toContain("md:left-0");
     expect(totalHeading.className).not.toContain("right-0");
     expect(payableCell?.className).not.toContain("sticky");
-    expect(amountHeading.className).toContain("right-0");
-    expect(amountCell?.className).toContain("right-0");
+    expect(amountHeading.className).toContain("right-[var(--lunch-paid-width)]");
+    expect(amountCell?.className).toContain("right-[var(--lunch-paid-width)]");
+    expect(screen.getByRole("columnheader", { name: "Zaplaceno" }).className).toContain("right-0");
   });
 
   it("uses a narrower total column only on mobile", async () => {
@@ -119,14 +149,14 @@ describe("LunchOverviewSection", () => {
     render(<LunchOverviewView overview={{ ...overview, priceCents: 6550,
       days: [overview.days[0], { key: "2026-08-20", day: 20, weekday: "Čt" }],
       children: [
-        { ...overview.children[0], statuses: ["present", "excused"], payableLunches: 1 },
-        { id: "eva", firstName: "Eva", lastName: "Nová", statuses: ["kept", "late"], payableLunches: 2 },
-        { id: "adam", firstName: "Adam", lastName: "Nový", statuses: [null, "makeup"], payableLunches: 1 },
-        { id: "jan", firstName: "Jan", lastName: "Nový", statuses: ["not-scheduled", "makeup-no-lunch"], payableLunches: 0 },
+        { ...overview.children[0], statuses: ["present", "excused"], payableLunches: 1, paid: false },
+        { id: "eva", firstName: "Eva", lastName: "Nová", statuses: ["kept", "late"], payableLunches: 2, paid: false },
+        { id: "adam", firstName: "Adam", lastName: "Nový", statuses: [null, "makeup"], payableLunches: 1, paid: false },
+        { id: "jan", firstName: "Jan", lastName: "Nový", statuses: ["not-scheduled", "makeup-no-lunch"], payableLunches: 0, paid: false },
       ],
     }} showDirectorControls />);
     const footer = screen.getByRole("rowheader", { name: "Součet" }).closest("tr")!;
-    expect(within(footer).getAllByRole("cell").map(cell => cell.textContent?.replaceAll(/\s/g, " "))).toEqual(["2", "2", "4", "262 Kč"]);
+    expect(within(footer).getAllByRole("cell").map(cell => cell.textContent?.replaceAll(/\s/g, " "))).toEqual(["2", "2", "4", "262 Kč", ""]);
     const eva = screen.getByRole("rowheader", { name: "Eva Nová" }).closest("tr")!;
     expect(within(eva).getByText(/131\s*Kč/)).toBeTruthy();
   });

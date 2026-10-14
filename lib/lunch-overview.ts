@@ -29,6 +29,7 @@ export type LunchOverview = {
     readonly lastName: string;
     readonly statuses: ReadonlyArray<LunchStatusValue | null>;
     readonly payableLunches: number;
+    readonly paid: boolean;
   }>;
   readonly childrenWithoutLunch: ReadonlyArray<{
     readonly id: string;
@@ -57,7 +58,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
   const startOfMonth = new Date(year, monthIndex, 1);
   const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [schoolDays, children, attendance, excuses, noLunchDays, priceCents] = await Promise.all([
+  const [schoolDays, children, attendance, excuses, noLunchDays, priceCents, payments] = await Promise.all([
     getSchoolDaysInRange(startOfMonth, endOfMonth),
     (parentId === undefined ? db.children.list({
       where: { active: true },
@@ -86,9 +87,11 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
       where: { date: { gte: startOfMonth, lte: endOfMonth } },
     }) as Promise<ReadonlyArray<NoLunchDay>>,
     db.lunchPrice.get(month) as Promise<number>,
+    db.lunchPayments.list(month) as Promise<ReadonlyArray<{ childId: string; paid: boolean }>>,
   ]);
 
   const excusesByChild = groupExcusesByChild(excuses);
+  const paidChildren = new Set(payments.filter(payment => payment.paid).map(payment => payment.childId));
   const sortedChildren = sortChildrenWithSiblings(
     children.map((child) => ({
       ...child,
@@ -155,6 +158,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
         lastName: child.lastName,
         statuses,
         payableLunches: statuses.filter(isPayableLunch).length,
+        paid: paidChildren.has(child.id),
       };
     }),
     childrenWithoutLunch: childrenWithoutLunch.map((child) => ({

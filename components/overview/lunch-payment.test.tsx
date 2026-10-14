@@ -4,8 +4,8 @@ import { LunchPayment } from "./lunch-payment";
 import { getLunchPayment } from "@/lib/lunch-payment";
 
 const payment = getLunchPayment({ month: "2026-09", monthLabel: "září 2026", priceCents: 6550, days: [], childrenWithoutLunch: [], children: [
-  { id: "anna", firstName: "Anna", lastName: "Malá", payableLunches: 3, statuses: [] },
-  { id: "jan", firstName: "Jan", lastName: "Malý", payableLunches: 2, statuses: [] },
+  { id: "anna", firstName: "Anna", lastName: "Malá", payableLunches: 3, paid: false, statuses: [] },
+  { id: "jan", firstName: "Jan", lastName: "Malý", payableLunches: 2, paid: false, statuses: [] },
 ] });
 const writeText = vi.fn();
 

@@ -189,6 +189,15 @@ export async function updateLunchPrice(month: string, price: string): Promise<vo
   revalidatePath("/rodic");
 }
 
+export async function updateLunchPaid(childId: string, month: string, paid: boolean): Promise<void> {
+  const user = await requireDirector();
+  validateLunchPriceMonth(month);
+  if (typeof childId !== "string" || !childId.trim() || typeof paid !== "boolean") throw new Error("Neplatné údaje platby.");
+  await db.lunchPayments.set(childId, month, paid, user.id);
+  revalidatePath("/reditel");
+  revalidatePath("/rodic");
+}
+
 export async function updateExtraFundPerson(personId: string, patch: ExtraFundPersonPatch): Promise<void> {
   const user = await requireDirector();
   const validated = validateExtraFundPersonPatch(patch);

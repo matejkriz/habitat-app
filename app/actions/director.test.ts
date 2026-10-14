@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   getDbUser: vi.fn(),
   lunchPriceGet: vi.fn(),
   lunchPriceSet: vi.fn(),
+  lunchPaymentsList: vi.fn(),
+  lunchPaidSet: vi.fn(),
   tripFundOverview: vi.fn(),
   createExtraPerson: vi.fn(), updateExtraPerson: vi.fn(), setExtraExpense: vi.fn(),
   childrenList: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
 vi.mock("@/lib/db", () => ({
   db: {
     lunchPrice: { get: mocks.lunchPriceGet, set: mocks.lunchPriceSet },
+    lunchPayments: { list: mocks.lunchPaymentsList, set: mocks.lunchPaidSet },
     tripFunds: { overview: mocks.tripFundOverview, createExtraPerson: mocks.createExtraPerson, updateExtraPerson: mocks.updateExtraPerson, setExtraExpense: mocks.setExtraExpense },
     children: {
       list: mocks.childrenList,
@@ -64,6 +67,7 @@ import {
   getExcuses,
   getLunchOverview,
   updateLunchPrice,
+  updateLunchPaid,
   getTripFundOverview,
   updateChild,
   updateExcuse,
@@ -120,6 +124,7 @@ describe("getLunchOverview", () => {
     ]);
     mocks.noLunchDaysList.mockResolvedValue([]);
     mocks.lunchPriceGet.mockResolvedValue(6550);
+    mocks.lunchPaymentsList.mockResolvedValue([]);
   });
 
   it("includes the saved monthly price in the director overview", async () => {
@@ -771,5 +776,33 @@ describe("updateLunchPrice", () => {
   it("rejects invalid months before writing", async () => {
     await expect(updateLunchPrice("2026-13", "55")).rejects.toThrow("Neplatný měsíc");
     expect(mocks.lunchPriceSet).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateLunchPaid", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
+  });
+
+  it("saves a child-month payment and refreshes both overviews", async () => {
+    await updateLunchPaid("anna", "2026-09", true);
+    expect(mocks.lunchPaidSet).toHaveBeenCalledWith("anna", "2026-09", true, "director-1");
+    const { revalidatePath } = await import("next/cache");
+    expect(revalidatePath).toHaveBeenCalledWith("/reditel");
+    expect(revalidatePath).toHaveBeenCalledWith("/rodic");
+  });
+
+  it.each([null, { role: "PARENT" }, { role: "TEACHER" }])("rejects non-directors (%j)", async user => {
+    mocks.getDbUser.mockResolvedValue(user);
+    await expect(updateLunchPaid("anna", "2026-09", true)).rejects.toThrow("Unauthorized");
+    expect(mocks.lunchPaidSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid month, child id, or checkbox value before writing", async () => {
+    await expect(updateLunchPaid("anna", "2026-13", true)).rejects.toThrow("Neplatný měsíc");
+    await expect(updateLunchPaid("", "2026-09", true)).rejects.toThrow();
+    await expect(updateLunchPaid("anna", "2026-09", "true" as unknown as boolean)).rejects.toThrow();
+    expect(mocks.lunchPaidSet).not.toHaveBeenCalled();
   });
 });
