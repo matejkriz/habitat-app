@@ -30,6 +30,8 @@ test("director records monthly sibling payments and both final columns stay fixe
   await expect(paid("Max Mlsoun")).not.toBeChecked();
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await table.scrollIntoViewIfNeeded();
+  await page.evaluate(async () => { await document.fonts.ready; });
   const positions = () => table.evaluate(element => {
     const amount = element.querySelector("thead th:nth-last-child(2)")!.getBoundingClientRect();
     const paid = element.querySelector("thead th:last-child")!.getBoundingClientRect();
@@ -44,7 +46,7 @@ test("director records monthly sibling payments and both final columns stay fixe
   await table.evaluate(element => { element.parentElement!.scrollLeft = element.parentElement!.scrollWidth; });
   const after = await positions();
   expect(after.paidWidth).toBe(64);
-  expect(Math.abs(after.amount - before.amount)).toBeLessThan(1);
+  expect(Math.abs(after.amount - before.amount), JSON.stringify({ before, after })).toBeLessThan(1);
   expect(Math.abs(after.paid - before.paid)).toBeLessThan(1);
   expect(Math.abs(after.gap)).toBeLessThan(1);
   expect(Math.abs(after.rowGap)).toBeLessThan(1);

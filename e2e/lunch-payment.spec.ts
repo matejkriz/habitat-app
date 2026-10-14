@@ -9,6 +9,13 @@ const monthName = new Intl.DateTimeFormat("cs-CZ", { month: "long", timeZone: "U
 const money = (amount: number) => new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(amount);
 
 test("parent payment totals siblings and its branded QR and clipboard contain the same payment", async ({ page, context }) => {
+  await persona(page, "director-bohumil");
+  await page.goto(`/reditel?month=${month}#obedy`);
+  for (const name of ["Božena Bublina", "Max Mlsoun"]) {
+    const paid = page.getByRole("checkbox", { name: `Zaplaceno: ${name}` });
+    await paid.uncheck();
+    await expect(paid).toBeEnabled();
+  }
   await persona(page, "teacher-kveta");
   await page.getByLabel("Datum docházky").fill(date);
   let changed = false;
@@ -24,6 +31,7 @@ test("parent payment totals siblings and its branded QR and clipboard contain th
   await persona(page, "parent-bedrich");
   await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${month}#obedy`);
   const table = page.getByRole("table", { name: /^Obědy/ });
+  await expect(table.locator("tbody tr")).toHaveCount(2);
   const counts = await table.locator("tbody tr").evaluateAll(rows => rows.map(row => Number(row.querySelector("td:nth-last-child(2)")?.textContent)));
   expect(counts).toHaveLength(2);
   expect(counts.every(count => count > 0)).toBe(true);
