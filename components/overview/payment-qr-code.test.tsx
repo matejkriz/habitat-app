@@ -14,8 +14,8 @@ describe("branded payment QR readability", () => {
     [29, "A*AM:1", "Malá%2A"],
     [999_999_999, "Alexandra", "Dvořáková"],
   ])("decodes the rendered QR with the real Habitat logo (%s, %s)", async (priceCents, firstName, lastName) => {
-    const payment = getLunchPayment({ month: "2026-09", monthLabel: "září 2026", priceCents, days: [], childrenWithoutLunch: [], children: [
-      { id: "child", firstName, lastName, payableLunches: 1, statuses: [] },
+    const payment = getLunchPayment({ month: "2026-09", monthLabel: "září 2026", lastOpenDay: "2026-09-30", priceCents, days: [], childrenWithoutLunch: [], children: [
+      { id: "child", firstName, lastName, payableLunches: 1, paid: false, statuses: [] },
     ] });
     const markup = renderToStaticMarkup(<PaymentQrCode value={payment.payload!} />);
     expect(markup).toContain("/habitat-logo.webp");

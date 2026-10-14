@@ -1,16 +1,100 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ParentLunchSection, ParentTripFundSection } from "./parent-overviews";
 const mocks = vi.hoisted(() => ({ lunch: vi.fn(), fund: vi.fn() }));
 vi.mock("@/app/actions/parent-overviews", () => ({ getParentLunchOverview: mocks.lunch, getParentTripFundOverview: mocks.fund }));
 vi.mock("@/app/actions/director", () => ({ updateLunchPrice: vi.fn() }));
 
 beforeEach(() => {
+  mocks.lunch.mockReset();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
 });
+afterEach(() => vi.useRealTimers());
+
+function billingOverview(month: string, paid = false, payableLunches = 2) {
+  return { month, monthLabel: month === "2026-09" ? "září 2026" : "říjen 2026", lastOpenDay: month === "2026-09" ? "2026-09-30" : "2026-10-29", priceCents: 6550,
+    days: [{ key: `${month}-01`, day: 1, weekday: "Čt" }], children: [
+      { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches, paid },
+    ], childrenWithoutLunch: [] };
+}
 
 describe("parent read-only overviews", () => {
+  it("shows the retrospective explanation and offers the previous month payment for an unfinished month", async () => {
+    mocks.lunch.mockImplementation(async month => ({ ...billingOverview(month), priceCents: month === "2026-09" ? 6550 : 5500 }));
+    render(await ParentLunchSection({ month: "2026-10", childId: "anna", calendarMonth: "2026-10" }));
+    expect(screen.getByRole("table", { name: "Obědy – Říjen 2026" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Platba říjen" })).toBeNull();
+    expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
+    expect(mocks.lunch.mock.calls).toEqual([["2026-10"], ["2026-09"]]);
+    fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Obědy září: Anna Malá")).toBeTruthy();
+    expect(within(dialog).getByText(/131\s*Kč/)).toBeTruthy();
+  });
+
+  it("keeps the explanation but hides the previous month payment when it is marked paid", async () => {
+    mocks.lunch.mockImplementation(async month => billingOverview(month, true));
+    render(await ParentLunchSection({ month: "2026-10", childId: "anna", calendarMonth: "2026-10" }));
+    expect(screen.queryByRole("button", { name: /^Platba/ })).toBeNull();
+    expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Obědy za září 2026 máte zaplacené.");
+  });
+
+  it("offers the previous calendar month when browsing a future overview", async () => {
+    mocks.lunch.mockImplementation(async month => month === "2026-11"
+      ? { ...billingOverview(month), monthLabel: "listopad 2026", lastOpenDay: "2026-11-30" }
+      : billingOverview(month));
+    render(await ParentLunchSection({ month: "2026-11", childId: "anna", calendarMonth: "2026-10" }));
+    expect(screen.queryByRole("button", { name: "Platba listopad" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Platba říjen" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Platba září" })).toBeTruthy();
+    expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
+    expect(mocks.lunch.mock.calls).toEqual([["2026-11"], ["2026-09"]]);
+  });
+
+  it("keeps a zero amount payment disabled for the selected closed month", async () => {
+    mocks.lunch.mockResolvedValue(billingOverview("2026-09", false, 0));
+    render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-10" }));
+    expect(screen.getByRole("button", { name: "Platba září" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("V tomto měsíci nemáte žádné obědy k úhradě.")).toBeTruthy();
+  });
+
+  it("replaces the selected month payment with confirmation when all children are marked paid", async () => {
+    mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
+      days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: true },
+        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["present"], payableLunches: 2, paid: true },
+      ], childrenWithoutLunch: [],
+    });
+    render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));
+    expect(screen.getByRole("status").textContent).toBe("Obědy za září 2026 máte zaplacené.");
+    expect(screen.queryByRole("button", { name: "Platba září" })).toBeNull();
+    expect(screen.queryByText("Obědy se platí za předchozí měsíc zpětně.")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Zaplaceno" })).toBeNull();
+    expect(within(screen.getByRole("table")).getByText(/165\s*Kč/)).toBeTruthy();
+    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-09");
+  });
+
+  it("includes only unpaid siblings in the selected month payment", async () => {
+    mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
+      days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: true },
+        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["present"], payableLunches: 2, paid: false },
+      ], childrenWithoutLunch: [],
+    });
+    render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));
+    fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/110\s*Kč/)).toBeTruthy();
+    expect(within(dialog).getByText("Obědy září: Jan Malý")).toBeTruthy();
+    expect(screen.getByText("Zaplaceno za: Anna Malá.")).toBeTruthy();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
   it("shows fund values without edit buttons, inputs, or staff-only day links", async () => {
     mocks.fund.mockResolvedValue({ days: [{ date: new Date(2026, 8, 10).getTime(), name: "Jarmark", expense: null }], children: [
       { childId: "anna", firstName: "Anna", lastName: "Malá", fundSent: 500, fundSpent: 80, fundBalance: 420, amounts: [80] },
@@ -26,7 +110,7 @@ describe("parent read-only overviews", () => {
 
   it("shows lunches with month navigation that stays on the parent overview and retains the selected child", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-08", monthLabel: "srpen 2026", priceCents: 5500, days: [{ key: "2026-08-19", day: 19, weekday: "St" }], children: [
-      { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1 },
+      { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: false },
     ], childrenWithoutLunch: [] });
     render(await ParentLunchSection({ month: "2026-08", childId: "anna", calendarMonth: "2026-09" }));
     const url = new URL(screen.getByRole("link", { name: "Následující měsíc" }).getAttribute("href")!, "https://example.com");
@@ -46,8 +130,8 @@ describe("parent read-only overviews", () => {
   it("opens the month payment below the lunch table with a combined sibling amount", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 6550,
       days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
-        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 3 },
-        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["present"], payableLunches: 2 },
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 3, paid: false },
+        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["present"], payableLunches: 2, paid: false },
       ], childrenWithoutLunch: [{ id: "petr", firstName: "Petr", lastName: "Malý" }],
     });
     render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-08" }));
@@ -67,8 +151,8 @@ describe("parent read-only overviews", () => {
   it("shows daily, monthly and money totals for a parent with multiple children", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 6550,
       days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }, { key: "2026-09-11", day: 11, weekday: "Pá" }], children: [
-        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present", "excused"], payableLunches: 1 },
-        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["kept", "late"], payableLunches: 2 },
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present", "excused"], payableLunches: 1, paid: false },
+        { id: "jan", firstName: "Jan", lastName: "Malý", statuses: ["kept", "late"], payableLunches: 2, paid: false },
       ], childrenWithoutLunch: [],
     });
     render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-08" }));
@@ -80,7 +164,7 @@ describe("parent read-only overviews", () => {
   it("keeps the family total when one of the parent's children does not take lunches", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
       days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
-        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1 },
+        { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: false },
       ], childrenWithoutLunch: [{ id: "jan", firstName: "Jan", lastName: "Malý" }],
     });
     render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));

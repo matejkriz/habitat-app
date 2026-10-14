@@ -27,6 +27,45 @@ const tableName = v.union(
 
 const documentValue = v.any();
 
+export const listLunchPayments = query({
+  args: { secret: v.string(), month: v.string() },
+  returns: v.array(v.object({ childId: v.string(), paid: v.boolean() })),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    validateLunchPriceMonth(args.month);
+    const payments = await db.query("lunchPayments")
+      .withIndex("by_month", query => query.eq("month", args.month)).collect();
+    return payments.map(({ childId, paid }) => ({ childId, paid }));
+  },
+});
+
+export const setLunchPaid = mutation({
+  args: { secret: v.string(), childId: v.string(), month: v.string(), paid: v.boolean(), recordedById: v.string() },
+  returns: v.null(),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    const user = await db.query("users")
+      .withIndex("by_app_id", query => query.eq("id", args.recordedById)).unique();
+    if (user?.role !== "DIRECTOR") throw new Error("Unauthorized");
+    validateLunchPriceMonth(args.month);
+    const child = await db.query("children")
+      .withIndex("by_app_id", query => query.eq("id", args.childId)).unique();
+    if (!child) throw new Error("Dítě nenalezeno");
+    const current = await db.query("lunchPayments")
+      .withIndex("by_child_month", query => query.eq("childId", args.childId).eq("month", args.month)).unique();
+    if ((current?.paid ?? false) === args.paid) return null;
+    const value = { childId: child.id, month: args.month, paid: args.paid, recordedById: user.id, updatedAt: Date.now() };
+    if (current) await db.patch(current._id, value);
+    else await db.insert("lunchPayments", value);
+    await db.insert("auditLogs", {
+      id: `lunch_payment_${args.month}_${child.id}_${value.updatedAt}`, userId: user.id,
+      action: current ? "UPDATE" : "CREATE", entityType: "LunchPayment", entityId: `${args.month}:${child.id}`,
+      previousValue: { paid: current?.paid ?? false }, newValue: { paid: args.paid }, createdAt: value.updatedAt,
+    });
+    return null;
+  },
+});
+
 export const getLunchPrice = query({
   args: { secret: v.string(), month: v.string() },
   returns: v.number(),

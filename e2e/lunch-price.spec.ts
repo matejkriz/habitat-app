@@ -29,26 +29,31 @@ test("monthly lunch pricing persists, carries forward, and reaches the parent ov
   await page.goto(`/reditel?month=${month}#obedy`);
   const price = page.getByLabel("Cena jednoho obědu (Kč)");
   await expect(price).toHaveValue("55");
+  const savePrice = page.getByRole("button", { name: "Uložit cenu" });
+  await expect(savePrice).toHaveCount(0);
+  await price.fill("55,00");
+  await expect(savePrice).toHaveCount(0);
   await price.fill("65,50");
   await page.getByRole("button", { name: "Uložit cenu" }).click();
   await expect(page.getByText("Cena byla uložena.", { exact: true })).toBeVisible();
+  await expect(savePrice).toHaveCount(0);
   await page.reload();
   await expect(price).toHaveValue("65.5");
 
   const table = page.getByRole("table", { name: /^Obědy/ });
   const oskar = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Oskar Okurka", exact: true }) });
-  const count = Number(await oskar.getByRole("cell").nth(-2).textContent());
+  const count = Number(await oskar.getByRole("cell").nth(-3).textContent());
   expect(count).toBeGreaterThan(0);
-  await expect(oskar.getByRole("cell").last()).toHaveText(money(count * 65.5));
-  const rowCounts = await table.locator("tbody tr").evaluateAll(rows => rows.map(row => Number(row.querySelector("td:nth-last-child(2)")?.textContent)));
+  await expect(oskar.getByRole("cell").nth(-2)).toHaveText(money(count * 65.5));
+  const rowCounts = await table.locator("tbody tr").evaluateAll(rows => rows.map(row => Number(row.querySelector("td:nth-last-child(3)")?.textContent)));
   const total = rowCounts.reduce((sum, value) => sum + value, 0);
   const footer = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Součet", exact: true }) });
-  await expect(footer.getByRole("cell").nth(-2)).toHaveText(String(total));
-  await expect(footer.getByRole("cell").last()).toHaveText(money(total * 65.5));
+  await expect(footer.getByRole("cell").nth(-3)).toHaveText(String(total));
+  await expect(footer.getByRole("cell").nth(-2)).toHaveText(money(total * 65.5));
 
   await page.setViewportSize({ width: 390, height: 844 });
   await table.evaluate(element => { element.parentElement!.scrollLeft = element.parentElement!.scrollWidth; });
-  await expect(oskar.getByRole("cell").last()).toBeVisible();
+  await expect(oskar.getByRole("cell").nth(-2)).toBeVisible();
   await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-mobile.png" });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-desktop.png" });
@@ -60,7 +65,7 @@ test("monthly lunch pricing persists, carries forward, and reaches the parent ov
   await price.fill("70");
   await page.getByRole("button", { name: "Uložit cenu" }).click();
   await expect(page.getByText("Cena byla uložena.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Uložit cenu" })).toBeEnabled();
+  await expect(savePrice).toHaveCount(0);
   await page.getByRole("link", { name: "Předchozí měsíc" }).click();
   await expect(page).toHaveURL(new RegExp(`month=${month}`));
   await expect(page.getByRole("heading", { name: monthLabel(month), exact: true })).toBeVisible();
