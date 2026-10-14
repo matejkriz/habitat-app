@@ -49,9 +49,9 @@ test("monthly lunch pricing persists, carries forward, and reaches the parent ov
   await page.setViewportSize({ width: 390, height: 844 });
   await table.evaluate(element => { element.parentElement!.scrollLeft = element.parentElement!.scrollWidth; });
   await expect(oskar.getByRole("cell").last()).toBeVisible();
-  await page.locator("#obedy").screenshot({ path: "/tmp/habitat-lunch-mobile.png" });
+  await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-mobile.png" });
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.locator("#obedy").screenshot({ path: "/tmp/habitat-lunch-desktop.png" });
+  await page.getByRole("region", { name: "Obědy", exact: true }).screenshot({ path: "/tmp/habitat-lunch-desktop.png" });
 
   await page.getByRole("link", { name: "Následující měsíc" }).click();
   await expect(page).toHaveURL(new RegExp(`month=${nextMonth}`));

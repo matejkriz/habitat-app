@@ -1,12 +1,17 @@
 import { getParentLunchOverview, getParentTripFundOverview } from "@/app/actions/parent-overviews";
 import { LunchOverviewView, safeLunchMonth } from "./lunch-overview-view";
 import { TripFundGrid } from "./trip-fund-grid";
+import { getLunchPayment } from "@/lib/lunch-payment";
+import { LunchPayment } from "./lunch-payment";
 
 export async function ParentLunchSection({ month, childId, calendarMonth }: {
   month?: string; childId: string; calendarMonth: string;
 }) {
   const overview = await getParentLunchOverview(safeLunchMonth(month));
-  return <LunchOverviewView overview={overview} basePath="/rodic" monthParam="lunchMonth" extraParams={{ child: childId, month: calendarMonth }} />;
+  return <div className="space-y-4">
+    <LunchOverviewView overview={overview} basePath="/rodic" monthParam="lunchMonth" extraParams={{ child: childId, month: calendarMonth }} />
+    <LunchPayment key={overview.month} payment={getLunchPayment(overview)} />
+  </div>;
 }
 
 export async function ParentTripFundSection() {
