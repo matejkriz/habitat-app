@@ -18,6 +18,7 @@ export type LunchOverview = {
   readonly month: string;
   readonly monthLabel: string;
   readonly priceCents: number;
+  readonly lastOpenDay: string | null;
   readonly days: ReadonlyArray<{
     readonly key: string;
     readonly day: number;
@@ -117,10 +118,12 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
     day: date.getDate(),
     weekday: ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"][date.getDay()],
   }));
+  const lastOpenDay = schoolDays.at(-1);
 
   return {
     month,
     priceCents,
+    lastOpenDay: lastOpenDay ? getLocalDateKey(lastOpenDay) : null,
     monthLabel: new Intl.DateTimeFormat("cs-CZ", {
       month: "long",
       year: "numeric",

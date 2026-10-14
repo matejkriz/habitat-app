@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import sharp from "sharp";
 import jsQR from "jsqr";
-import { persona } from "./helpers";
+import { persona, previousBillingSchoolDay } from "./helpers";
 
-const date = process.env.E2E_DATE ?? "2026-09-17";
+const date = previousBillingSchoolDay();
 const month = date.slice(0, 7);
 const monthName = new Intl.DateTimeFormat("cs-CZ", { month: "long", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
 const money = (amount: number) => new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(amount);
@@ -24,7 +24,7 @@ test("parent payment totals siblings and its branded QR and clipboard contain th
     await expect(present).toBeAttached();
     if (!(await present.isChecked())) { await present.check({ force: true }); changed = true; }
   }
-  if (changed) {
+  if (changed || await page.getByRole("button", { name: /Potvrdit docházku|Uložit změny|^Uloženo$/ }).isEnabled()) {
     await page.getByRole("button", { name: /Potvrdit docházku|Uložit změny/ }).click();
     await expect(page.getByText(/Docházka uložena/)).toBeVisible();
   }

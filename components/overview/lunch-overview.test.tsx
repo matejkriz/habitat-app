@@ -21,6 +21,7 @@ function lunchOverview(): LunchOverview {
   return {
     month: "2026-08",
     monthLabel: "srpen 2026",
+    lastOpenDay: "2026-08-31",
     priceCents: 5500,
     days: [{ key: "2026-08-19", day: 19, weekday: "St" }],
     children: [

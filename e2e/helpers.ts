@@ -1,4 +1,12 @@
 import { expect, type Page } from "@playwright/test";
+import { getPreviousLunchPaymentMonth } from "../lib/lunch-payment";
+
+export function previousBillingSchoolDay(): string {
+  const [year, month] = getPreviousLunchPaymentMonth().split("-").map(Number);
+  const date = new Date(Date.UTC(year, month, 0, 12));
+  while ([0, 5, 6].includes(date.getUTCDay())) date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
 
 export async function persona(
   page: Page,
@@ -19,4 +27,3 @@ export async function persona(
         : /\/reditel/,
   );
 }
-

@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { persona } from "./helpers";
+import { persona, previousBillingSchoolDay } from "./helpers";
 
-const date = process.env.E2E_DATE ?? "2026-09-17";
+const date = previousBillingSchoolDay();
 const month = date.slice(0, 7);
+const [year, monthNumber] = month.split("-").map(Number);
+const unfinishedMonth = new Date(Date.UTC(year, monthNumber + 1, 1)).toISOString().slice(0, 7);
+const unfinishedName = new Intl.DateTimeFormat("cs-CZ", { month: "long", timeZone: "UTC" }).format(new Date(`${unfinishedMonth}-01T12:00:00Z`));
 const monthName = new Intl.DateTimeFormat("cs-CZ", { month: "long", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
 const monthLabel = new Intl.DateTimeFormat("cs-CZ", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
 
@@ -14,7 +17,7 @@ test("director records monthly sibling payments and both final columns stay fixe
     const presence = page.getByRole("checkbox", { name: `Docházka: ${name}` });
     if (!(await presence.isChecked())) { await presence.check({ force: true }); changed = true; }
   }
-  if (changed) {
+  if (changed || await page.getByRole("button", { name: /Potvrdit docházku|Uložit změny|^Uloženo$/ }).isEnabled()) {
     await page.getByRole("button", { name: /Potvrdit docházku|Uložit změny/ }).click();
     await expect(page.getByText(/Docházka uložena/)).toBeVisible();
   }
@@ -87,6 +90,10 @@ test("director records monthly sibling payments and both final columns stay fixe
   await expect(page.getByRole("button", { name: `Platba ${monthName}` })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("status").filter({ hasText: `Obědy za ${monthLabel} máte zaplacené.` })).toBeVisible();
+  await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${unfinishedMonth}#obedy`);
+  await expect(page.getByRole("button", { name: `Platba ${unfinishedName}` })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: `Obědy za ${monthLabel} máte zaplacené.` })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Platba ${monthName}` })).toHaveCount(0);
 
   await persona(page, "director-bohumil");
   await page.goto(`/reditel?month=${month}#obedy`);
@@ -95,6 +102,15 @@ test("director records monthly sibling payments and both final columns stay fixe
     await expect(paid(name)).toBeEnabled();
   }
   await persona(page, "parent-bedrich");
-  await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${month}#obedy`);
+  await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${unfinishedMonth}#obedy`);
   await expect(page.getByRole("button", { name: `Platba ${monthName}` })).toBeEnabled();
+  await expect(page.getByRole("button", { name: `Platba ${unfinishedName}` })).toHaveCount(0);
+  await expect(page.getByText(/se platí až po posledním otevřeném dni měsíce\./).filter({ visible: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: `Platba ${monthName}` }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "/tmp/habitat-previous-month-choice-mobile.png" });
+  await page.getByRole("button", { name: `Platba ${monthName}` }).click();
+  await expect(page.getByRole("dialog").getByText(`Obědy ${monthName}: Božena Bublina, Max Mlsoun`, { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`lunchMonth=${unfinishedMonth}`));
+  await page.getByRole("dialog").screenshot({ path: "/tmp/habitat-previous-month-payment-mobile.png" });
 });

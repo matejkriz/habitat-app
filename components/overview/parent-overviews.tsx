@@ -1,30 +1,46 @@
 import { getParentLunchOverview, getParentTripFundOverview } from "@/app/actions/parent-overviews";
 import { LunchOverviewView, safeLunchMonth } from "./lunch-overview-view";
 import { TripFundGrid } from "./trip-fund-grid";
-import { getLunchPayment } from "@/lib/lunch-payment";
+import { getLunchPayment, getPreviousLunchPaymentMonth, isLunchMonthClosed } from "@/lib/lunch-payment";
+import type { LunchOverview } from "@/lib/lunch-overview";
 import { LunchPayment } from "./lunch-payment";
 
 export async function ParentLunchSection({ month, childId, calendarMonth }: {
   month?: string; childId: string; calendarMonth: string;
 }) {
   const overview = await getParentLunchOverview(safeLunchMonth(month));
-  const paidChildren = overview.children.filter(child => child.paid);
-  const allPaid = paidChildren.length > 0 && overview.children.every(child => child.paid || child.payableLunches === 0);
+  const now = new Date();
+  const closed = isLunchMonthClosed(overview, now);
+  const previous = closed ? null : await getParentLunchOverview(getPreviousLunchPaymentMonth(now));
+  const paymentOverview = closed ? overview : previous && isLunchMonthClosed(previous, now) ? previous : null;
   return <div className="space-y-4">
     <LunchOverviewView overview={overview} basePath="/rodic" monthParam="lunchMonth" extraParams={{ child: childId, month: calendarMonth }} />
-    {allPaid ? (
-      <p role="status" className="flex items-center gap-2 rounded-xl border border-sage/30 bg-sage/10 px-4 py-3 font-semibold text-sage-dark">
-        <svg aria-hidden="true" className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" />
-        </svg>
-        Obědy za {overview.monthLabel} máte zaplacené.
-      </p>
-    ) : <div className="space-y-2">
-      {paidChildren.length > 0 && <p className="text-sm text-sage-dark">
-        Zaplaceno za: {paidChildren.map(child => `${child.firstName} ${child.lastName}`).join(", ")}. Platba zahrnuje pouze nezaplacené obědy.
-      </p>}
-      <LunchPayment key={overview.month} payment={getLunchPayment(overview)} />
-    </div>}
+    {!closed && <p className="text-sm text-charcoal-light">
+      Obědy za {overview.monthLabel} se platí až po posledním otevřeném dni měsíce.
+    </p>}
+    {paymentOverview && <ParentLunchPayment overview={paymentOverview} previous={!closed} />}
+  </div>;
+}
+
+function ParentLunchPayment({ overview, previous }: { overview: LunchOverview; previous: boolean }) {
+  const paidChildren = overview.children.filter(child => child.paid);
+  const allPaid = paidChildren.length > 0 && overview.children.every(child => child.paid || child.payableLunches === 0);
+  const payment = getLunchPayment(overview);
+  if (allPaid) return (
+    <p role="status" className="flex items-center gap-2 rounded-xl border border-sage/30 bg-sage/10 px-4 py-3 font-semibold text-sage-dark">
+      <svg aria-hidden="true" className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" />
+      </svg>
+      Obědy za {overview.monthLabel} máte zaplacené.
+    </p>
+  );
+  if (payment.amountCents === 0) return <p className="text-sm text-charcoal-light">Za {overview.monthLabel} nemáte žádné obědy k úhradě.</p>;
+  return <div className="space-y-2">
+    {previous && <p className="text-sm text-charcoal-light">K úhradě zbývají obědy za {overview.monthLabel}.</p>}
+    {paidChildren.length > 0 && <p className="text-sm text-sage-dark">
+      Zaplaceno za: {paidChildren.map(child => `${child.firstName} ${child.lastName}`).join(", ")}. Platba zahrnuje pouze nezaplacené obědy.
+    </p>}
+    <LunchPayment key={overview.month} payment={payment} />
   </div>;
 }
 

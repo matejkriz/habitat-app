@@ -3,6 +3,26 @@ import { formatLunchAmount, validateLunchPriceMonth } from "./lunch-price";
 
 const account = "2802518214 / 2010";
 const iban = "CZ3020100000002802518214";
+const pragueDate = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+function pragueDayKey(now: Date): string {
+  const parts = pragueDate.formatToParts(now);
+  const part = (type: string) => parts.find(part => part.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+export function isLunchMonthClosed(overview: Pick<LunchOverview, "month" | "lastOpenDay">, now = new Date()): boolean {
+  const today = pragueDayKey(now);
+  const month = today.slice(0, 7);
+  return overview.month < month || (overview.month === month && (overview.lastOpenDay === null || overview.lastOpenDay < today));
+}
+
+export function getPreviousLunchPaymentMonth(now = new Date()): string {
+  const [year, month] = pragueDayKey(now).slice(0, 7).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+}
 
 export type LunchPayment = {
   monthName: string;

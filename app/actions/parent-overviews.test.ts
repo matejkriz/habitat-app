@@ -29,6 +29,17 @@ beforeEach(() => {
 });
 
 describe("parent overview actions", () => {
+  it("uses the last actual open day for billing even when lunch is not served that day", async () => {
+    const lastDay = new Date(2026, 8, 30);
+    mocks.schoolDays.mockResolvedValue([date, lastDay]);
+    mocks.noLunchDays.mockResolvedValue([{ date: lastDay }]);
+    const data = await getParentLunchOverview("2026-09");
+    expect(data.days.map(day => day.key)).toEqual(["2026-09-10"]);
+    expect(data.lastOpenDay).toBe("2026-09-30");
+    mocks.schoolDays.mockResolvedValue([]);
+    expect((await getParentLunchOverview("2026-09")).lastOpenDay).toBeNull();
+  });
+
   it("loads the selected month's paid state only for the parent's own children", async () => {
     mocks.lunchPayments.mockResolvedValue([{ childId: "own", paid: true }, { childId: "stranger", paid: true }]);
     const data = await getParentLunchOverview("2026-09");
