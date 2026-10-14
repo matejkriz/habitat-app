@@ -22,32 +22,37 @@ function billingOverview(month: string, paid = false, payableLunches = 2) {
 }
 
 describe("parent read-only overviews", () => {
-  it("shows only the retrospective payment explanation for an unfinished month", async () => {
+  it("shows the retrospective explanation and offers the previous month payment for an unfinished month", async () => {
     mocks.lunch.mockImplementation(async month => ({ ...billingOverview(month), priceCents: month === "2026-09" ? 6550 : 5500 }));
     render(await ParentLunchSection({ month: "2026-10", childId: "anna", calendarMonth: "2026-10" }));
     expect(screen.getByRole("table", { name: "Obědy – Říjen 2026" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Platba/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Platba říjen" })).toBeNull();
     expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
-    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-10");
+    expect(mocks.lunch.mock.calls).toEqual([["2026-10"], ["2026-09"]]);
+    fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Obědy září: Anna Malá")).toBeTruthy();
+    expect(within(dialog).getByText(/131\s*Kč/)).toBeTruthy();
   });
 
-  it("keeps the unfinished month explanation independent of manual paid marks", async () => {
+  it("keeps the explanation but hides the previous month payment when it is marked paid", async () => {
     mocks.lunch.mockImplementation(async month => billingOverview(month, true));
     render(await ParentLunchSection({ month: "2026-10", childId: "anna", calendarMonth: "2026-10" }));
     expect(screen.queryByRole("button", { name: /^Platba/ })).toBeNull();
     expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
-    expect(screen.queryByText(/máte zaplacené/)).toBeNull();
-    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-10");
+    expect(screen.getByRole("status").textContent).toBe("Obědy za září 2026 máte zaplacené.");
   });
 
-  it("does not offer payment or load another month when browsing a future overview", async () => {
+  it("offers the previous calendar month when browsing a future overview", async () => {
     mocks.lunch.mockImplementation(async month => month === "2026-11"
       ? { ...billingOverview(month), monthLabel: "listopad 2026", lastOpenDay: "2026-11-30" }
       : billingOverview(month));
     render(await ParentLunchSection({ month: "2026-11", childId: "anna", calendarMonth: "2026-10" }));
-    expect(screen.queryByRole("button", { name: /^Platba/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Platba listopad" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Platba říjen" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Platba září" })).toBeTruthy();
     expect(screen.getByText("Obědy se platí za předchozí měsíc zpětně.")).toBeTruthy();
-    expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-11");
+    expect(mocks.lunch.mock.calls).toEqual([["2026-11"], ["2026-09"]]);
   });
 
   it("keeps a zero amount payment disabled for the selected closed month", async () => {
@@ -57,7 +62,7 @@ describe("parent read-only overviews", () => {
     expect(screen.getByText("V tomto měsíci nemáte žádné obědy k úhradě.")).toBeTruthy();
   });
 
-  it("offers the full selected month payment even when all children are marked paid", async () => {
+  it("replaces the selected month payment with confirmation when all children are marked paid", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
       days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
         { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: true },
@@ -65,19 +70,16 @@ describe("parent read-only overviews", () => {
       ], childrenWithoutLunch: [],
     });
     render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));
-    expect(screen.queryByText(/máte zaplacené/)).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Obědy za září 2026 máte zaplacené.");
+    expect(screen.queryByRole("button", { name: "Platba září" })).toBeNull();
     expect(screen.queryByText("Obědy se platí za předchozí měsíc zpětně.")).toBeNull();
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Zaplaceno" })).toBeNull();
     expect(within(screen.getByRole("table")).getByText(/165\s*Kč/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/165\s*Kč/)).toBeTruthy();
-    expect(within(dialog).getByText("Obědy září: Anna Malá, Jan Malý")).toBeTruthy();
     expect(mocks.lunch).toHaveBeenCalledExactlyOnceWith("2026-09");
   });
 
-  it("includes all siblings in the selected month payment regardless of partial paid marks", async () => {
+  it("includes only unpaid siblings in the selected month payment", async () => {
     mocks.lunch.mockResolvedValue({ month: "2026-09", monthLabel: "září 2026", priceCents: 5500,
       days: [{ key: "2026-09-10", day: 10, weekday: "Čt" }], children: [
         { id: "anna", firstName: "Anna", lastName: "Malá", statuses: ["present"], payableLunches: 1, paid: true },
@@ -87,9 +89,9 @@ describe("parent read-only overviews", () => {
     render(await ParentLunchSection({ month: "2026-09", childId: "anna", calendarMonth: "2026-09" }));
     fireEvent.click(screen.getByRole("button", { name: "Platba září" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/165\s*Kč/)).toBeTruthy();
-    expect(within(dialog).getByText("Obědy září: Anna Malá, Jan Malý")).toBeTruthy();
-    expect(screen.queryByText(/Zaplaceno za:/)).toBeNull();
+    expect(within(dialog).getByText(/110\s*Kč/)).toBeTruthy();
+    expect(within(dialog).getByText("Obědy září: Jan Malý")).toBeTruthy();
+    expect(screen.getByText("Zaplaceno za: Anna Malá.")).toBeTruthy();
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 

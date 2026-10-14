@@ -38,11 +38,12 @@ describe("lunch payment details", () => {
     expect(getPreviousLunchPaymentMonth(new Date("2026-12-31T22:59:59Z"))).toBe("2026-11");
   });
 
-  it.each([false, true])("includes all siblings regardless of manual paid marks (all paid: %s)", allPaid => {
+  it.each([false, true])("excludes children marked paid from the amount and note (all paid: %s)", allPaid => {
     const payment = getLunchPayment({ ...overview, children: overview.children.map((child, index) => ({ ...child, paid: allPaid || index === 0 })) });
-    expect(payment.amountCents).toBe(32750);
-    expect(payment.note).toBe("Obědy září: Anna Malá, Jan Malý");
-    expect(fields(payment.payload!).AM).toBe("327.50");
+    expect(payment.amountCents).toBe(allPaid ? 0 : 13100);
+    expect(payment.note).toBe(allPaid ? "Obědy září: " : "Obědy září: Jan Malý");
+    if (allPaid) expect(payment.payload).toBeNull();
+    else expect(fields(payment.payload!).AM).toBe("131.00");
   });
 
   it("encodes the correct account, exact sibling total, currency and Czech note", () => {

@@ -5,9 +5,11 @@ const date = previousBillingSchoolDay();
 const month = date.slice(0, 7);
 const [year, monthNumber] = month.split("-").map(Number);
 const unfinishedMonth = new Date(Date.UTC(year, monthNumber + 1, 1)).toISOString().slice(0, 7);
+const unfinishedName = new Intl.DateTimeFormat("cs-CZ", { month: "long", timeZone: "UTC" }).format(new Date(`${unfinishedMonth}-01T12:00:00Z`));
 const monthName = new Intl.DateTimeFormat("cs-CZ", { month: "long", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
+const monthLabel = new Intl.DateTimeFormat("cs-CZ", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
 
-test("director keeps monthly paid marks while parents can pay the selected closed month in full", async ({ page }) => {
+test("parents can pay the previous month until the director marks it paid", async ({ page }) => {
   await persona(page, "teacher-kveta");
   await page.getByLabel("Datum docházky").fill(date);
   let changed = false;
@@ -72,10 +74,10 @@ test("director keeps monthly paid marks while parents can pay the selected close
   await expect(table.getByRole("checkbox")).toHaveCount(0);
   await page.getByRole("button", { name: `Platba ${monthName}` }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText(`Obědy ${monthName}: Božena Bublina, Max Mlsoun`, { exact: true })).toBeVisible();
-  const familyTotal = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Součet", exact: true }) });
-  const totalAmount = await familyTotal.getByRole("cell").last().textContent();
-  await expect(dialog.getByText(totalAmount!, { exact: true })).toBeVisible();
+  await expect(dialog.getByText(`Obědy ${monthName}: Max Mlsoun`, { exact: true })).toBeVisible();
+  const parentMax = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Max Mlsoun", exact: true }) });
+  const maxAmount = await parentMax.getByRole("cell").last().textContent();
+  await expect(dialog.getByText(maxAmount!, { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
 
   await persona(page, "director-bohumil");
@@ -84,17 +86,15 @@ test("director keeps monthly paid marks while parents can pay the selected close
   await expect(paid("Max Mlsoun")).toBeEnabled();
   await persona(page, "parent-bedrich");
   await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${month}#obedy`);
-  await expect(page.getByRole("button", { name: `Platba ${monthName}` })).toBeEnabled();
-  await expect(page.getByText(/máte zaplacené/)).toHaveCount(0);
+  const paidStatus = page.getByRole("status").filter({ hasText: `Obědy za ${monthLabel} máte zaplacené.` });
+  await expect(paidStatus).toBeVisible();
+  await expect(page.getByRole("button", { name: `Platba ${monthName}` })).toHaveCount(0);
   await page.reload();
-  await page.getByRole("button", { name: `Platba ${monthName}` }).click();
-  await expect(dialog.getByText(`Obědy ${monthName}: Božena Bublina, Max Mlsoun`, { exact: true })).toBeVisible();
-  await expect(dialog.getByText(totalAmount!, { exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
+  await expect(paidStatus).toBeVisible();
   await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${unfinishedMonth}#obedy`);
   await expect(page.getByRole("button", { name: /^Platba/ })).toHaveCount(0);
   await expect(page.getByText("Obědy se platí za předchozí měsíc zpětně.", { exact: true }).filter({ visible: true })).toBeVisible();
-  await expect(page.getByText(/máte zaplacené/)).toHaveCount(0);
+  await expect(paidStatus).toBeVisible();
 
   await persona(page, "director-bohumil");
   await page.goto(`/reditel?month=${month}#obedy`);
@@ -104,15 +104,15 @@ test("director keeps monthly paid marks while parents can pay the selected close
   }
   await persona(page, "parent-bedrich");
   await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${unfinishedMonth}#obedy`);
-  await expect(page.getByRole("button", { name: /^Platba/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Platba ${monthName}` })).toBeEnabled();
+  await expect(page.getByRole("button", { name: `Platba ${unfinishedName}` })).toHaveCount(0);
   const explanation = page.getByText("Obědy se platí za předchozí měsíc zpětně.", { exact: true }).filter({ visible: true });
   await expect(explanation).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await explanation.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: "/tmp/habitat-unfinished-month-mobile.png" });
-  await page.goto(`/rodic?child=seed-child-bozena&lunchMonth=${month}#obedy`);
+  await page.screenshot({ path: "/tmp/habitat-previous-month-choice-mobile.png" });
   await page.getByRole("button", { name: `Platba ${monthName}` }).click();
   await expect(page.getByRole("dialog").getByText(`Obědy ${monthName}: Božena Bublina, Max Mlsoun`, { exact: true })).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`lunchMonth=${month}`));
-  await page.getByRole("dialog").screenshot({ path: "/tmp/habitat-selected-month-payment-mobile.png" });
+  await expect(page).toHaveURL(new RegExp(`lunchMonth=${unfinishedMonth}`));
+  await page.getByRole("dialog").screenshot({ path: "/tmp/habitat-previous-month-payment-mobile.png" });
 });
