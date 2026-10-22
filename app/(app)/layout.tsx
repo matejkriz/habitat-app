@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getDbUser } from "@/lib/auth";
 import { AppShell } from "@/components/layout/app-shell";
 import { getParentChildren } from "@/app/actions/parent";
+import { ToastProvider } from "@/components/ui/toast-provider";
 
 export default async function AppLayout({
   children,
@@ -18,5 +19,5 @@ export default async function AppLayout({
     (child) => child.attendanceDays !== undefined && child.attendanceDays.length < 4,
   );
 
-  return <AppShell user={user} canSubmitMakeup={canSubmitMakeup}>{children}</AppShell>;
+  return <ToastProvider><AppShell user={user} canSubmitMakeup={canSubmitMakeup}>{children}</AppShell></ToastProvider>;
 }

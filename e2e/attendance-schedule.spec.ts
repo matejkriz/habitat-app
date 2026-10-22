@@ -165,9 +165,13 @@ test("regular day off → parent makeup → staff plan and enrolled lunch withou
     await expect(page.getByRole("tab", { name: "Náhrada", exact: true })).toHaveAttribute("aria-selected", "true");
     await page.getByLabel("Poznámka (volitelné)").fill(marker);
     await page.getByRole("button", { name: "Odeslat náhradu", exact: true }).click();
-    await expect(page.getByText("Oběd bude přihlášen.", { exact: true })).toBeVisible();
-    created = true;
     await expect(page).toHaveURL(/\/rodic\?child=/);
+    created = true;
+    const confirmation = page.getByRole("status").filter({ hasText: "Náhrada odeslána" });
+    await expect(confirmation).toBeVisible();
+    await expect(confirmation).toContainText(/Oběd bude přihlášen\./);
+    await confirmation.getByRole("button", { name: /zavřít/i }).click();
+    await expect(confirmation).toHaveCount(0);
 
     await persona(page, "teacher-kveta");
     await page.goto(`/ucitel/dochazka?date=${date}`);

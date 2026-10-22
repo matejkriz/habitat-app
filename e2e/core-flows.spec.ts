@@ -34,6 +34,11 @@ test("parent excuse → director forgives and recounts lunch", async ({
   await page.getByLabel("Důvod (volitelné)").fill(marker);
   await page.getByRole("button", { name: "Odeslat omluvenku" }).click();
   await expect(page).toHaveURL(/\/rodic\?child=/);
+  const confirmation = page.getByRole("status").filter({ hasText: "Omluvenka odeslána" });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toContainText("Oběd zůstane započítaný.");
+  await confirmation.getByRole("button", { name: /zavřít/i }).click();
+  await expect(confirmation).toHaveCount(0);
   await expect(page.getByText(marker, { exact: true })).toBeVisible();
   await page.goto(`/rodic?child=${childId}&month=${date.slice(0, 7)}`);
   await expect(parentLunchRow.getByRole("img", { name: `${Number(date.slice(-2))}.: Pozdě omluvena`, exact: true })).toBeVisible();

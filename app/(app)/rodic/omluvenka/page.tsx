@@ -14,6 +14,8 @@ import {
 } from "@/components/ui";
 import { DayPartSelector } from "@/components/excuses/day-part-selector";
 import { ExcuseDatePicker } from "@/components/excuses/excuse-date-picker";
+import { getSubmissionToast } from "@/components/excuses/submission-toast";
+import { useToast } from "@/components/ui/toast-provider";
 import {
   getParentChildren,
   submitExcuse,
@@ -27,41 +29,10 @@ import {
   type ExcuseDayPart as ExcuseDayPartValue,
 } from "@/lib/types";
 
-type SubmissionSummary = {
-  readonly count: number;
-  readonly cancelLunch: boolean;
-  readonly schoolDayCount: number;
-  readonly lateDayCount: number;
-  readonly onTimeDayCount: number;
-  readonly automaticallyApprovedDayCount: number;
-};
-
-function canceledLunchMessage(dayCount: number): string {
-  return dayCount === 1
-    ? "1 oběd bude odhlášen"
-    : dayCount < 5
-      ? `${dayCount} obědy budou odhlášeny`
-      : `${dayCount} obědů bude odhlášeno`;
-}
-
-function mixedLunchMessage(summary: SubmissionSummary): string {
-  const canceled = canceledLunchMessage(summary.onTimeDayCount);
-  const lateDays =
-    summary.lateDayCount === 1
-      ? "1 pozdně omluvený den"
-      : summary.lateDayCount < 5
-        ? `${summary.lateDayCount} pozdně omluvené dny`
-        : `${summary.lateDayCount} pozdně omluvených dnů`;
-  const charged =
-    summary.lateDayCount === 1
-      ? "zůstane oběd započítaný"
-      : "zůstanou obědy započítané";
-  return `${canceled}; za ${lateDays} ${charged}.`;
-}
-
 export default function NewExcusePage() {
   const request = useRef<{ fingerprint: string; id: string } | null>(null);
   const router = useRouter();
+  const showToast = useToast();
   const searchParams = useSearchParams();
   const preselectedChildId = searchParams.get("child");
   const preselectedDate = searchParams.get("date") || "";
@@ -81,7 +52,6 @@ export default function NewExcusePage() {
   const [registerLunch, setRegisterLunch] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<SubmissionSummary | null>(null);
   const selectedChildren = children.filter((child) =>
     selectedChildIds.includes(child.id),
   );
@@ -128,7 +98,6 @@ export default function NewExcusePage() {
   const changeMode = (makeup: boolean) => {
     setIsMakeup(makeup);
     setError("");
-    setSuccess(null);
     request.current = null;
     const allowedChildren = makeup ? makeupChildren : children;
     const keptIds = selectedChildIds.filter((id) => allowedChildren.some((child) => child.id === id));
@@ -174,8 +143,8 @@ export default function NewExcusePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError("");
-    setSuccess(null);
 
     if (selectedChildIds.length === 0) {
       setError("Vyberte alespoň jedno dítě.");
@@ -211,20 +180,16 @@ export default function NewExcusePage() {
       const result = await (isMakeup ? submitMakeup(formData) : submitExcuse(formData));
       if ("error" in result) {
         setError(result.error);
+        setIsSubmitting(false);
         return;
       }
-      setSuccess({
+      showToast(getSubmissionToast(isMakeup ? "MAKEUP" : "EXCUSE", {
         count: result.excuses.length,
         ...result.summary,
-      });
-
-      // Redirect after short delay
-      setTimeout(() => {
-        router.push(`/rodic?child=${selectedChildIds[0] ?? selectedChildId}`);
-      }, 2000);
+      }));
+      router.push(`/rodic?child=${selectedChildIds[0] ?? selectedChildId}`);
     } catch {
       setError(isMakeup ? "Nepodařilo se odeslat náhradu. Zkuste to prosím znovu." : "Nepodařilo se odeslat omluvenku. Zkuste to prosím znovu.");
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -260,69 +225,6 @@ export default function NewExcusePage() {
                 role="alert"
               >
                 {error}
-              </div>
-            )}
-
-            {success && (
-              <div className={`p-4 rounded-lg text-sm ${
-                success.lateDayCount === 0
-                  ? "bg-sage/10 border border-sage/20 text-sage-dark"
-                  : "bg-gold/10 border border-gold/20 text-gold-dark"
-              }`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="font-semibold">
-                    {isMakeup
-                      ? success.count > 1 ? "Náhrady odeslány" : "Náhrada odeslána"
-                      : success.count > 1 ? "Omluvenky odeslány" : "Omluvenka odeslána"}
-                  </span>
-                </div>
-                {isMakeup ? (
-                  <div className="space-y-1">
-                    <p>O mimořádném příchodu se dozví ředitelka a učitelé.</p>
-                    {success.schoolDayCount === 0 ? <p>V zadaném období nejsou žádné dny pro náhradu.</p> : success.cancelLunch ? (
-                      <p>Oběd nebude přihlášen.</p>
-                    ) : makeupTakesLunch ? (
-                      <>
-                        {success.onTimeDayCount > 0 && <p>{success.onTimeDayCount === 1 ? "Oběd bude přihlášen." : `${success.onTimeDayCount} obědy budou přihlášeny.`}</p>}
-                        {success.lateDayCount > 0 && <p>Oběd není zajištěný pro dny zadané po termínu. Dítě může dorazit i bez zajištěného oběda.</p>}
-                      </>
-                    ) : null}
-                  </div>
-                ) : success.schoolDayCount === 0 ? (
-                  <p>V zadaném období nejsou žádné školní dny.</p>
-                ) : !success.cancelLunch ? (
-                  <p>
-                    {success.count > 1
-                      ? "Obědy nebudou odhlášeny."
-                      : "Oběd nebude odhlášen."}
-                  </p>
-                ) : success.automaticallyApprovedDayCount ===
-                  success.schoolDayCount ? (
-                  <p>
-                    {success.count > 1
-                      ? "Vybrané děti neodebírají obědy."
-                      : "Dítě neodebírá obědy."}
-                  </p>
-                ) : success.lateDayCount === 0 ? (
-                  <p>
-                    {success.onTimeDayCount === 1
-                      ? "Oběd bude odhlášen."
-                      : `${canceledLunchMessage(success.onTimeDayCount)}.`}
-                  </p>
-                ) : success.onTimeDayCount === 0 ? (
-                  <p>
-                    {success.lateDayCount === 1
-                      ? "Oběd zůstane započítaný."
-                      : success.lateDayCount < 5
-                        ? `${success.lateDayCount} obědy zůstanou započítané.`
-                        : `${success.lateDayCount} obědů zůstane započítaných.`}
-                  </p>
-                ) : (
-                  <p>{mixedLunchMessage(success)}</p>
-                )}
               </div>
             )}
 
@@ -489,7 +391,7 @@ export default function NewExcusePage() {
             <Button
               type="submit"
               isLoading={isSubmitting}
-              disabled={!selectedChildId || !fromDate || !toDate || !!success}
+              disabled={!selectedChildId || !fromDate || !toDate}
               className="flex-1"
             >
               {isMakeup ? "Odeslat náhradu" : "Odeslat omluvenku"}
