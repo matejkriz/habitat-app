@@ -4,6 +4,16 @@ Push odběr je uložený pro konkrétního uživatele a zařízení. Typy odběr
 vedené jako témata, takže lze později přidat schválení omluvenky pro rodiče nebo
 hromadnou zprávu bez změny formátu zařízení.
 
+Ředitelé se zapnutými notifikacemi dostávají nové omluvenky a upozornění na
+přihlášení rodiče, který nemá přiřazené žádné dítě. Upozornění obsahuje e-mail
+a otevírá správu dětí. Používá stávající odběry, takže není potřeba notifikace
+znovu zapínat.
+
+Kontrola proběhne po úspěšném přihlášení přes WorkOS, včetně prvního přihlášení
+nového účtu. Učitelé a ředitelé upozornění nevyvolají. Přiřazené neaktivní dítě
+se také počítá jako vazba. Obnovení stránky ani prodloužení session upozornění
+nespouští; opakované zpracování stejné session nevytvoří duplicitní zprávu.
+
 ## Konfigurace
 
 Vygenerujte samostatný VAPID pár pro každé prostředí:
@@ -49,7 +59,10 @@ Uložení beze změny ani samotné schválení pozdní omluvenky další push ne
 Změna a její notifikační událost se ukládají v jedné databázové transakci;
 každá změna má vlastní klíč i při více úpravách během jedné milisekundy.
 Neúspěšná doručení se opakují s
-prodlužujícími se intervaly až desetkrát. Pravidelná úloha navíc:
+prodlužujícími se intervaly až desetkrát. Upozornění na přihlášení používají
+stejnou frontu doručení. Pokud se kontrola přihlášení nezdaří ještě před
+uložením události, zapíše se chyba do serverového logu a přihlášení pokračuje.
+Pravidelná úloha navíc:
 
 - doplní událost, pokud mezi uložením omluvenky a zařazením notifikace došlo k
   výpadku; trvalý kurzor po obnovení naváže od posledního dokončeného průchodu,

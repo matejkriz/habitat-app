@@ -1,10 +1,31 @@
 import { handleAuth } from "@workos-inc/authkit-nextjs";
+import { decodeJwt } from "jose";
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { isDevPersonaEmail, isDevPersonaModeAllowed } from "@/lib/dev-persona";
 import { getWorkOSBaseUrl } from "@/lib/workos-url";
 
 export const GET = handleAuth({
   returnPathname: "/",
   baseURL: getWorkOSBaseUrl(),
+  onSuccess: async ({ user, accessToken }) => {
+    if (isDevPersonaModeAllowed() && isDevPersonaEmail(user.email)) return;
+
+    try {
+      const { sid } = decodeJwt(accessToken);
+      if (typeof sid !== "string" || !sid) {
+        throw new Error("WorkOS session ID is missing");
+      }
+
+      await db.notifications.enqueueUnassignedParentLogin({
+        workosUserId: user.id,
+        email: user.email,
+        loginId: sid,
+      });
+    } catch (error) {
+      console.error("Failed to enqueue unassigned parent login notification:", error);
+    }
+  },
   onError: ({ error, request }) => {
     const code =
       typeof error === "object" && error !== null && "code" in error

@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import { buildExcuseNotificationBody } from "./notificationContent";
 import { requireServerSecret } from "./serverSecret";
 
+// Reuse the stored topic so existing director devices also receive login alerts.
 export const DIRECTOR_EXCUSE_TOPIC = "DIRECTOR_EXCUSE_CREATED";
 const DELIVERY_LEASE_MS = 5 * 60 * 1000;
 const EXCUSE_RECONCILIATION_CURSOR = "EXCUSE_CREATED";
@@ -19,6 +20,33 @@ async function isDirector(ctx: MutationCtx, userId: string): Promise<boolean> {
     .withIndex("by_app_id", (query) => query.eq("id", userId))
     .unique();
   return user?.role === "DIRECTOR";
+}
+
+async function enqueueDirectorDeliveries(
+  ctx: MutationCtx,
+  eventId: Id<"notificationEvents">,
+  now: number,
+): Promise<void> {
+  const subscriptions = await ctx.db.query("pushSubscriptions").collect();
+  for (const subscription of subscriptions) {
+    if (
+      !subscription.topics.includes(DIRECTOR_EXCUSE_TOPIC) ||
+      !(await isDirector(ctx, subscription.userId))
+    ) {
+      continue;
+    }
+
+    const deliveryId = await ctx.db.insert("notificationDeliveries", {
+      eventId,
+      subscriptionId: subscription._id,
+      status: "PENDING",
+      attemptCount: 0,
+      nextAttemptAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.pushDelivery.deliver, { deliveryId });
+  }
 }
 
 export async function enqueueExcuseEvent(
@@ -60,29 +88,67 @@ export async function enqueueExcuseEvent(
     createdAt: now,
   });
 
-  const subscriptions = await ctx.db.query("pushSubscriptions").collect();
-  for (const subscription of subscriptions) {
-    if (
-      !subscription.topics.includes(DIRECTOR_EXCUSE_TOPIC) ||
-      !(await isDirector(ctx, subscription.userId))
-    ) {
-      continue;
-    }
-
-    const deliveryId = await ctx.db.insert("notificationDeliveries", {
-      eventId,
-      subscriptionId: subscription._id,
-      status: "PENDING",
-      attemptCount: 0,
-      nextAttemptAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await ctx.scheduler.runAfter(0, internal.pushDelivery.deliver, { deliveryId });
-  }
-
+  await enqueueDirectorDeliveries(ctx, eventId, now);
   return eventId;
 }
+
+export const enqueueUnassignedParentLogin = mutation({
+  args: {
+    secret: v.string(),
+    workosUserId: v.string(),
+    email: v.string(),
+    loginId: v.string(),
+  },
+  returns: v.union(v.null(), v.id("notificationEvents")),
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const dedupeKey = `UNASSIGNED_PARENT_LOGIN:${args.loginId}`;
+    const existing = await ctx.db
+      .query("notificationEvents")
+      .withIndex("by_dedupe_key", (query) => query.eq("dedupeKey", dedupeKey))
+      .unique();
+    if (existing) return existing._id;
+
+    const user =
+      (await ctx.db
+        .query("users")
+        .withIndex("by_workos_id", (query) =>
+          query.eq("workosId", args.workosUserId),
+        )
+        .unique()) ??
+      (await ctx.db
+        .query("users")
+        .withIndex("by_email", (query) => query.eq("email", args.email))
+        .unique());
+    if (user && user.role !== "PARENT") return null;
+
+    if (user) {
+      const links = await ctx.db
+        .query("parentChildren")
+        .withIndex("by_parent_id", (query) => query.eq("parentId", user.id))
+        .collect();
+      for (const link of links) {
+        const child = await ctx.db
+          .query("children")
+          .withIndex("by_app_id", (query) => query.eq("id", link.childId))
+          .unique();
+        if (child) return null;
+      }
+    }
+
+    const now = Date.now();
+    const eventId = await ctx.db.insert("notificationEvents", {
+      dedupeKey,
+      type: "UNASSIGNED_PARENT_LOGIN",
+      title: "Přihlášení bez přiřazeného dítěte",
+      body: `${args.email} se přihlásil/a do aplikace a nemá přiřazené žádné dítě.`,
+      url: "/reditel/deti",
+      createdAt: now,
+    });
+    await enqueueDirectorDeliveries(ctx, eventId, now);
+    return eventId;
+  },
+});
 
 export const upsertDirectorSubscription = mutation({
   args: {

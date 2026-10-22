@@ -1348,6 +1348,16 @@ export const db: any = {
   },
 
   notifications: {
+    enqueueUnassignedParentLogin: async (args: {
+      workosUserId: string;
+      email: string;
+      loginId: string;
+    }) =>
+      await convexMutation(api.pushNotifications.enqueueUnassignedParentLogin, {
+        secret: getServerSecret(),
+        ...args,
+      }),
+
     enqueueExcuse: async (args: { excuseId: string }) =>
       await convexMutation(api.pushNotifications.enqueueExcuse, {
         secret: getServerSecret(),
