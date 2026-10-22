@@ -259,3 +259,50 @@ details[open] > summary { background-color: var(--habitat-cream-dark); }
   :where(button, a) .animate-spin { animation: none; }
   .card-hover:hover { transform: none; }
 }
+
+.habitat-toast-region {
+  --toast-left-inset: max(1rem, env(safe-area-inset-left, 0px));
+  --toast-right-inset: max(1rem, env(safe-area-inset-right, 0px));
+  position: fixed;
+  z-index: 100;
+  top: max(1rem, env(safe-area-inset-top, 0px));
+  right: var(--toast-right-inset);
+  width: min(28rem, calc(100vw - var(--toast-left-inset) - var(--toast-right-inset)));
+  pointer-events: none;
+}
+
+.habitat-toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgb(61 61 61 / 14%);
+  border-radius: var(--radius-xl);
+  background: white;
+  padding: 0.75rem 0.5rem 0.75rem 1rem;
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+}
+
+.toast-lifetime {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  animation-name: toastLifetimeDrain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.toast-lifetime[data-tone="success"] { background: rgb(139 158 124 / 18%); }
+.toast-lifetime[data-tone="warning"] { background: rgb(212 168 75 / 18%); }
+
+@keyframes toastLifetimeDrain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-lifetime { animation: none; }
+}

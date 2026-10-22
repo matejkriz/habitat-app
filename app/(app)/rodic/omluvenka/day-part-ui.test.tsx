@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getExcuseCalendarMonth: vi.fn(),
   push: vi.fn(),
   back: vi.fn(),
+  showToast: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -22,6 +23,10 @@ vi.mock("@/app/actions/parent", () => ({
 
 vi.mock("@/app/actions/calendar", () => ({
   getExcuseCalendarMonth: mocks.getExcuseCalendarMonth,
+}));
+
+vi.mock("@/components/ui/toast-provider", () => ({
+  useToast: () => mocks.showToast,
 }));
 
 const children = [
@@ -96,6 +101,10 @@ describe("day-part choice in the parent excuse form", () => {
     await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalledOnce());
     const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
     expect(formData.get("dayPart")).toBe("AFTERNOON");
+    await waitFor(() => expect(mocks.showToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Omluvenka odeslána" }),
+    ));
+    expect(mocks.push).toHaveBeenCalledWith("/rodic?child=child-1");
   });
 
   it("hides the choice for a multi-day range and submits the whole day", async () => {
