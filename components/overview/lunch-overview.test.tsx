@@ -171,24 +171,42 @@ describe("LunchOverviewSection", () => {
     expect(screen.queryByRole("rowheader", { name: "Součet" })).toBeNull();
   });
 
-  it("shows excuse-based parent statuses for unrecorded days while retaining billing totals", () => {
+  it("shows inferred parent statuses and includes assumed presence in billing totals", () => {
     const overview = lunchOverview();
     render(<LunchOverviewView overview={{
       ...overview,
       days: [overview.days[0], { key: "2026-08-20", day: 20, weekday: "Čt" }, { key: "2026-08-24", day: 24, weekday: "Po" }],
       children: [
-        { ...overview.children[0], statuses: [null, null, null], displayStatuses: ["excused", "late", "unexcused"], payableLunches: 0 },
-        { id: "eva", firstName: "Eva", lastName: "Malá", statuses: ["present", null, null], displayStatuses: ["present", "kept", "unexcused"], payableLunches: 1, paid: false },
+        { ...overview.children[0], statuses: ["excused", "late", "present"], payableLunches: 2 },
+        { id: "eva", firstName: "Eva", lastName: "Malá", statuses: ["present", "kept", "present"], payableLunches: 3, paid: false },
       ],
     }} basePath="/rodic" />);
 
     const child = within(screen.getByRole("rowheader", { name: "Tobiáš Tornádo" }).closest("tr")!);
     expect(child.getByRole("img", { name: "19.: Včas omluven/a" })).toBeTruthy();
     expect(child.getByRole("img", { name: "20.: Pozdě omluven/a" })).toBeTruthy();
-    expect(child.getByRole("img", { name: "24.: Neomluven/a" })).toBeTruthy();
+    expect(child.getByRole("img", { name: "24.: Přišel/a" })).toBeTruthy();
     expect(screen.queryByRole("img", { name: /Docházka nezapsána/ })).toBeNull();
     const footer = within(screen.getByRole("rowheader", { name: "Součet" }).closest("tr")!);
-    expect(footer.getAllByRole("cell").map(cell => cell.textContent?.replaceAll(/\s/g, " "))).toEqual(["1", "0", "0", "1", "55 Kč"]);
+    expect(footer.getAllByRole("cell").map(cell => cell.textContent?.replaceAll(/\s/g, " "))).toEqual(["1", "2", "2", "5", "275 Kč"]);
+  });
+
+  it.each([
+    { gender: "MALE" as const, labels: ["Přišel", "Včas omluven", "Omluven, oběd neodhlášen", "Pozdě omluven", "Neomluven"] },
+    { gender: "FEMALE" as const, labels: ["Přišla", "Včas omluvena", "Omluvena, oběd neodhlášen", "Pozdě omluvena", "Neomluvena"] },
+  ])("uses the child's $gender gender for lunch status labels", ({ gender, labels }) => {
+    const overview = lunchOverview();
+    render(<LunchOverviewView overview={{
+      ...overview,
+      days: [19, 20, 24, 25, 26].map(day => ({ key: `2026-08-${day}`, day, weekday: "" })),
+      children: [{ ...overview.children[0], gender, statuses: ["present", "excused", "kept", "late", "unexcused"], payableLunches: 4 }],
+    }} basePath="/rodic" />);
+
+    const child = within(screen.getByRole("rowheader", { name: "Tobiáš Tornádo" }).closest("tr")!);
+    expect(child.getAllByRole("img").map(cell => cell.title)).toEqual(labels);
+    expect(child.getAllByRole("img").map(cell => cell.getAttribute("aria-label"))).toEqual(
+      [19, 20, 24, 25, 26].map((day, index) => `${day}.: ${labels[index]}`),
+    );
   });
 
   it("keeps the director total visible even with only one child", () => {

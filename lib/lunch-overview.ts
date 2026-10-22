@@ -1,6 +1,6 @@
 import { getChildDayPlan } from "@/lib/attendance-schedule";
 import { db } from "@/lib/db";
-import { Presence, type Attendance, type Child, type NoLunchDay } from "@/lib/types";
+import type { Attendance, Child, ChildGender, NoLunchDay } from "@/lib/types";
 import { getSchoolDaysInRange } from "@/lib/school-days";
 import { getExcusesOverlapping } from "@/lib/excuse";
 import { getDayCoverage, getDayPartCoverage, groupExcusesByChild } from "@/lib/excuse-coverage";
@@ -28,8 +28,8 @@ export type LunchOverview = {
     readonly id: string;
     readonly firstName: string;
     readonly lastName: string;
+    readonly gender?: ChildGender | null;
     readonly statuses: ReadonlyArray<LunchStatusValue | null>;
-    readonly displayStatuses?: ReadonlyArray<LunchStatusValue | null>;
     readonly payableLunches: number;
     readonly paid: boolean;
   }>;
@@ -145,10 +145,16 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
         if (plan.makeup && !plan.lunchEnrolled) return LunchStatus.MAKEUP_NO_LUNCH;
         const usesMorningCancellation =
           !wholeDayCoverage.covered && morningCoverage.covered;
+        const attendance = attendanceByChildAndDate.get(`${child.id}:${day.key}`);
+        let coverage = usesMorningCancellation ? morningCoverage : wholeDayCoverage;
+        if (!attendance && !coverage.covered) {
+          const afternoonCoverage = getDayPartCoverage(childExcuses, day.date, "AFTERNOON");
+          coverage = { ...afternoonCoverage, lunchCancelled: false };
+        }
 
         const status = getLunchStatus(
-          attendanceByChildAndDate.get(`${child.id}:${day.key}`),
-          usesMorningCancellation ? morningCoverage : wholeDayCoverage,
+          attendance,
+          coverage,
           noLunchDateKeys.has(day.key),
           usesMorningCancellation,
         );
@@ -160,22 +166,8 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
         id: child.id,
         firstName: child.firstName,
         lastName: child.lastName,
+        gender: child.gender ?? null,
         statuses,
-        ...(parentId === undefined ? {} : {
-          displayStatuses: statuses.map((status, index) => {
-            if (status !== null) return status;
-            const day = days[index].date;
-            const wholeDayCoverage = getDayCoverage(childExcuses, day);
-            const morningCoverage = getDayPartCoverage(childExcuses, day, "MORNING");
-            const afternoonCoverage = getDayPartCoverage(childExcuses, day, "AFTERNOON");
-            const coverage = wholeDayCoverage.covered
-              ? wholeDayCoverage
-              : morningCoverage.covered
-                ? morningCoverage
-                : { ...afternoonCoverage, lunchCancelled: false };
-            return getLunchStatus({ presence: Presence.ABSENT }, coverage);
-          }),
-        }),
         payableLunches: statuses.filter(isPayableLunch).length,
         paid: paidChildren.has(child.id),
       };

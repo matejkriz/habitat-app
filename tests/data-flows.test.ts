@@ -356,18 +356,23 @@ describe("director workflows", () => {
       (await getLunchOverview("2026-09")).children.find(
         (child) => child.id === "a",
       )?.payableLunches,
-    ).toBe(1);
+    ).toBe(18);
     await updateExcuse(created.excuses[0].id, true);
     expect(
       (await getLunchOverview("2026-09")).children.find(
         (child) => child.id === "a",
       )?.payableLunches,
-    ).toBe(0);
+    ).toBe(17);
     expect(await exportAttendanceCSV(day, day, "a")).toContain(
       '"Omluveno";"Řekl ""bolí mě břicho""; doma"',
     );
     transport.user = { id: "parent", role: "PARENT" };
     await deleteParentExcuse(created.excuses[0].id);
+    expect(
+      (await getParentLunchOverview("2026-09")).children.find(
+        (child) => child.id === "a",
+      )?.payableLunches,
+    ).toBe(18);
     expect(await getChildAttendanceHistory("a")).toEqual([
       expect.objectContaining({ excuseStatus: "UNEXCUSED" }),
     ]);

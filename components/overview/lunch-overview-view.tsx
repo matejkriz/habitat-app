@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { isPayableLunch, LunchStatus, type LunchStatus as LunchStatusValue } from "@/lib/lunches";
 import { formatLunchAmount } from "@/lib/lunch-price";
+import type { ChildGender } from "@/lib/types";
 import { LunchPriceEditor } from "./lunch-price-editor";
 import { LunchPaidCheckbox } from "./lunch-paid-checkbox";
 
@@ -31,6 +32,14 @@ const statusLabels: Record<LunchStatusValue, string> = {
   [LunchStatus.LATE]: "Pozdě omluven/a",
   [LunchStatus.UNEXCUSED]: "Neomluven/a",
 };
+
+function getStatusLabel(status: LunchStatusValue, gender: ChildGender | null | undefined): string {
+  const label = statusLabels[status];
+  if (gender === "FEMALE") {
+    return status === LunchStatus.PRESENT ? "Přišla" : label.replace("/a", "a");
+  }
+  return gender === "MALE" ? label.replace("/a", "") : label;
+}
 
 function currentMonth(): string {
   const today = new Date();
@@ -189,10 +198,9 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                         {child.firstName} {child.lastName}
                       </span>
                     </th>
-                    {child.statuses.map((recordedStatus, dayIndex) => {
-                      const status = child.displayStatuses?.[dayIndex] ?? recordedStatus;
+                    {child.statuses.map((status, dayIndex) => {
                       const day = overview.days[dayIndex];
-                      const label = status ? statusLabels[status] : "Docházka nezapsána";
+                      const label = status ? getStatusLabel(status, child.gender) : "Docházka nezapsána";
 
                       return (
                         <td

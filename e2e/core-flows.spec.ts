@@ -28,7 +28,7 @@ test("parent excuse → director forgives and recounts lunch", async ({
   await persona(page, "parent-roza");
   await page.goto(`/rodic?child=${childId}&month=${date.slice(0, 7)}`);
   const parentLunchRow = page.getByRole("table", { name: /^Obědy/ }).getByRole("row").filter({ hasText: childName });
-  await expect(parentLunchRow.getByRole("img", { name: `${Number(date.slice(-2))}.: Neomluven/a`, exact: true })).toBeVisible();
+  await expect(parentLunchRow.getByRole("img", { name: `${Number(date.slice(-2))}.: Přišla`, exact: true })).toBeVisible();
   await page.goto(`/rodic/omluvenka?child=${childId}&date=${date}`);
   await expect(page.getByRole("checkbox", { name: "Žofie", exact: true })).toBeChecked();
   await page.getByLabel("Důvod (volitelné)").fill(marker);
@@ -36,7 +36,7 @@ test("parent excuse → director forgives and recounts lunch", async ({
   await expect(page).toHaveURL(/\/rodic\?child=/);
   await expect(page.getByText(marker, { exact: true })).toBeVisible();
   await page.goto(`/rodic?child=${childId}&month=${date.slice(0, 7)}`);
-  await expect(parentLunchRow.getByRole("img", { name: `${Number(date.slice(-2))}.: Pozdě omluven/a`, exact: true })).toBeVisible();
+  await expect(parentLunchRow.getByRole("img", { name: `${Number(date.slice(-2))}.: Pozdě omluvena`, exact: true })).toBeVisible();
   await setAbsence(page);
 
   await persona(page, "director-bohumil");
@@ -55,7 +55,7 @@ test("parent excuse → director forgives and recounts lunch", async ({
   const row = page.getByRole("row").filter({ hasText: childName });
   await expect(
     row.getByRole("img", {
-      name: `${Number(date.slice(-2))}.: Včas omluven/a`,
+      name: `${Number(date.slice(-2))}.: Včas omluvena`,
       exact: true,
     }),
   ).toBeVisible();
@@ -65,7 +65,7 @@ test("parent excuse → director forgives and recounts lunch", async ({
   await page.goto(`/reditel/obedy?month=${date.slice(0, 7)}`);
   await expect(
     row.getByRole("img", {
-      name: `${Number(date.slice(-2))}.: Pozdě omluven/a`,
+      name: `${Number(date.slice(-2))}.: Pozdě omluvena`,
       exact: true,
     }),
   ).toBeVisible();

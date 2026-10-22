@@ -35,9 +35,16 @@ describe("lunch overview", () => {
     },
   );
 
-  it("leaves a day without attendance unmarked and unpaid", () => {
-    expect(getLunchStatus(undefined, NO_COVERAGE)).toBeNull();
-    expect(isPayableLunch(null)).toBe(false);
+  it.each([
+    [NO_COVERAGE, LunchStatus.PRESENT, true],
+    [coverage(true), LunchStatus.EXCUSED, false],
+    [coverage(false), LunchStatus.LATE, true],
+    [coverage(true, false), LunchStatus.KEPT, true],
+  ])("uses excuses and otherwise assumes a payable lunch before attendance is recorded", (dayCoverage, expectedStatus, expectedPayable) => {
+    const status = getLunchStatus(undefined, dayCoverage);
+
+    expect(status).toBe(expectedStatus);
+    expect(isPayableLunch(status)).toBe(expectedPayable);
   });
 
   it("charges for an excused absence when the parent keeps the lunch", () => {

@@ -137,8 +137,8 @@ describe("getLunchOverview", () => {
     mocks.excusesList.mockResolvedValue([]);
     mocks.attendanceList.mockResolvedValue([{ childId: "tobias", date: AUG(20), presence: "PRESENT" }]);
     const overview = await getLunchOverview("2026-08");
-    expect(overview.children[0].statuses).toEqual([null, "not-scheduled"]);
-    expect(overview.children[0].payableLunches).toBe(0);
+    expect(overview.children[0].statuses).toEqual(["present", "not-scheduled"]);
+    expect(overview.children[0].payableLunches).toBe(1);
   });
 
   it("registers a timely makeup lunch and keeps a late makeup without lunch", async () => {

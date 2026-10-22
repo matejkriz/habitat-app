@@ -24,12 +24,17 @@ async function setRegularTuesday(page: Page, attends: boolean) {
 
 async function openCalendarDay(page: Page, date: string) {
   await page.goto("/kalendar");
-  const label = new Date(`${date}T12:00:00`).toLocaleDateString("cs-CZ", {
+  const targetDate = new Date(`${date}T12:00:00`);
+  const label = targetDate.toLocaleDateString("cs-CZ", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
   const day = page.getByRole("button", { name: new RegExp(`^${label}`) });
-  if (!(await day.isVisible())) {
+  const targetMonth = targetDate.toLocaleDateString("cs-CZ", { month: "long", year: "numeric" });
+  const monthHeading = page.getByRole("heading", { level: 2 });
+  await expect(monthHeading).toBeVisible();
+  if ((await monthHeading.innerText()).toLocaleLowerCase("cs-CZ").trim() !== targetMonth) {
     await page.getByRole("button", { name: "Další měsíc", exact: true }).click();
+    await expect(monthHeading).toHaveText(targetMonth);
   }
   await day.click();
   return page.getByRole("dialog");
