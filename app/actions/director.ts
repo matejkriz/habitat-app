@@ -511,6 +511,10 @@ export async function updateExcuse(excuseId: string, approveLate: boolean) {
     throw new Error("Excuse not found");
   }
 
+  if (excuse.kind === "MAKEUP" && excuse.cancelLunch) {
+    throw new Error("Náhradu bez přihlášení oběda není potřeba schvalovat");
+  }
+
   if (!approveLate) {
     if (excuse.kind !== "MAKEUP" && !excuse.cancelLunch) {
       throw new Error("Omluvenku bez odhlášení oběda není potřeba schvalovat");

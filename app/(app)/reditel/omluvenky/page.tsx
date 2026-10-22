@@ -479,7 +479,7 @@ export default function ExcuseManagementPage() {
                         {excuse.child.doesNotTakeLunch
                           ? "dítě obědy neodebírá"
                           : excuse.kind === "MAKEUP"
-                            ? excuse.dayPart === "AFTERNOON" ? "bez oběda (jen odpoledne)" : "přihlásit"
+                            ? excuse.dayPart === "AFTERNOON" ? "bez oběda (jen odpoledne)" : excuse.cancelLunch ? "nepřihlašovat" : "přihlásit"
                           : excuse.cancelLunch
                             ? "odhlásit"
                             : "ponechat přihlášený"}

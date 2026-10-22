@@ -36,7 +36,7 @@ export type CoveringExcuse = {
   readonly reason?: string | null;
   /** Missing on legacy records means that the whole day is covered. */
   readonly dayPart?: ExcuseDayPartValue;
-  /** Missing on legacy records means that lunch cancellation was requested. */
+  /** True cancels an absence lunch or declines a makeup lunch. Legacy makeups request lunch. */
   readonly cancelLunch?: boolean;
   readonly submittedAt: Date;
   readonly lateApprovedAt: Date | null;
@@ -73,7 +73,7 @@ export function coversDay(excuse: CoveringExcuse, day: Date): boolean {
 /** The preceding-weekday 9:00 deadline is evaluated against the day itself. */
 export function isLateForDay(excuse: CoveringExcuse, day: Date): boolean {
   return excuse.kind === "MAKEUP"
-    ? !isMakeupLunchOnTime(excuse.submittedAt, day)
+    ? excuse.cancelLunch !== true && !isMakeupLunchOnTime(excuse.submittedAt, day)
     : !isAutoApproved(excuse.submittedAt, day);
 }
 

@@ -88,6 +88,7 @@ export default function NewExcusePage() {
     ExcuseDayPart.FULL_DAY,
   );
   const [cancelLunch, setCancelLunch] = useState(true);
+  const [registerLunch, setRegisterLunch] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<SubmissionSummary | null>(null);
@@ -119,8 +120,9 @@ export default function NewExcusePage() {
     !fromDate || makeupDates.some((date) => !isRegularAttendanceDay(child, date)),
   );
   const hasMakeupDays = selectedMakeupChildren.length > 0;
-  const makeupTakesLunch = selectedMakeupChildren.some((child) => !child.doesNotTakeLunch)
+  const canRegisterMakeupLunch = selectedMakeupChildren.some((child) => !child.doesNotTakeLunch)
     && (hasMultipleDays || dayPart !== ExcuseDayPart.AFTERNOON);
+  const makeupTakesLunch = canRegisterMakeupLunch && registerLunch;
   const makeupOnTime = fromDate
     ? isMakeupLunchOnTime(new Date(), parseExcuseDate(fromDate))
     : null;
@@ -231,6 +233,7 @@ export default function NewExcusePage() {
         hasMultipleDays ? ExcuseDayPart.FULL_DAY : dayPart,
       );
       formData.set("cancelLunch", String(shouldCancelLunch));
+      if (isMakeup) formData.set("registerLunch", String(makeupTakesLunch));
       if (reason) formData.set("reason", reason);
 
       const fingerprint = JSON.stringify([isMakeup, ...formData.entries()]);
@@ -312,7 +315,9 @@ export default function NewExcusePage() {
                 {isMakeup ? (
                   <div className="space-y-1">
                     <p>O mimořádném příchodu se dozví ředitelka a učitelé.</p>
-                    {success.schoolDayCount === 0 ? <p>V zadaném období nejsou žádné dny pro náhradu.</p> : makeupTakesLunch ? (
+                    {success.schoolDayCount === 0 ? <p>V zadaném období nejsou žádné dny pro náhradu.</p> : success.cancelLunch ? (
+                      <p>Oběd nebude přihlášen.</p>
+                    ) : makeupTakesLunch ? (
                       <>
                         {success.onTimeDayCount > 0 && <p>{success.onTimeDayCount === 1 ? "Oběd bude přihlášen." : `${success.onTimeDayCount} obědy budou přihlášeny.`}</p>}
                         {success.lateDayCount > 0 && <p>Oběd není zajištěný pro dny zadané po termínu. Dítě může dorazit i bez zajištěného oběda.</p>}
@@ -478,6 +483,20 @@ export default function NewExcusePage() {
                 {isMakeup ? "Dítě dorazí pouze odpoledne." : "Dítě bude ve škole dopoledne, odpoledne bude chybět."}
               </p>
             ) : null}
+
+            {isMakeup && canRegisterMakeupLunch && <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
+              <Toggle
+                id="register-lunch"
+                role="switch"
+                checked={registerLunch}
+                disabled={isSubmitting}
+                onChange={(event) => setRegisterLunch(event.target.checked)}
+                label="Přihlásit oběd"
+                description={registerLunch
+                  ? "Oběd se přihlásí podle běžných pravidel."
+                  : "Oběd nebude přihlášen."}
+              />
+            </div>}
 
             {!isMakeup && <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
               <Toggle

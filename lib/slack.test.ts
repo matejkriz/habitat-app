@@ -17,6 +17,14 @@ afterEach(() => {
 });
 
 describe("Slack excuse notifications", () => {
+  it("describes an opted-out makeup as without lunch even when timely", async () => {
+    vi.stubEnv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/excuses");
+    const fetch = vi.fn().mockResolvedValue(new Response("ok"));
+    vi.stubGlobal("fetch", fetch);
+    await sendExcuseNotification({ ...data, kind: "MAKEUP", cancelLunch: true });
+    const message = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(message.text).toContain("dítě dorazí, bez oběda");
+  });
   it("labels a late makeup as a arrival without a guaranteed lunch", async () => {
     vi.stubEnv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/excuses");
     const fetch = vi.fn().mockResolvedValue(new Response("ok"));

@@ -90,6 +90,11 @@ describe("createExcuse push notification", () => {
     expect(mocks.createExcuseRecord).not.toHaveBeenCalled();
   });
 
+  it("passes an explicit makeup lunch opt-out to persistence", async () => {
+    await createExcuse("child-1", new Date(2026, 8, 22), new Date(2026, 8, 22), null, "parent-1", [], { kind: "MAKEUP", cancelLunch: true });
+    expect(mocks.createExcuseRecord).toHaveBeenCalledWith({ data: expect.objectContaining({ kind: "MAKEUP", cancelLunch: true }) });
+  });
+
   it("stores a director approval in the initial insert", async () => {
     await createExcuse(
       "child-1",

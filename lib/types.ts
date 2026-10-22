@@ -100,7 +100,7 @@ export type Excuse = {
   kind?: ExcuseKind;
   /** Which part of every covered school day the child will miss. */
   dayPart: ExcuseDayPart;
-  /** Whether an excused absence should also cancel the child's lunch. */
+  /** Cancels an absence lunch or declines lunch enrollment for a makeup. */
   cancelLunch: boolean;
   submittedById: string;
   submittedAt: Date;

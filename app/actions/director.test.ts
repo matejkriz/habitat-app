@@ -144,8 +144,8 @@ describe("getLunchOverview", () => {
   it("registers a timely makeup lunch and keeps a late makeup without lunch", async () => {
     mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2] }]);
     mocks.excusesList.mockResolvedValue([
-      { ...spanningLate, kind: "MAKEUP", fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
-      { ...spanningLate, id: "late-makeup", kind: "MAKEUP", fromDate: AUG(20), toDate: AUG(20), submittedAt: AUG(19, 12) },
+      { ...spanningLate, kind: "MAKEUP", cancelLunch: false, fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
+      { ...spanningLate, id: "late-makeup", kind: "MAKEUP", cancelLunch: false, fromDate: AUG(20), toDate: AUG(20), submittedAt: AUG(19, 12) },
     ]);
     mocks.attendanceList.mockResolvedValue([{ childId: "tobias", date: AUG(20), presence: "PRESENT" }]);
     const overview = await getLunchOverview("2026-08");
@@ -153,11 +153,26 @@ describe("getLunchOverview", () => {
     expect(overview.children[0].payableLunches).toBe(1);
   });
 
+  it("never bills an opted-out makeup lunch, including a director-approved record", async () => {
+    mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2] }]);
+    mocks.attendanceList.mockResolvedValue([
+      { childId: "tobias", date: AUG(19), presence: "PRESENT" },
+      { childId: "tobias", date: AUG(20), presence: "PRESENT" },
+    ]);
+    mocks.excusesList.mockResolvedValue([
+      { ...spanningLate, kind: "MAKEUP", cancelLunch: true, fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
+      { ...approvedSingleDay, kind: "MAKEUP", cancelLunch: true, fromDate: AUG(20), toDate: AUG(20), submittedAt: AUG(20, 8) },
+    ]);
+    const overview = await getLunchOverview("2026-08");
+    expect(overview.children[0].statuses).toEqual(["makeup-no-lunch", "makeup-no-lunch"]);
+    expect(overview.children[0].payableLunches).toBe(0);
+  });
+
   it("does not charge a timely canceled makeup lunch even before attendance is recorded", async () => {
     mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2] }]);
     mocks.attendanceList.mockResolvedValue([]);
     mocks.excusesList.mockResolvedValue([
-      { ...spanningLate, kind: "MAKEUP", fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
+      { ...spanningLate, kind: "MAKEUP", cancelLunch: false, fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
       { ...approvedSingleDay, fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(18, 8) },
     ]);
     const overview = await getLunchOverview("2026-08");
@@ -169,8 +184,8 @@ describe("getLunchOverview", () => {
     mocks.childrenList.mockResolvedValue([{ ...tobias, attendanceDays: [1, 2] }]);
     mocks.attendanceList.mockResolvedValue([]);
     mocks.excusesList.mockResolvedValue([
-      { ...approvedSingleDay, kind: "MAKEUP", fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(19, 8) },
-      { ...approvedSingleDay, id: "afternoon-makeup", kind: "MAKEUP", dayPart: "AFTERNOON", fromDate: AUG(20), toDate: AUG(20), submittedAt: AUG(18, 8) },
+      { ...approvedSingleDay, kind: "MAKEUP", cancelLunch: false, fromDate: AUG(19), toDate: AUG(19), submittedAt: AUG(19, 8) },
+      { ...approvedSingleDay, id: "afternoon-makeup", kind: "MAKEUP", cancelLunch: false, dayPart: "AFTERNOON", fromDate: AUG(20), toDate: AUG(20), submittedAt: AUG(18, 8) },
     ]);
     const overview = await getLunchOverview("2026-08");
     expect(overview.children[0].statuses).toEqual(["makeup", "makeup-no-lunch"]);
@@ -288,6 +303,12 @@ describe("updateExcuse", () => {
     mocks.excusesGet.mockResolvedValue({ ...spanningLate, kind: "MAKEUP", cancelLunch: false, lateApprovedAt: AUG(19, 14) });
     await updateExcuse("excuse-old", false);
     expect(mocks.excusesUpdate).toHaveBeenCalledWith({ where: { id: "excuse-old" }, data: { lateApprovedAt: null, lateApprovedById: null } });
+  });
+
+  it.each([true, false])("does not review an explicitly declined makeup lunch: %s", async approve => {
+    mocks.excusesGet.mockResolvedValue({ ...spanningLate, kind: "MAKEUP", cancelLunch: true, lateApprovedAt: AUG(19, 14) });
+    await expect(updateExcuse("excuse-old", approve)).rejects.toThrow("Náhradu bez přihlášení oběda není potřeba schvalovat");
+    expect(mocks.excusesUpdate).not.toHaveBeenCalled();
   });
 
   it("records who forgave the late submission and when", async () => {
@@ -414,7 +435,7 @@ describe("getExcuses", () => {
 
   it("reviews a makeup range only on the child's regular days off", async () => {
     const makeup = {
-      ...spanningLate, kind: "MAKEUP", fromDate: AUG(17), toDate: AUG(18), submittedAt: AUG(17, 8),
+      ...spanningLate, kind: "MAKEUP", cancelLunch: false, fromDate: AUG(17), toDate: AUG(18), submittedAt: AUG(17, 8),
       child: { ...tobias, attendanceDays: [1, 3, 4] },
       submittedBy: { id: "parent-1", name: "Rodič", email: null },
     };
@@ -729,7 +750,7 @@ describe("attendance schedule reporting", () => {
 
   it("does not put a timely day-off makeup into the dashboard's pending queue", async () => {
     mocks.excusesList.mockResolvedValue([{
-      ...spanningLate, kind: "MAKEUP", fromDate: AUG(17), toDate: AUG(18), submittedAt: AUG(17, 8),
+      ...spanningLate, kind: "MAKEUP", cancelLunch: false, fromDate: AUG(17), toDate: AUG(18), submittedAt: AUG(17, 8),
       child: { ...tobias, attendanceDays: [1, 3, 4] },
     }]);
     mocks.getSchoolDaysInRange.mockResolvedValue([AUG(17), AUG(18)]);

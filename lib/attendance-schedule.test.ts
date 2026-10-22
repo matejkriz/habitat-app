@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getChildDayPlan, getAttendanceDays, getAttendanceDateDisabledReason, hasPartialAttendance, parseAttendanceDays } from "./attendance-schedule";
-import { getDayCoverage, getDayPartCoverage, type CoveringExcuse } from "./excuse-coverage";
+import { getDayCoverage, getDayPartCoverage, getExcuseRangeState, type CoveringExcuse } from "./excuse-coverage";
 import { getMakeupLunchDeadline, isMakeupLunchOnTime } from "./makeup-rules";
 
 const tuesday = new Date(2026, 8, 29);
@@ -54,6 +54,17 @@ describe("regular attendance and makeup days", () => {
   });
   it("supports afternoon-only arrivals without a lunch", () => {
     expect(getChildDayPlan(child, [makeup({ dayPart: "AFTERNOON" })], tuesday)).toMatchObject({ expectedMorning: false, expectedAfternoon: true, lunchEnrolled: false, makeupLate: false });
+  });
+  it.each([null, tuesday])("keeps an opted-out makeup out of lunches even after approval: %s", (lateApprovedAt) => {
+    const record = makeup({ cancelLunch: true, submittedAt: tuesday, lateApprovedAt });
+    expect(getChildDayPlan(child, [record], tuesday)).toMatchObject({
+      expectedMorning: true, expectedAfternoon: true, lunchEnrolled: false, makeupLate: false,
+    });
+    expect(getExcuseRangeState(record, [tuesday])).toBe("ON_TIME");
+  });
+  it("keeps a child without lunches out of a timely makeup lunch", () => {
+    expect(getChildDayPlan({ ...child, doesNotTakeLunch: true }, [makeup()], tuesday))
+      .toMatchObject({ expectedMorning: true, lunchEnrolled: false, makeupLate: false });
   });
   it("removes a notified late absence from staff planning before lunch approval", () => {
     const lateAbsence = makeup({ kind: "EXCUSE", dayPart: "MORNING", submittedAt: tuesday });

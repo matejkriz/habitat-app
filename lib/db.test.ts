@@ -75,6 +75,22 @@ describe("legacy excuse rollout", () => {
     expect(excuse.cancelLunch).toBe(false);
   });
 
+  it("keeps lunch enrollment for a legacy makeup with no lunch choice", async () => {
+    mocks.query.mockResolvedValueOnce([{ ...legacyExcuse, kind: "MAKEUP" }])
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const [excuse] = await db.excuses.list();
+    expect(excuse.cancelLunch).toBe(false);
+  });
+
+  it("requests lunch by default when creating a makeup through the adapter", async () => {
+    mocks.mutation.mockImplementation(async (_api, { value }) => value);
+    const excuse = await db.excuses.create({ data: {
+      childId: "child-1", kind: "MAKEUP", fromDate: new Date(2026, 8, 22), toDate: new Date(2026, 8, 22),
+      submittedById: "parent-1",
+    } });
+    expect(excuse.cancelLunch).toBe(false);
+  });
+
   it("honors an explicit revoked approval instead of falling back", async () => {
     mocks.query
       .mockResolvedValueOnce([{ ...legacyExcuse, lateApprovedAt: null }])

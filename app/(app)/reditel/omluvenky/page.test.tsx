@@ -83,6 +83,14 @@ describe("ExcuseManagementPage", () => {
     await waitFor(() => expect(mocks.updateExcuse).toHaveBeenCalledWith("excuse-1", true));
   });
 
+  it("shows a makeup without a lunch request", async () => {
+    mocks.getExcuses.mockResolvedValue([{ ...lateExcuse, kind: "MAKEUP", cancelLunch: true, rangeState: "ON_TIME" }]);
+    render(<ExcuseManagementPage />);
+    expect(await screen.findByText("Náhrada")).toBeTruthy();
+    expect(screen.getByText("nepřihlašovat")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Přihlásit oběd" })).toBeNull();
+  });
+
   it("reloads the derived range state after narrowing an excuse", async () => {
     mocks.getExcuses
       .mockResolvedValueOnce([lateExcuse])

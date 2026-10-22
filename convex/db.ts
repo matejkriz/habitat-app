@@ -342,7 +342,7 @@ export const createExcuse = mutation({
     if (!child) throw new Error("Child not found");
 
     const isMakeup = value.kind === "MAKEUP";
-    const cancelLunch = isMakeup ? false : child.doesNotTakeLunch ? true : value.cancelLunch;
+    const cancelLunch = child.doesNotTakeLunch ? true : value.cancelLunch ?? !isMakeup;
     const dayPart =
       value.fromDate === value.toDate ? (value.dayPart ?? "FULL_DAY") : "FULL_DAY";
     const excuse = {
@@ -351,7 +351,7 @@ export const createExcuse = mutation({
       cancelLunch,
       lateApprovedAt:
         value.lateApprovedAt == null &&
-        (child.doesNotTakeLunch || (isMakeup ? dayPart === "AFTERNOON" : !cancelLunch))
+        (child.doesNotTakeLunch || (isMakeup ? cancelLunch || dayPart === "AFTERNOON" : !cancelLunch))
           ? Date.now()
           : value.lateApprovedAt,
     };

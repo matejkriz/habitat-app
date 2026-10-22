@@ -103,7 +103,7 @@ export async function createExcuse(
     normalizedTo,
   );
   const isMakeup = options?.kind === "MAKEUP";
-  const cancelLunch = isMakeup ? false : options?.cancelLunch ?? true;
+  const cancelLunch = options?.cancelLunch ?? !isMakeup;
 
   // Director-created, no-lunch, and lunch-preserving excuses are approved in
   // the initial write.
@@ -311,7 +311,7 @@ export async function updateExcuse(
     newToDate,
   );
   const newCancelLunch = current.cancelLunch;
-  const resetMakeupSettlement = current.kind === "MAKEUP" &&
+  const resetMakeupSettlement = current.kind === "MAKEUP" && !current.cancelLunch &&
     current.dayPart === "AFTERNOON" && newDayPart !== "AFTERNOON" &&
     current.lateApprovedById === null;
 
