@@ -165,7 +165,7 @@ async function DashboardContent({ searchParams }: { searchParams: SearchParams }
             <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Nedávné neomluvené omluvenky
+            Nedávné omluvenky
           </CardTitle>
           <Link href="/reditel/omluvenky">
             <Button variant="outline" size="sm">Zobrazit vše</Button>
@@ -174,7 +174,7 @@ async function DashboardContent({ searchParams }: { searchParams: SearchParams }
         <CardContent>
           {stats.recentExcuses.length === 0 ? (
             <p className="text-charcoal-light text-center py-8">
-              Žádné neomluvené omluvenky k vyřízení
+              Žádné omluvenky k vyřízení
             </p>
           ) : (
             <div className="space-y-3">
@@ -191,7 +191,7 @@ async function DashboardContent({ searchParams }: { searchParams: SearchParams }
                       {excuse.reason && ` • ${excuse.reason}`}
                     </p>
                   </div>
-                  <Badge variant="unexcused">Ke schválení</Badge>
+                  <Badge variant="unexcused">K vyřízení</Badge>
                 </Link>
               ))}
             </div>

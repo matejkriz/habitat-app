@@ -63,9 +63,30 @@ const rangeStateBadge: Record<
   { readonly variant: "excused" | "unexcused"; readonly label: string }
 > = {
   ON_TIME: { variant: "excused", label: "Včas" },
-  LATE: { variant: "unexcused", label: "Pozdě" },
-  LATE_APPROVED: { variant: "excused", label: "Pozdě – schváleno" },
+  LATE: { variant: "unexcused", label: "Pozdě - oběd započítán" },
+  LATE_APPROVED: { variant: "excused", label: "Pozdě - oběd prominut" },
 };
+
+function hasLunchDecision(excuse: Excuse): boolean {
+  return !excuse.child.doesNotTakeLunch &&
+    excuse.dayPart !== "AFTERNOON" &&
+    (excuse.kind === "MAKEUP" ? !excuse.cancelLunch : excuse.cancelLunch);
+}
+
+function getRangeStateLabel(excuse: Excuse): string {
+  if (excuse.child.doesNotTakeLunch ||
+    (excuse.kind === "MAKEUP" && (excuse.cancelLunch || excuse.dayPart === "AFTERNOON"))) {
+    return "Bez oběda";
+  }
+  if (excuse.kind === "MAKEUP") {
+    if (excuse.rangeState === "LATE") return "Pozdě - oběd nepřihlášen";
+    if (excuse.rangeState === "LATE_APPROVED") return "Pozdě - oběd přihlášen";
+  } else if (excuse.dayPart === "AFTERNOON" ||
+    (!excuse.cancelLunch && excuse.rangeState === "LATE_APPROVED")) {
+    return "Oběd ponechán";
+  }
+  return rangeStateBadge[excuse.rangeState].label;
+}
 
 export default function ExcuseManagementPage() {
   const [excuses, setExcuses] = useState<Excuse[]>([]);
@@ -139,7 +160,7 @@ export default function ExcuseManagementPage() {
       await updateExcuse(excuseId, approve);
       await loadExcuses(false);
     } catch {
-      setUpdateError("Nepodařilo se změnit schválení. Zkuste to znovu.");
+      setUpdateError("Nepodařilo se změnit započítání oběda. Zkuste to znovu.");
     } finally {
       setUpdatingIds(ids => {
         const next = new Set(ids);
@@ -190,11 +211,7 @@ export default function ExcuseManagementPage() {
       setCreateToDate("");
       setCreateCancelLunch(true);
       setCreateDayPart("FULL_DAY");
-      setNotice(
-        createCancelLunch
-          ? "Omluvenka byla uložena a rovnou schválena."
-          : "Omluvenka byla uložena. Oběd nebude odhlášen.",
-      );
+      setNotice("Omluvenka byla uložena.");
     } catch (error) {
       setCreateError(
         error instanceof Error ? error.message : "Omluvenku se nepodařilo uložit.",
@@ -235,7 +252,7 @@ export default function ExcuseManagementPage() {
             onChange={(e) => setFilter(e.target.value as typeof filter)}
             options={[
               { value: "all", label: "Všechny omluvenky" },
-              { value: "pending", label: "Ke schválení" },
+              { value: "pending", label: "K vyřízení" },
               { value: "settled", label: "Vyřízené" },
             ]}
             className="sm:w-[200px]"
@@ -256,7 +273,7 @@ export default function ExcuseManagementPage() {
             <CardHeader>
               <CardTitle>Nová omluvenka</CardTitle>
               <p className="text-sm text-charcoal-light">
-                Omluvenka zadaná ředitelkou se schválí okamžitě bez ohledu na datum.
+                Oběd lze odhlásit i po termínu.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -430,7 +447,7 @@ export default function ExcuseManagementPage() {
           ) : loadError ? null : excuses.length === 0 ? (
             <p className="text-charcoal-light text-center py-12">
               {filter === "pending"
-                ? "Žádné omluvenky ke schválení"
+                ? "Žádné omluvenky k vyřízení"
                 : filter === "settled"
                 ? "Žádné vyřízené omluvenky"
                 : "Žádné omluvenky"}
@@ -450,10 +467,7 @@ export default function ExcuseManagementPage() {
                         </h3>
                         {excuse.kind === "MAKEUP" && <Badge variant="info">Náhrada</Badge>}
                         <Badge variant={rangeStateBadge[excuse.rangeState].variant}>
-                          {excuse.kind !== "MAKEUP" && !excuse.cancelLunch &&
-                          excuse.rangeState === "LATE_APPROVED"
-                            ? "Bez schválení"
-                            : rangeStateBadge[excuse.rangeState].label}
+                          {getRangeStateLabel(excuse)}
                         </Badge>
                       </div>
                       <p className="text-sm text-charcoal-light">
@@ -492,26 +506,25 @@ export default function ExcuseManagementPage() {
 
                     <div className="flex flex-col items-start gap-2 sm:items-end">
                       <div className="flex items-center gap-2">
-                        {excuse.rangeState === "LATE" && (
+                        {excuse.rangeState === "LATE" && hasLunchDecision(excuse) && (
                           <Button
                             variant="secondary"
                             size="sm"
                             onClick={() => handleApprove(excuse.id, true)}
                             isLoading={updatingIds.has(excuse.id)}
                           >
-                            {excuse.kind === "MAKEUP" ? "Přihlásit oběd" : "Schválit"}
+                            {excuse.kind === "MAKEUP" ? "Přihlásit oběd" : "Prominout oběd"}
                           </Button>
                         )}
                         {excuse.rangeState === "LATE_APPROVED" &&
-                          !excuse.child.doesNotTakeLunch &&
-                          (excuse.cancelLunch || excuse.kind === "MAKEUP") && (
+                          hasLunchDecision(excuse) && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleApprove(excuse.id, false)}
                             isLoading={updatingIds.has(excuse.id)}
                           >
-                            Zrušit schválení
+                            {excuse.kind === "MAKEUP" ? "Odhlásit oběd" : "Započítat oběd"}
                           </Button>
                         )}
                       </div>

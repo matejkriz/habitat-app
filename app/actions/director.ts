@@ -172,6 +172,14 @@ function getRecordSchoolDays(
     : schoolDays;
 }
 
+function hasPendingLunchDecision(
+  excuse: Excuse,
+  schoolDays: ReadonlyArray<Date>,
+): boolean {
+  if (excuse.kind !== "MAKEUP" && excuse.dayPart === "AFTERNOON") return false;
+  return !isExcuseSettled(excuse, schoolDays);
+}
+
 export async function createExtraFundPerson(name: string): Promise<void> {
   const user = await requireDirector();
   const validated = validateExtraFundPersonPatch({ name });
@@ -295,7 +303,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     recentExcuseCandidates,
   );
   const recentExcuses = recentExcuseCandidates
-    .filter((excuse) => !isExcuseSettled(excuse, getRecordSchoolDays(excuse, recentSchoolDays)))
+    .filter((excuse) => hasPendingLunchDecision(excuse, getRecordSchoolDays(excuse, recentSchoolDays)))
     .slice(0, 5);
 
   // Get children count
@@ -367,8 +375,8 @@ export async function getExcuses(options?: {
   // pushed down into the query.
   const filtered = excuses.filter((excuse) => {
     const recordDays = getRecordSchoolDays(excuse, schoolDays);
-    if (options?.settledOnly) return isExcuseSettled(excuse, recordDays);
-    if (options?.pendingOnly) return !isExcuseSettled(excuse, recordDays);
+    if (options?.settledOnly) return !hasPendingLunchDecision(excuse, recordDays);
+    if (options?.pendingOnly) return hasPendingLunchDecision(excuse, recordDays);
     return true;
   });
 

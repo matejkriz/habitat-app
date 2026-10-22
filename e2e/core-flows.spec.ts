@@ -22,7 +22,7 @@ async function setAbsence(page: Page) {
   await expect(page.getByText(/Docházka uložena/)).toBeVisible();
 }
 
-test("parent excuse → director approval → lunch cancellation", async ({
+test("parent excuse → director forgives and recounts lunch", async ({
   page,
 }) => {
   await setAbsence(page);
@@ -40,15 +40,27 @@ test("parent excuse → director approval → lunch cancellation", async ({
     .locator("div.rounded-lg")
     .filter({ has: page.getByText(`Důvod: ${marker}`, { exact: true }) })
     .last();
-  await excuse.getByRole("button", { name: "Schválit", exact: true }).click();
+  await expect(excuse.getByText("Pozdě - oběd započítán", { exact: true })).toBeVisible();
+  await excuse.getByRole("button", { name: "Prominout oběd", exact: true }).click();
   await expect(
-    excuse.getByRole("button", { name: "Zrušit schválení" }),
+    excuse.getByRole("button", { name: "Započítat oběd" }),
   ).toBeVisible();
+  await expect(excuse.getByText("Pozdě - oběd prominut", { exact: true })).toBeVisible();
   await page.goto(`/reditel/obedy?month=${date.slice(0, 7)}`);
   const row = page.getByRole("row").filter({ hasText: childName });
   await expect(
     row.getByRole("img", {
       name: `${Number(date.slice(-2))}.: Včas omluven/a`,
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.goto("/reditel/omluvenky");
+  await excuse.getByRole("button", { name: "Započítat oběd", exact: true }).click();
+  await expect(excuse.getByText("Pozdě - oběd započítán", { exact: true })).toBeVisible();
+  await page.goto(`/reditel/obedy?month=${date.slice(0, 7)}`);
+  await expect(
+    row.getByRole("img", {
+      name: `${Number(date.slice(-2))}.: Pozdě omluven/a`,
       exact: true,
     }),
   ).toBeVisible();

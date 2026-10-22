@@ -468,6 +468,31 @@ describe("getExcuses", () => {
       expect.objectContaining({ rangeState: "ON_TIME" }),
     ]);
   });
+
+  it("settles a late afternoon absence without changing its coverage state", async () => {
+    const afternoon = {
+      ...spanningLate,
+      id: "afternoon-excuse",
+      dayPart: "AFTERNOON",
+      child: tobias,
+      submittedBy: { id: "parent-1", name: "Rodič", email: null },
+    };
+    const wholeDay = { ...afternoon, id: "whole-day-excuse", dayPart: "FULL_DAY" };
+    mocks.excusesList.mockResolvedValue([afternoon, wholeDay]);
+    mocks.getSchoolDaysInRange.mockResolvedValue([AUG(19), AUG(20)]);
+
+    await expect(getExcuses({ pendingOnly: true })).resolves.toEqual([
+      expect.objectContaining({ id: wholeDay.id, rangeState: "LATE" }),
+    ]);
+    await expect(getExcuses({ settledOnly: true })).resolves.toEqual([
+      expect.objectContaining({ id: afternoon.id, rangeState: "LATE" }),
+    ]);
+    await expect(getExcuses()).resolves.toEqual([
+      expect.objectContaining({ id: afternoon.id, rangeState: "LATE" }),
+      expect.objectContaining({ id: wholeDay.id, rangeState: "LATE" }),
+    ]);
+    expect(mocks.excusesUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe("getExcuseChildren", () => {
@@ -755,6 +780,20 @@ describe("attendance schedule reporting", () => {
     }]);
     mocks.getSchoolDaysInRange.mockResolvedValue([AUG(17), AUG(18)]);
     expect((await getDashboardStats()).recentExcuses).toEqual([]);
+  });
+
+  it("keeps a late afternoon absence out of the dashboard's pending queue", async () => {
+    mocks.excusesList.mockResolvedValue([
+      { ...spanningLate, id: "afternoon-excuse", dayPart: "AFTERNOON", child: tobias },
+      { ...spanningLate, id: "whole-day-excuse", dayPart: "FULL_DAY", child: tobias },
+      { ...spanningLate, id: "late-makeup", kind: "MAKEUP", cancelLunch: false, dayPart: "FULL_DAY", child: { ...tobias, attendanceDays: [1, 2] } },
+    ]);
+
+    expect((await getDashboardStats()).recentExcuses.map(excuse => excuse.id)).toEqual([
+      "whole-day-excuse",
+      "late-makeup",
+    ]);
+    expect(mocks.excusesUpdate).not.toHaveBeenCalled();
   });
 
   it("counts a stored absence on a regular day off as excused in the dashboard", async () => {
