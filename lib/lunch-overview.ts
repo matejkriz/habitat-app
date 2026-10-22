@@ -1,6 +1,6 @@
 import { getChildDayPlan } from "@/lib/attendance-schedule";
 import { db } from "@/lib/db";
-import type { Attendance, Child, NoLunchDay } from "@/lib/types";
+import { Presence, type Attendance, type Child, type NoLunchDay } from "@/lib/types";
 import { getSchoolDaysInRange } from "@/lib/school-days";
 import { getExcusesOverlapping } from "@/lib/excuse";
 import { getDayCoverage, getDayPartCoverage, groupExcusesByChild } from "@/lib/excuse-coverage";
@@ -29,6 +29,7 @@ export type LunchOverview = {
     readonly firstName: string;
     readonly lastName: string;
     readonly statuses: ReadonlyArray<LunchStatusValue | null>;
+    readonly displayStatuses?: ReadonlyArray<LunchStatusValue | null>;
     readonly payableLunches: number;
     readonly paid: boolean;
   }>;
@@ -160,6 +161,21 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
         firstName: child.firstName,
         lastName: child.lastName,
         statuses,
+        ...(parentId === undefined ? {} : {
+          displayStatuses: statuses.map((status, index) => {
+            if (status !== null) return status;
+            const day = days[index].date;
+            const wholeDayCoverage = getDayCoverage(childExcuses, day);
+            const morningCoverage = getDayPartCoverage(childExcuses, day, "MORNING");
+            const afternoonCoverage = getDayPartCoverage(childExcuses, day, "AFTERNOON");
+            const coverage = wholeDayCoverage.covered
+              ? wholeDayCoverage
+              : morningCoverage.covered
+                ? morningCoverage
+                : { ...afternoonCoverage, lunchCancelled: false };
+            return getLunchStatus({ presence: Presence.ABSENT }, coverage);
+          }),
+        }),
         payableLunches: statuses.filter(isPayableLunch).length,
         paid: paidChildren.has(child.id),
       };

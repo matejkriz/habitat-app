@@ -189,7 +189,8 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                         {child.firstName} {child.lastName}
                       </span>
                     </th>
-                    {child.statuses.map((status, dayIndex) => {
+                    {child.statuses.map((recordedStatus, dayIndex) => {
+                      const status = child.displayStatuses?.[dayIndex] ?? recordedStatus;
                       const day = overview.days[dayIndex];
                       const label = status ? statusLabels[status] : "Docházka nezapsána";
 

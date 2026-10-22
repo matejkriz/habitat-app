@@ -171,6 +171,26 @@ describe("LunchOverviewSection", () => {
     expect(screen.queryByRole("rowheader", { name: "Součet" })).toBeNull();
   });
 
+  it("shows excuse-based parent statuses for unrecorded days while retaining billing totals", () => {
+    const overview = lunchOverview();
+    render(<LunchOverviewView overview={{
+      ...overview,
+      days: [overview.days[0], { key: "2026-08-20", day: 20, weekday: "Čt" }, { key: "2026-08-24", day: 24, weekday: "Po" }],
+      children: [
+        { ...overview.children[0], statuses: [null, null, null], displayStatuses: ["excused", "late", "unexcused"], payableLunches: 0 },
+        { id: "eva", firstName: "Eva", lastName: "Malá", statuses: ["present", null, null], displayStatuses: ["present", "kept", "unexcused"], payableLunches: 1, paid: false },
+      ],
+    }} basePath="/rodic" />);
+
+    const child = within(screen.getByRole("rowheader", { name: "Tobiáš Tornádo" }).closest("tr")!);
+    expect(child.getByRole("img", { name: "19.: Včas omluven/a" })).toBeTruthy();
+    expect(child.getByRole("img", { name: "20.: Pozdě omluven/a" })).toBeTruthy();
+    expect(child.getByRole("img", { name: "24.: Neomluven/a" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: /Docházka nezapsána/ })).toBeNull();
+    const footer = within(screen.getByRole("rowheader", { name: "Součet" }).closest("tr")!);
+    expect(footer.getAllByRole("cell").map(cell => cell.textContent?.replaceAll(/\s/g, " "))).toEqual(["1", "0", "0", "1", "55 Kč"]);
+  });
+
   it("keeps the director total visible even with only one child", () => {
     render(<LunchOverviewView overview={{ ...lunchOverview(), childrenWithoutLunch: [] }} showDirectorControls />);
     expect(screen.getByRole("rowheader", { name: "Součet" })).toBeTruthy();

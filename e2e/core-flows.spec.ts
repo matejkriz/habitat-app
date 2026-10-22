@@ -25,14 +25,19 @@ async function setAbsence(page: Page) {
 test("parent excuse → director forgives and recounts lunch", async ({
   page,
 }) => {
-  await setAbsence(page);
   await persona(page, "parent-roza");
+  await page.goto(`/rodic?child=${childId}&month=${date.slice(0, 7)}`);
+  const parentLunchRow = page.getByRole("table", { name: /^Obědy/ }).getByRole("row").filter({ hasText: childName });
+  await expect(parentLunchRow.getByRole("img", { name: `${Number(date.slice(-2))}.: Neomluven/a`, exact: true })).toBeVisible();
   await page.goto(`/rodic/omluvenka?child=${childId}&date=${date}`);
   await expect(page.getByRole("checkbox", { name: "Žofie", exact: true })).toBeChecked();
   await page.getByLabel("Důvod (volitelné)").fill(marker);
   await page.getByRole("button", { name: "Odeslat omluvenku" }).click();
   await expect(page).toHaveURL(/\/rodic\?child=/);
   await expect(page.getByText(marker, { exact: true })).toBeVisible();
+  await page.goto(`/rodic?child=${childId}&month=${date.slice(0, 7)}`);
+  await expect(parentLunchRow.getByRole("img", { name: `${Number(date.slice(-2))}.: Pozdě omluven/a`, exact: true })).toBeVisible();
+  await setAbsence(page);
 
   await persona(page, "director-bohumil");
   await page.goto("/reditel/omluvenky");

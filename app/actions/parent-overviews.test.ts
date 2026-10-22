@@ -9,7 +9,22 @@ vi.mock("@/lib/db", () => ({ db: {
 vi.mock("@/lib/excuse", () => ({ getExcusesOverlapping: mocks.excuses }));
 vi.mock("@/lib/school-days", () => ({ getSchoolDaysInRange: mocks.schoolDays }));
 import { getParentLunchOverview, getParentTripFundOverview } from "./parent-overviews";
+import { loadLunchOverview } from "@/lib/lunch-overview";
+import { LunchStatus } from "@/lib/lunches";
+import { ExcuseDayPart } from "@/lib/types";
 const date = new Date(2026, 8, 10);
+const timelyExcuse = {
+  id: "excuse",
+  childId: "own",
+  fromDate: date,
+  toDate: date,
+  dayPart: ExcuseDayPart.FULL_DAY,
+  cancelLunch: true,
+  submittedAt: new Date(2026, 8, 9, 8),
+  lateApprovedAt: null,
+};
+const lateSubmission = new Date(2026, 8, 10, 10);
+const forgiveness = new Date(2026, 8, 10, 11);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -29,6 +44,66 @@ beforeEach(() => {
 });
 
 describe("parent overview actions", () => {
+  it.each([
+    { scenario: "timely whole-day excuse", excuses: [timelyExcuse], expected: LunchStatus.EXCUSED },
+    { scenario: "late whole-day excuse", excuses: [{ ...timelyExcuse, submittedAt: lateSubmission }], expected: LunchStatus.LATE },
+    { scenario: "forgiven whole-day lunch", excuses: [{ ...timelyExcuse, submittedAt: lateSubmission, lateApprovedAt: forgiveness }], expected: LunchStatus.EXCUSED },
+    { scenario: "kept whole-day lunch", excuses: [{ ...timelyExcuse, cancelLunch: false }], expected: LunchStatus.KEPT },
+    { scenario: "no excuse", excuses: [], expected: LunchStatus.UNEXCUSED },
+    { scenario: "timely morning excuse", excuses: [{ ...timelyExcuse, dayPart: ExcuseDayPart.MORNING }], expected: LunchStatus.EXCUSED },
+    { scenario: "late morning excuse", excuses: [{ ...timelyExcuse, dayPart: ExcuseDayPart.MORNING, submittedAt: lateSubmission }], expected: LunchStatus.LATE },
+    { scenario: "kept morning lunch", excuses: [{ ...timelyExcuse, dayPart: ExcuseDayPart.MORNING, cancelLunch: false }], expected: LunchStatus.KEPT },
+    { scenario: "timely afternoon excuse", excuses: [{ ...timelyExcuse, dayPart: ExcuseDayPart.AFTERNOON }], expected: LunchStatus.KEPT },
+    { scenario: "late afternoon excuse", excuses: [{ ...timelyExcuse, dayPart: ExcuseDayPart.AFTERNOON, submittedAt: lateSubmission }], expected: LunchStatus.LATE },
+    { scenario: "forgiven afternoon lunch", excuses: [{ ...timelyExcuse, dayPart: ExcuseDayPart.AFTERNOON, submittedAt: lateSubmission, lateApprovedAt: forgiveness }], expected: LunchStatus.KEPT },
+  ])("displays a $scenario before attendance is recorded without changing billing", async ({ excuses, expected }) => {
+    mocks.attendance.mockResolvedValue([]);
+    mocks.excuses.mockResolvedValue(excuses);
+
+    const data = await getParentLunchOverview("2026-09");
+
+    expect(data.children[0]).toMatchObject({
+      statuses: [null],
+      displayStatuses: [expected],
+      payableLunches: 0,
+    });
+  });
+
+  it.each(["PRESENT", "ABSENT"])("keeps recorded %s attendance authoritative in the parent's display", async presence => {
+    mocks.attendance.mockResolvedValue([{ childId: "own", date, presence }]);
+    mocks.excuses.mockResolvedValue([{ ...timelyExcuse, dayPart: ExcuseDayPart.AFTERNOON }]);
+
+    const data = await getParentLunchOverview("2026-09");
+
+    expect(data.children[0].displayStatuses).toEqual(data.children[0].statuses);
+    expect(data.children[0].payableLunches).toBe(1);
+  });
+
+  it.each([
+    { scenario: "unscheduled day", excuses: [], expected: LunchStatus.NOT_SCHEDULED, payableLunches: 0 },
+    { scenario: "makeup with lunch", excuses: [{ ...timelyExcuse, kind: "MAKEUP", cancelLunch: false }], expected: LunchStatus.MAKEUP, payableLunches: 1 },
+    { scenario: "makeup without lunch", excuses: [{ ...timelyExcuse, kind: "MAKEUP", cancelLunch: true }], expected: LunchStatus.MAKEUP_NO_LUNCH, payableLunches: 0 },
+  ])("preserves the existing $scenario status without attendance", async ({ excuses, expected, payableLunches }) => {
+    mocks.parentLinks.mockResolvedValue([{ child: { id: "own", firstName: "Anna", lastName: "Malá", active: true, doesNotTakeLunch: false, attendanceDays: [1, 2, 3] } }]);
+    mocks.attendance.mockResolvedValue([]);
+    mocks.excuses.mockResolvedValue(excuses);
+
+    const data = await getParentLunchOverview("2026-09");
+
+    expect(data.children[0]).toMatchObject({ statuses: [expected], displayStatuses: [expected], payableLunches });
+  });
+
+  it("keeps the director's overview unchanged when attendance is missing", async () => {
+    mocks.children.mockResolvedValue([{ id: "own", firstName: "Anna", lastName: "Malá", active: true, doesNotTakeLunch: false, parents: [] }]);
+    mocks.attendance.mockResolvedValue([]);
+    mocks.excuses.mockResolvedValue([timelyExcuse]);
+
+    const data = await loadLunchOverview("2026-09");
+
+    expect(data.children[0]).toMatchObject({ statuses: [null], payableLunches: 0 });
+    expect(data.children[0]).not.toHaveProperty("displayStatuses");
+  });
+
   it("uses the last actual open day for billing even when lunch is not served that day", async () => {
     const lastDay = new Date(2026, 8, 30);
     mocks.schoolDays.mockResolvedValue([date, lastDay]);
