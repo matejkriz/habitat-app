@@ -20,12 +20,7 @@ import {
   submitMakeup,
   type ParentVisibleChild,
 } from "@/app/actions/parent";
-import {
-  canStillAutoApprove,
-  formatDeadline,
-  parseExcuseDate,
-} from "@/lib/excuse-rules";
-import { formatMakeupLunchDeadline, isMakeupLunchOnTime } from "@/lib/makeup-rules";
+import { parseExcuseDate } from "@/lib/excuse-rules";
 import { DEFAULT_ATTENDANCE_DAYS, getAttendanceDateDisabledReason, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import {
   ExcuseDayPart,
@@ -41,21 +36,16 @@ type SubmissionSummary = {
   readonly automaticallyApprovedDayCount: number;
 };
 
-function automaticApprovalMessage(dayCount: number): string {
-  if (dayCount === 1) {
-    return "1 den omluvenky byl automaticky schválen, protože dítě neodebírá obědy.";
-  }
-  if (dayCount < 5) {
-    return `${dayCount} dny omluvenek byly automaticky schváleny, protože děti neodebírají obědy.`;
-  }
-  return `${dayCount} dnů omluvenek bylo automaticky schváleno, protože děti neodebírají obědy.`;
+function canceledLunchMessage(dayCount: number): string {
+  return dayCount === 1
+    ? "1 oběd bude odhlášen"
+    : dayCount < 5
+      ? `${dayCount} obědy budou odhlášeny`
+      : `${dayCount} obědů bude odhlášeno`;
 }
 
 function mixedLunchMessage(summary: SubmissionSummary): string {
-  const canceled =
-    summary.onTimeDayCount === 1
-      ? "1 oběd bude odhlášen"
-      : `${summary.onTimeDayCount} obědy budou odhlášeny`;
+  const canceled = canceledLunchMessage(summary.onTimeDayCount);
   const lateDays =
     summary.lateDayCount === 1
       ? "1 pozdně omluvený den"
@@ -66,7 +56,7 @@ function mixedLunchMessage(summary: SubmissionSummary): string {
     summary.lateDayCount === 1
       ? "zůstane oběd započítaný"
       : "zůstanou obědy započítané";
-  return `${canceled}; za ${lateDays} ${charged} do schválení ředitelkou.`;
+  return `${canceled}; za ${lateDays} ${charged}.`;
 }
 
 export default function NewExcusePage() {
@@ -88,16 +78,12 @@ export default function NewExcusePage() {
     ExcuseDayPart.FULL_DAY,
   );
   const [cancelLunch, setCancelLunch] = useState(true);
+  const [registerLunch, setRegisterLunch] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<SubmissionSummary | null>(null);
-  const [willAutoApprove, setWillAutoApprove] = useState<boolean | null>(null);
-  const [deadline, setDeadline] = useState("");
   const selectedChildren = children.filter((child) =>
     selectedChildIds.includes(child.id),
-  );
-  const someSelectedChildrenDoNotTakeLunch = selectedChildren.some(
-    (child) => child.doesNotTakeLunch,
   );
   const allSelectedChildrenDoNotTakeLunch =
     selectedChildren.length > 0 &&
@@ -119,14 +105,9 @@ export default function NewExcusePage() {
     !fromDate || makeupDates.some((date) => !isRegularAttendanceDay(child, date)),
   );
   const hasMakeupDays = selectedMakeupChildren.length > 0;
-  const makeupTakesLunch = selectedMakeupChildren.some((child) => !child.doesNotTakeLunch)
+  const canRegisterMakeupLunch = selectedMakeupChildren.some((child) => !child.doesNotTakeLunch)
     && (hasMultipleDays || dayPart !== ExcuseDayPart.AFTERNOON);
-  const makeupOnTime = fromDate
-    ? isMakeupLunchOnTime(new Date(), parseExcuseDate(fromDate))
-    : null;
-  const makeupDeadline = fromDate
-    ? formatMakeupLunchDeadline(parseExcuseDate(fromDate))
-    : "";
+  const makeupTakesLunch = canRegisterMakeupLunch && registerLunch;
 
   const getDisabledReason = (date: Date, selected = selectedChildren, makeup = isMakeup): string | null =>
     selected.length === 0
@@ -191,18 +172,6 @@ export default function NewExcusePage() {
     loadChildren();
   }, [preselectedChildId, requestedMakeup, preselectedDate]);
 
-  useEffect(() => {
-    if (fromDate) {
-      const from = parseExcuseDate(fromDate);
-      const canAutoApprove = canStillAutoApprove(from);
-      setWillAutoApprove(canAutoApprove);
-      setDeadline(formatDeadline(from));
-    } else {
-      setWillAutoApprove(null);
-      setDeadline("");
-    }
-  }, [fromDate]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -231,6 +200,7 @@ export default function NewExcusePage() {
         hasMultipleDays ? ExcuseDayPart.FULL_DAY : dayPart,
       );
       formData.set("cancelLunch", String(shouldCancelLunch));
+      if (isMakeup) formData.set("registerLunch", String(makeupTakesLunch));
       if (reason) formData.set("reason", reason);
 
       const fingerprint = JSON.stringify([isMakeup, ...formData.entries()]);
@@ -312,7 +282,9 @@ export default function NewExcusePage() {
                 {isMakeup ? (
                   <div className="space-y-1">
                     <p>O mimořádném příchodu se dozví ředitelka a učitelé.</p>
-                    {success.schoolDayCount === 0 ? <p>V zadaném období nejsou žádné dny pro náhradu.</p> : makeupTakesLunch ? (
+                    {success.schoolDayCount === 0 ? <p>V zadaném období nejsou žádné dny pro náhradu.</p> : success.cancelLunch ? (
+                      <p>Oběd nebude přihlášen.</p>
+                    ) : makeupTakesLunch ? (
                       <>
                         {success.onTimeDayCount > 0 && <p>{success.onTimeDayCount === 1 ? "Oběd bude přihlášen." : `${success.onTimeDayCount} obědy budou přihlášeny.`}</p>}
                         {success.lateDayCount > 0 && <p>Oběd není zajištěný pro dny zadané po termínu. Dítě může dorazit i bez zajištěného oběda.</p>}
@@ -324,50 +296,29 @@ export default function NewExcusePage() {
                 ) : !success.cancelLunch ? (
                   <p>
                     {success.count > 1
-                      ? "Omluvenky není potřeba schvalovat. Obědy nebudou odhlášeny."
-                      : "Omluvenku není potřeba schvalovat. Oběd nebude odhlášen."}
+                      ? "Obědy nebudou odhlášeny."
+                      : "Oběd nebude odhlášen."}
                   </p>
                 ) : success.automaticallyApprovedDayCount ===
                   success.schoolDayCount ? (
                   <p>
-                    {automaticApprovalMessage(
-                      success.automaticallyApprovedDayCount,
-                    )}
+                    {success.count > 1
+                      ? "Vybrané děti neodebírají obědy."
+                      : "Dítě neodebírá obědy."}
                   </p>
-                ) : success.automaticallyApprovedDayCount > 0 ? (
-                  <div className="space-y-1">
-                    <p>
-                      {automaticApprovalMessage(
-                        success.automaticallyApprovedDayCount,
-                      )}
-                    </p>
-                    {success.lateDayCount === 0 ? (
-                      <p>
-                        {success.onTimeDayCount === 1
-                          ? "Za ostatní den bude oběd odhlášen."
-                          : `Za ostatních ${success.onTimeDayCount} dnů budou obědy odhlášeny.`}
-                      </p>
-                    ) : success.onTimeDayCount === 0 ? (
-                      <p>
-                        {success.lateDayCount === 1
-                          ? "Za ostatní pozdně omluvený den zůstane oběd započítaný do schválení ředitelkou."
-                          : `Za ostatních ${success.lateDayCount} pozdně omluvených dnů zůstanou obědy započítané do schválení ředitelkou.`}
-                      </p>
-                    ) : (
-                      <p>{mixedLunchMessage(success)}</p>
-                    )}
-                  </div>
                 ) : success.lateDayCount === 0 ? (
                   <p>
-                    {success.count > 1
-                      ? `Omluvenky pro ${success.count} děti byly odeslány včas – obědy budou odhlášeny.`
-                      : "Omluvenka byla odeslána včas – oběd bude odhlášen."}
+                    {success.onTimeDayCount === 1
+                      ? "Oběd bude odhlášen."
+                      : `${canceledLunchMessage(success.onTimeDayCount)}.`}
                   </p>
                 ) : success.onTimeDayCount === 0 ? (
                   <p>
-                    {success.count > 1
-                      ? `Omluvenky pro ${success.count} děti byly odeslány pozdě – obědy nebudou automaticky odhlášeny.`
-                      : "Omluvenka byla odeslána pozdě – oběd nebude automaticky odhlášen."}
+                    {success.lateDayCount === 1
+                      ? "Oběd zůstane započítaný."
+                      : success.lateDayCount < 5
+                        ? `${success.lateDayCount} obědy zůstanou započítané.`
+                        : `${success.lateDayCount} obědů zůstane započítaných.`}
                   </p>
                 ) : (
                   <p>{mixedLunchMessage(success)}</p>
@@ -479,6 +430,17 @@ export default function NewExcusePage() {
               </p>
             ) : null}
 
+            {isMakeup && canRegisterMakeupLunch && <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
+              <Toggle
+                id="register-lunch"
+                role="switch"
+                checked={registerLunch}
+                disabled={isSubmitting}
+                onChange={(event) => setRegisterLunch(event.target.checked)}
+                label="Přihlásit oběd"
+              />
+            </div>}
+
             {!isMakeup && <div className="rounded-lg border-2 border-cream-dark bg-white p-4">
               <Toggle
                 id="cancel-lunch"
@@ -486,11 +448,6 @@ export default function NewExcusePage() {
                 checked={cancelLunch}
                 onChange={(event) => setCancelLunch(event.target.checked)}
                 label="Odhlásit oběd"
-                description={
-                  cancelLunch
-                    ? "Oběd se odhlásí podle běžných pravidel."
-                    : "Oběd zůstane přihlášený a omluvenku není potřeba schvalovat."
-                }
               />
             </div>}
 
@@ -502,94 +459,8 @@ export default function NewExcusePage() {
               rows={3}
             />
 
-            {/* Auto-approval info */}
             {isMakeup && fromDate && selectedChildren.length > 0 && !hasMakeupDays && (
               <p className="rounded-lg bg-gold/10 p-3 text-sm text-charcoal">Vyberte den, kdy dítě běžně nechodí.</p>
-            )}
-            {isMakeup && fromDate && !hasMultipleDays && makeupTakesLunch && (
-              <div className={`rounded-lg border p-4 ${makeupOnTime ? "border-sage/20 bg-sage/10" : "border-gold/20 bg-gold/10"}`}>
-                <p className="font-semibold text-charcoal">{makeupOnTime ? "Oběd bude přihlášen" : "Termín pro přihlášení oběda uplynul"}</p>
-                <p className="mt-1 text-sm text-charcoal-light">
-                  {makeupOnTime ? `Pro zajištění oběda odešlete náhradu do ${makeupDeadline}.` : `Termín byl do ${makeupDeadline}. Náhradu můžete zadat, ale oběd už není zajištěný.`}
-                </p>
-              </div>
-            )}
-            {!isMakeup && fromDate && (
-              <div className={`p-4 rounded-lg ${
-                !shouldCancelLunch || willAutoApprove || allSelectedChildrenDoNotTakeLunch
-                  ? "bg-sage/10 border border-sage/20"
-                  : "bg-gold/10 border border-gold/20"
-              }`}>
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    !shouldCancelLunch || willAutoApprove || allSelectedChildrenDoNotTakeLunch
-                      ? "bg-sage/20"
-                      : "bg-gold/20"
-                  }`}>
-                    {!shouldCancelLunch || willAutoApprove || allSelectedChildrenDoNotTakeLunch ? (
-                      <svg className="w-4 h-4 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )}
-                  </div>
-                  <div>
-                    {!shouldCancelLunch ? (
-                      <>
-                        <p className="font-semibold text-sage-dark">
-                          Oběd nebude odhlášen
-                        </p>
-                        <p className="text-sm text-charcoal-light mt-1">
-                          Omluvenku není potřeba schvalovat. Oběd zůstane přihlášený.
-                        </p>
-                      </>
-                    ) : allSelectedChildrenDoNotTakeLunch ? (
-                      <>
-                        <p className="font-semibold text-sage-dark">
-                          Omluvenka bude automaticky schválena
-                        </p>
-                        <p className="text-sm text-charcoal-light mt-1">
-                          {selectedChildren.length > 1
-                            ? "Vybrané děti neodebírají obědy."
-                            : "Dítě neodebírá obědy."}
-                        </p>
-                      </>
-                    ) : !willAutoApprove && someSelectedChildrenDoNotTakeLunch ? (
-                      <>
-                        <p className="font-semibold text-gold-dark">
-                          Část omluvenek se schválí automaticky
-                        </p>
-                        <p className="text-sm text-charcoal-light mt-1">
-                          Děti bez obědů se schválí automaticky. U ostatních už
-                          termín pro odhlášení oběda uplynul ({deadline}).
-                        </p>
-                      </>
-                    ) : willAutoApprove ? (
-                      <>
-                        <p className="font-semibold text-sage-dark">
-                          Omluvenka bude odeslána včas
-                        </p>
-                        <p className="text-sm text-charcoal-light mt-1">
-                          Oběd bude automaticky odhlášen (termín do {deadline})
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-semibold text-gold-dark">
-                          Omluvenka bude odeslána pozdě
-                        </p>
-                        <p className="text-sm text-charcoal-light mt-1">
-                          Termín pro odhlášení oběda již uplynul ({deadline}).
-                          Bětka může oběd dodatečně odhlásit.
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
             )}
 
             {/* Info box */}

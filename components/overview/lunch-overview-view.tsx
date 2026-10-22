@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { isPayableLunch, LunchStatus, type LunchStatus as LunchStatusValue } from "@/lib/lunches";
 import { formatLunchAmount } from "@/lib/lunch-price";
+import type { ChildGender } from "@/lib/types";
 import { LunchPriceEditor } from "./lunch-price-editor";
 import { LunchPaidCheckbox } from "./lunch-paid-checkbox";
 
@@ -32,9 +33,26 @@ const statusLabels: Record<LunchStatusValue, string> = {
   [LunchStatus.UNEXCUSED]: "Neomluven/a",
 };
 
+function getStatusLabel(status: LunchStatusValue, gender: ChildGender | null | undefined, isFuture: boolean): string {
+  const label = statusLabels[status];
+  const genderedLabel = gender === "FEMALE"
+    ? status === LunchStatus.PRESENT ? "Přišla" : label.replace("/a", "a")
+    : gender === "MALE" ? label.replace("/a", "") : label;
+  if (isFuture && status === LunchStatus.PRESENT) return "Přijde";
+  if (isFuture && status === LunchStatus.UNEXCUSED) return `Nepřijde, ${genderedLabel.toLocaleLowerCase("cs-CZ")}`;
+  return genderedLabel;
+}
+
+function currentDayKey(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find(part => part.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 function currentMonth(): string {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  return currentDayKey().slice(0, 7);
 }
 
 export function safeLunchMonth(value: string | string[] | undefined): string {
@@ -57,6 +75,18 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
   overview: LunchOverview; basePath?: string; monthParam?: string; extraParams?: Record<string, string>; showDirectorControls?: boolean;
 }) {
   const month = overview.month;
+  const today = currentDayKey();
+  const thisMonth = today.slice(0, 7);
+  const todayIndex = overview.days.findIndex(day => day.key === today);
+  const nextDayIndex = overview.days.findIndex(day => day.key > today);
+  const boundaryAfterLastDay = nextDayIndex === -1;
+  const todayBoundaryIndex = month === thisMonth && todayIndex === -1
+    ? boundaryAfterLastDay ? overview.days.length - 1 : nextDayIndex
+    : -1;
+  const dayMarkerClass = (index: number) => {
+    if (index === todayIndex) return "border-l-2 border-l-gold border-r-2 border-r-gold";
+    if (index === todayBoundaryIndex) return boundaryAfterLastDay ? "border-r-2 border-r-gold" : "border-l-2 border-l-gold";
+  };
   const amountPosition = showDirectorControls ? "right-[var(--lunch-paid-width)]" : "right-0";
   const showTotals = showDirectorControls || overview.children.length + overview.childrenWithoutLunch.length > 1;
   const dailyTotals = showTotals ? overview.days.map((_, index) =>
@@ -121,9 +151,9 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
               <p className="text-sm text-charcoal-light">Volné dny a dny bez oběda jsou automaticky vynechané</p>
               <p className="mt-1 text-sm text-charcoal-light">Cena oběda: {formatLunchAmount(1, overview.priceCents)}</p>
             </div>
-            {month !== currentMonth() && (
+            {month !== thisMonth && (
               <Link
-                href={monthHref(currentMonth())}
+                href={monthHref(thisMonth)}
                 className="relative rounded-lg px-3 py-1.5 text-sm font-semibold text-gold-dark transition-colors hover:bg-gold/10"
               >
                 Aktuální měsíc
@@ -151,17 +181,26 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                   <th className="sticky top-0 z-30 min-w-48 border-b border-r border-cream-dark bg-[#fbf7f1] px-4 py-3 text-left font-bold text-charcoal shadow-[6px_0_12px_-12px_rgba(61,61,61,0.8)] md:left-0">
                     Dítě
                   </th>
-                  {overview.days.map((day) => (
+                  {overview.days.map((day, index) => (
                     <th
                       key={day.key}
-                      className="sticky top-0 z-20 min-w-12 border-b border-r border-cream-dark bg-[#fbf7f1] px-1 py-2 text-center"
+                      aria-current={index === todayIndex ? "date" : undefined}
+                      className={cn(
+                        "sticky top-0 z-20 min-w-12 border-b border-r border-cream-dark bg-[#fbf7f1] px-1 py-2 text-center",
+                        dayMarkerClass(index),
+                      )}
                     >
                       <span className="block text-[10px] font-bold uppercase tracking-wide text-charcoal-light">
                         {day.weekday}
                       </span>
-                      <span className="block text-base font-extrabold leading-5 text-charcoal">
+                      <span className={cn(
+                        "mx-auto grid size-7 place-items-center rounded-full text-base font-extrabold text-charcoal",
+                        index === todayIndex && "bg-gold",
+                      )}>
                         {day.day}.
                       </span>
+                      {index === todayIndex && <span className="sr-only">Dnes</span>}
+                      {index === todayBoundaryIndex && <span className="sr-only">{boundaryAfterLastDay ? "Dnes po tomto dni" : "Dnes před tímto dnem"}</span>}
                     </th>
                   ))}
                   <th scope="col" className="sticky top-0 z-20 min-w-16 border-b border-l border-cream-dark bg-[#f8f1e7] px-1.5 py-2 text-center font-bold leading-tight text-charcoal md:min-w-24 md:px-3">
@@ -191,7 +230,9 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                     </th>
                     {child.statuses.map((status, dayIndex) => {
                       const day = overview.days[dayIndex];
-                      const label = status ? statusLabels[status] : "Docházka nezapsána";
+                      const isFuture = day.key > today;
+                      const label = status ? getStatusLabel(status, child.gender, isFuture) : "Docházka nezapsána";
+                      const isPlannedPresence = isFuture && (status === LunchStatus.PRESENT || status === LunchStatus.MAKEUP);
 
                       return (
                         <td
@@ -199,6 +240,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                           className={cn(
                             "h-12 border-b border-r border-cream-dark p-1",
                             rowIndex % 2 === 0 ? "bg-white" : "bg-[#fdfaf6]",
+                            dayMarkerClass(dayIndex),
                           )}
                         >
                           <div
@@ -208,7 +250,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                             className={cn(
                               "h-9 min-w-9 rounded-lg ring-1 ring-inset transition-transform group-hover:scale-[1.03]",
                               status
-                                ? `${statusStyles[status]} ring-black/5`
+                                ? `${isPlannedPresence ? "bg-[#b9d0ae]" : statusStyles[status]} ring-black/5`
                                 : "bg-cream/45 ring-cream-dark",
                             )}
                           />
@@ -248,7 +290,7 @@ export function LunchOverviewView({ overview, basePath = "/reditel", monthParam 
                       Součet
                     </th>
                     {dailyTotals.map((total, index) => (
-                      <td key={overview.days[index].key} className="border-r border-t-2 border-cream-dark bg-[#f8f1e7] px-1 py-3 text-center">
+                      <td key={overview.days[index].key} className={cn("border-r border-t-2 border-cream-dark bg-[#f8f1e7] px-1 py-3 text-center", dayMarkerClass(index))}>
                         {total}
                       </td>
                     ))}

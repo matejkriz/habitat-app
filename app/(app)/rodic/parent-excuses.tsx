@@ -80,6 +80,11 @@ export function ParentExcuses({ excuses: initialExcuses }: { readonly excuses: P
                   Oběd zůstává přihlášený
                 </p>
               ) : null}
+              {excuse.kind === "MAKEUP" && excuse.cancelLunch ? (
+                <p className="text-xs font-medium text-charcoal-light">
+                  Bez přihlášení oběda
+                </p>
+              ) : null}
             </div>
             <ExcuseEditor excuse={excuse} onSave={handleSave} onDelete={handleDelete} />
           </div>

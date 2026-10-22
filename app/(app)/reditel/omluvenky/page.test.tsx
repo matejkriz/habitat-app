@@ -78,9 +78,100 @@ describe("ExcuseManagementPage", () => {
     mocks.getExcuses.mockResolvedValue([{ ...lateExcuse, kind: "MAKEUP", cancelLunch: false }]);
     render(<ExcuseManagementPage />);
     expect(await screen.findByText("Náhrada")).toBeTruthy();
+    expect(screen.getByText("Pozdě - oběd nepřihlášen")).toBeTruthy();
     expect(screen.getByText("přihlásit")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Přihlásit oběd" }));
     await waitFor(() => expect(mocks.updateExcuse).toHaveBeenCalledWith("excuse-1", true));
+  });
+
+  it("shows a makeup without a lunch request", async () => {
+    mocks.getExcuses.mockResolvedValue([{ ...lateExcuse, kind: "MAKEUP", cancelLunch: true, rangeState: "ON_TIME" }]);
+    render(<ExcuseManagementPage />);
+    expect(await screen.findByText("Náhrada")).toBeTruthy();
+    expect(screen.getByText("nepřihlašovat")).toBeTruthy();
+    expect(screen.getByText("Bez oběda")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Přihlásit oběd" })).toBeNull();
+  });
+
+  it("lets the director forgive a charged lunch on a late excuse", async () => {
+    mocks.getExcuses.mockResolvedValue([lateExcuse]);
+    render(<ExcuseManagementPage />);
+
+    expect(await screen.findByText("Pozdě - oběd započítán")).toBeTruthy();
+    expect(screen.getByRole("option", { name: "K vyřízení" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Prominout oběd" }));
+
+    await waitFor(() => expect(mocks.updateExcuse).toHaveBeenCalledWith("excuse-1", true));
+  });
+
+  it("lets the director charge a previously forgiven lunch", async () => {
+    mocks.getExcuses.mockResolvedValue([{ ...lateExcuse, rangeState: "LATE_APPROVED" }]);
+    render(<ExcuseManagementPage />);
+
+    expect(await screen.findByText("Pozdě - oběd prominut")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Započítat oběd" }));
+
+    await waitFor(() => expect(mocks.updateExcuse).toHaveBeenCalledWith("excuse-1", false));
+  });
+
+  it("lets the director cancel a previously registered makeup lunch", async () => {
+    mocks.getExcuses.mockResolvedValue([
+      { ...lateExcuse, kind: "MAKEUP", cancelLunch: false, rangeState: "LATE_APPROVED" },
+    ]);
+    render(<ExcuseManagementPage />);
+
+    expect(await screen.findByText("Pozdě - oběd přihlášen")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Odhlásit oběd" }));
+    await waitFor(() => expect(mocks.updateExcuse).toHaveBeenCalledWith("excuse-1", false));
+    expect(screen.queryByRole("button", { name: "Započítat oběd" })).toBeNull();
+  });
+
+  it.each([
+    { dayPart: "AFTERNOON", doesNotTakeLunch: false },
+    { dayPart: "FULL_DAY", doesNotTakeLunch: true },
+  ])("does not offer lunch actions for a makeup without lunch (%s)", async ({ dayPart, doesNotTakeLunch }) => {
+    mocks.getExcuses.mockResolvedValue([
+      {
+        ...lateExcuse,
+        kind: "MAKEUP",
+        cancelLunch: false,
+        rangeState: "LATE_APPROVED",
+        dayPart,
+        child: { ...lateExcuse.child, doesNotTakeLunch },
+      },
+    ]);
+    render(<ExcuseManagementPage />);
+
+    expect(await screen.findByText("Bez oběda")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Odhlásit oběd" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Přihlásit oběd" })).toBeNull();
+  });
+
+  it.each(["ON_TIME", "LATE", "LATE_APPROVED"])(
+    "keeps lunch on an afternoon-only absence (%s)",
+    async (rangeState) => {
+      mocks.getExcuses.mockResolvedValue([
+        { ...lateExcuse, dayPart: "AFTERNOON", rangeState },
+      ]);
+      render(<ExcuseManagementPage />);
+
+      expect(await screen.findByText("Oběd ponechán")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Prominout oběd" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Započítat oběd" })).toBeNull();
+    },
+  );
+
+  it("describes the shared pending filter without implying excuse approval", async () => {
+    mocks.getExcuses.mockResolvedValue([]);
+    render(<ExcuseManagementPage />);
+
+    await screen.findByText("Žádné omluvenky");
+    fireEvent.change(screen.getByRole("combobox", { name: "Filtr omluvenek" }), {
+      target: { value: "pending" },
+    });
+
+    expect(await screen.findByText("Žádné omluvenky k vyřízení")).toBeTruthy();
+    await waitFor(() => expect(mocks.getExcuses).toHaveBeenLastCalledWith({ pendingOnly: true }));
   });
 
   it("reloads the derived range state after narrowing an excuse", async () => {
@@ -90,14 +181,14 @@ describe("ExcuseManagementPage", () => {
     mocks.editExcuse.mockResolvedValue({ success: true, excuse: lateExcuse });
     render(<ExcuseManagementPage />);
 
-    expect(await screen.findByText("Pozdě")).toBeTruthy();
+    expect(await screen.findByText("Pozdě - oběd započítán")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Upravit" }));
     fireEvent.change(screen.getByLabelText("Od"), { target: { value: "2026-08-20" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit změny" }));
 
     await waitFor(() => expect(mocks.getExcuses).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("Včas")).toBeTruthy();
-    expect(screen.queryByText("Pozdě")).toBeNull();
+    expect(screen.queryByText("Pozdě - oběd započítán")).toBeNull();
   });
 
   it("lets the director create an excuse for any active child", async () => {
@@ -107,6 +198,7 @@ describe("ExcuseManagementPage", () => {
 
     await screen.findByText("Žádné omluvenky");
     fireEvent.click(screen.getByRole("button", { name: "Přidat omluvenku" }));
+    expect(screen.getByText("Oběd lze odhlásit i po termínu.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Dítě"), {
       target: { value: "child-2" },
     });
@@ -132,6 +224,7 @@ describe("ExcuseManagementPage", () => {
       cancelLunch: "true",
     });
     await waitFor(() => expect(mocks.getExcuses).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Omluvenka byla uložena.")).toBeTruthy();
   });
 
   it("shows an edit validation error without discarding the form or reloading", async () => {
@@ -224,7 +317,7 @@ describe("ExcuseManagementPage", () => {
     const formData = mocks.createDirectorExcuse.mock.calls[0][0] as FormData;
     expect(formData.get("cancelLunch")).toBe("false");
     expect(
-      await screen.findByText("Omluvenka byla uložena. Oběd nebude odhlášen."),
+      await screen.findByText("Omluvenka byla uložena."),
     ).toBeTruthy();
   });
 
@@ -238,10 +331,10 @@ describe("ExcuseManagementPage", () => {
     ]);
     render(<ExcuseManagementPage />);
 
-    expect(await screen.findByText("Bez schválení")).toBeTruthy();
+    expect(await screen.findByText("Oběd ponechán")).toBeTruthy();
     expect(screen.getByText(/ponechat přihlášený/)).toBeTruthy();
     expect(
-      screen.queryByRole("button", { name: "Zrušit schválení" }),
+      screen.queryByRole("button", { name: "Započítat oběd" }),
     ).toBeNull();
   });
 
@@ -302,13 +395,13 @@ it("shows a failed load and can retry without claiming the list is empty", async
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("reports failed approval and allows another attempt", async () => {
+it("reports a failed lunch update and allows another attempt", async () => {
   mocks.getExcuseChildren.mockResolvedValue([]);
   mocks.getExcuses.mockResolvedValue([lateExcuse]);
   mocks.updateExcuse.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
   render(<ExcuseManagementPage />);
-  fireEvent.click(await screen.findByRole("button", { name: "Schválit" }));
-  expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("schválení"));
-  fireEvent.click(screen.getByRole("button", { name: "Schválit" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Prominout oběd" }));
+  expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Nepodařilo se změnit započítání oběda. Zkuste to znovu.");
+  fireEvent.click(screen.getByRole("button", { name: "Prominout oběd" }));
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });

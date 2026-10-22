@@ -129,18 +129,28 @@ describe("NewExcusePage", () => {
     expect(await screen.findByRole("button", { name: /středa 9\. září 2026/i })).toHaveProperty("disabled", true);
   });
 
-  it("keeps the selected date when previewing its deadline west of UTC", async () => {
-    vi.stubEnv("TZ", "America/New_York");
+  it.each([
+    { scenario: "on-time cancellation", date: "2099-09-22", keepLunch: false, withoutLunch: false, selectBoth: false },
+    { scenario: "late cancellation", date: "2026-09-10", keepLunch: false, withoutLunch: false, selectBoth: false },
+    { scenario: "kept lunch", date: "2026-09-10", keepLunch: true, withoutLunch: false, selectBoth: false },
+    { scenario: "children without lunches", date: "2026-09-10", keepLunch: false, withoutLunch: true, selectBoth: false },
+    { scenario: "children with and without lunches", date: "2026-09-10", keepLunch: false, withoutLunch: true, selectBoth: true },
+  ])("keeps the parent form free of approval and timing notices for $scenario", async ({ date, keepLunch, withoutLunch, selectBoth }) => {
+    vi.setSystemTime(new Date(2026, 8, 16, 10));
+    mocks.searchParams = `child=child-1&date=${date}`;
+    mocks.getParentChildren.mockResolvedValueOnce([
+      { ...children[0], doesNotTakeLunch: withoutLunch },
+      children[1],
+    ]);
     render(<NewExcusePage />);
 
-    await screen.findByRole("checkbox", { name: "Anna" });
-    fireEvent.change(screen.getByLabelText("Od"), {
-      target: { value: "2099-09-22" },
-    });
+    await screen.findByRole("checkbox", { name: /Anna/ });
+    if (selectBoth) fireEvent.click(screen.getByRole("checkbox", { name: "Jan" }));
+    if (keepLunch) fireEvent.click(screen.getByRole("switch"));
 
-    expect(
-      await screen.findByText(/termín do pondělí 21\. září.*09:00/i),
-    ).toBeTruthy();
+    expect(screen.queryAllByText(/Omluvenka bude|Část omluvenek|Oběd nebude odhlášen|schvál/i)).toHaveLength(0);
+    expect(screen.getByRole("switch", { name: "Odhlásit oběd" })).toHaveProperty("checked", !keepLunch);
+    expect(screen.getByText("Pravidla pro omluvenky")).toBeTruthy();
   });
   it("offers makeup only for children with a reduced attendance schedule", async () => {
     mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 3] }, children[1]]);
@@ -152,7 +162,7 @@ describe("NewExcusePage", () => {
     expect(screen.getByRole("group", { name: "Dítě dorazí" })).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: "Jan" })).toBeNull();
     expect(screen.getByText("Anna")).toBeTruthy();
-    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.getByRole("switch", { name: /Přihlásit oběd/ })).toHaveProperty("checked", true);
     expect(screen.queryByText("Pravidla pro omluvenky")).toBeNull();
     expect(screen.getByText("Pravidla pro přihlášení oběda")).toBeTruthy();
   });
@@ -161,6 +171,25 @@ describe("NewExcusePage", () => {
     render(<NewExcusePage />);
     await screen.findByRole("checkbox", { name: "Anna" });
     expect(screen.queryByRole("tab", { name: "Náhrada" })).toBeNull();
+  });
+
+  it.each([
+    { scenario: "timely lunch enrollment", now: new Date(2026, 8, 9, 8), registerLunch: true },
+    { scenario: "late lunch enrollment", now: new Date(2026, 8, 10, 10), registerLunch: true },
+    { scenario: "no lunch enrollment", now: new Date(2026, 8, 10, 10), registerLunch: false },
+  ])("keeps the makeup form free of lunch previews and approval notices for $scenario", async ({ now, registerLunch }) => {
+    vi.setSystemTime(now);
+    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-10";
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
+    render(<NewExcusePage />);
+
+    const lunchToggle = await screen.findByRole("switch", { name: /Přihlásit oběd/ });
+    if (!registerLunch) fireEvent.click(lunchToggle);
+
+    expect(screen.queryAllByText(/Oběd bude přihlášen|Termín pro přihlášení oběda uplynul|Termín byl do/)).toHaveLength(0);
+    expect(screen.getByRole("switch", { name: "Přihlásit oběd" })).toHaveProperty("checked", registerLunch);
+    expect(screen.queryAllByText(/schvál|promin/i)).toHaveLength(0);
+    if (registerLunch) expect(screen.getByText("Pravidla pro přihlášení oběda")).toBeTruthy();
   });
 
   it("submits makeup arrival and explains late lunch without approval text", async () => {
@@ -180,9 +209,42 @@ describe("NewExcusePage", () => {
     const formData = mocks.submitMakeup.mock.calls[0][0] as FormData;
     expect(formData.getAll("childIds")).toEqual(["child-1"]);
     expect(formData.get("dayPart")).toBe("MORNING");
+    expect(formData.get("registerLunch")).toBe("true");
     expect(formData.get("requestId")).toEqual(expect.any(String));
     expect(screen.getByText(/Oběd není zajištěný/)).toBeTruthy();
-    expect(screen.queryByText(/schválen/i)).toBeNull();
+    expect(screen.queryAllByText(/schvál|promin/i)).toHaveLength(0);
+  });
+
+  it("submits a makeup without lunch and hides the lunch deadline", async () => {
+    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-10";
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
+    mocks.submitMakeup.mockResolvedValueOnce({
+      excuses: [{ id: "makeup-without-lunch" }],
+      summary: { schoolDayCount: 1, lateDayCount: 0, onTimeDayCount: 0, cancelLunch: true, automaticallyApprovedDayCount: 1 },
+    });
+    render(<NewExcusePage />);
+    await screen.findByText("Nová náhrada");
+    fireEvent.click(screen.getByRole("switch", { name: /Přihlásit oběd/ }));
+    expect(screen.queryByText("Pravidla pro přihlášení oběda")).toBeNull();
+    expect(screen.queryByText("Termín pro přihlášení oběda uplynul")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Odeslat náhradu" }));
+    await screen.findByText("Náhrada odeslána");
+    expect((mocks.submitMakeup.mock.calls[0][0] as FormData).get("registerLunch")).toBe("false");
+    expect(screen.getAllByText("Oběd nebude přihlášen.").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Oběd není zajištěný/)).toBeNull();
+  });
+
+  it("keeps lunch choices separate when switching between absence and makeup", async () => {
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
+    render(<NewExcusePage />);
+    fireEvent.click(await screen.findByRole("switch", { name: /Odhlásit oběd/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "Náhrada" }));
+    expect(screen.getByRole("switch", { name: /Přihlásit oběd/ })).toHaveProperty("checked", true);
+    fireEvent.click(screen.getByRole("switch", { name: /Přihlásit oběd/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "Omluvenka" }));
+    expect(screen.getByRole("switch", { name: /Odhlásit oběd/ })).toHaveProperty("checked", false);
+    fireEvent.click(screen.getByRole("tab", { name: "Náhrada" }));
+    expect(screen.getByRole("switch", { name: /Přihlásit oběd/ })).toHaveProperty("checked", false);
   });
 
   it("hides lunch rules for a makeup child without lunches", async () => {
@@ -192,6 +254,7 @@ describe("NewExcusePage", () => {
     await screen.findByText("Nová náhrada");
     expect(screen.queryByText("Pravidla pro přihlášení oběda")).toBeNull();
     expect(screen.queryByText("Pravidla pro omluvenky")).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
   });
   it("does not promise lunch for an afternoon-only makeup", async () => {
     mocks.searchParams = "child=child-1&kind=MAKEUP&date=2026-09-10";
@@ -204,10 +267,12 @@ describe("NewExcusePage", () => {
     await screen.findByText("Nová náhrada");
     fireEvent.click(screen.getByRole("radio", { name: "Odpoledne" }));
     expect(screen.getByText("Dítě dorazí pouze odpoledne.")).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
     expect(screen.queryByText("Pravidla pro přihlášení oběda")).toBeNull();
     expect(screen.queryByText(/Termín pro přihlášení oběda uplynul/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Odeslat náhradu" }));
     await screen.findByText("Náhrada odeslána");
+    expect((mocks.submitMakeup.mock.calls[0][0] as FormData).get("registerLunch")).toBe("false");
     expect(screen.queryByText(/Oběd bude přihlášen/)).toBeNull();
     expect(screen.queryByText(/Oběd není zajištěný/)).toBeNull();
   });
@@ -480,9 +545,10 @@ describe("NewExcusePage", () => {
       await screen.findByText(/1 oběd bude odhlášen.*1 pozdně omluvený den/i),
     ).toBeTruthy();
     expect(screen.queryByText(/oběd nebude automaticky odhlášen/i)).toBeNull();
+    expect(screen.queryByText(/schvál/i)).toBeNull();
   });
 
-  it("confirms automatic approval for a child without lunches", async () => {
+  it("confirms an excuse for a child without lunches without mentioning approval", async () => {
     mocks.getParentChildren.mockResolvedValueOnce([
       { ...children[0], doesNotTakeLunch: true },
     ]);
@@ -507,15 +573,15 @@ describe("NewExcusePage", () => {
       target: { value: "2026-08-19" },
     });
     expect(screen.getByRole("switch")).toBeTruthy();
-    expect(await screen.findByText("Dítě neodebírá obědy.")).toBeTruthy();
+    expect(screen.queryByText(/schvál/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Odeslat omluvenku" }));
 
-    expect(
-      await screen.findByText(/1 den omluvenky byl automaticky schválen/),
-    ).toBeTruthy();
+    await screen.findByText("Omluvenka odeslána");
+    expect(screen.getByText("Dítě neodebírá obědy.")).toBeTruthy();
+    expect(screen.queryByText(/schvál/i)).toBeNull();
   });
 
-  it("lets the parent keep lunch without sending the excuse for review", async () => {
+  it("lets the parent keep lunch without mentioning approval", async () => {
     mocks.submitExcuse.mockResolvedValueOnce({
       success: true,
       excuses: [{ id: "excuse-1", childId: "child-1" }],
@@ -533,11 +599,7 @@ describe("NewExcusePage", () => {
     const lunchToggle = screen.getByRole("switch");
     expect((lunchToggle as HTMLInputElement).checked).toBe(true);
     fireEvent.click(lunchToggle);
-    expect(
-      screen.getByText(
-        "Oběd zůstane přihlášený a omluvenku není potřeba schvalovat.",
-      ),
-    ).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Odhlásit oběd" })).toHaveProperty("checked", false);
     fireEvent.change(screen.getByLabelText("Od"), {
       target: { value: "2026-09-10" },
     });
@@ -549,11 +611,8 @@ describe("NewExcusePage", () => {
     await waitFor(() => expect(mocks.submitExcuse).toHaveBeenCalledOnce());
     const formData = mocks.submitExcuse.mock.calls[0][0] as FormData;
     expect(formData.get("cancelLunch")).toBe("false");
-    expect(
-      await screen.findByText(
-        "Omluvenku není potřeba schvalovat. Oběd nebude odhlášen.",
-      ),
-    ).toBeTruthy();
+    expect(await screen.findByText("Oběd nebude odhlášen.")).toBeTruthy();
+    expect(screen.queryByText(/schvál/i)).toBeNull();
   });
   it("keeps the same request identity and form values when retrying a failed submission", async () => {
     mocks.submitExcuse.mockRejectedValueOnce(new Error("Spojení přerušeno"));

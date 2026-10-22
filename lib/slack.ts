@@ -49,7 +49,7 @@ function buildExcuseMessage(data: ExcuseNotificationData) {
 
   const statusEmoji = isOnTime || automaticallyApproved ? "✅" : "⚠️";
   const statusText = data.kind === "MAKEUP"
-    ? data.doesNotTakeLunch || dayPart === "AFTERNOON"
+    ? data.cancelLunch === true || data.doesNotTakeLunch || dayPart === "AFTERNOON"
       ? "dítě dorazí, bez oběda"
       : isOnTime || automaticallyApproved
         ? "dítě dorazí, oběd zajištěný"

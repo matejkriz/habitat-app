@@ -11,6 +11,13 @@ export function parseCancelLunchChoice(value: FormDataEntryValue | null): boolea
   throw new ExcuseValidationError("Neplatná volba pro odhlášení oběda.");
 }
 
+export function parseRegisterLunchChoice(value: FormDataEntryValue | null): boolean {
+  if (value === null || value === "true") return true;
+  if (value === "false") return false;
+
+  throw new ExcuseValidationError("Neplatná volba pro přihlášení oběda.");
+}
+
 export function parseExcuseDayPart(
   value: FormDataEntryValue | null,
 ): ExcuseDayPartValue {

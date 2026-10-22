@@ -73,6 +73,32 @@ describe("attendance schedule and makeup persistence", () => {
     expect(await t.run(({ db }) => db.query("excuses").collect())).toHaveLength(0);
   });
 
+  it("persists and settles a declined makeup lunch and keeps its retry choice stable", async () => {
+    const t = await setup();
+    await t.mutation(api.db.patchById, { secret, table: "children", id: "child", patch: { attendanceDays: [1, 3, 4] } });
+    const result = await t.mutation(api.parentExcuses.createParentExcuses, { ...input, cancelLunch: true });
+    expect(result.excuses[0]).toMatchObject({ cancelLunch: true, lateApprovedAt: now, lateApprovedById: null });
+    await expect(t.mutation(api.parentExcuses.createParentExcuses, input)).rejects.toThrow("změnil");
+    expect(await t.run(({ db }) => db.query("excuses").collect())).toHaveLength(1);
+  });
+
+  it("does not enroll lunch for a child who does not take lunches", async () => {
+    const t = await setup();
+    await t.mutation(api.db.patchById, { secret, table: "children", id: "child", patch: { attendanceDays: [1, 3, 4], doesNotTakeLunch: true } });
+    const result = await t.mutation(api.parentExcuses.createParentExcuses, input);
+    expect(result.excuses[0]).toMatchObject({ cancelLunch: true, lateApprovedAt: now });
+  });
+
+  it("preserves the declined lunch through standalone makeup creation", async () => {
+    const t = await setup();
+    const record = await t.mutation(api.db.createExcuse, { secret, value: {
+      id: "standalone", childId: "child", kind: "MAKEUP", cancelLunch: true,
+      fromDate: date, toDate: date, reason: null, submittedById: "PARENT",
+      submittedAt: now, lateApprovedAt: null, lateApprovedById: null, createdAt: now, updatedAt: now,
+    } });
+    expect(record).toMatchObject({ cancelLunch: true, lateApprovedAt: now });
+  });
+
   it.each(["AFTERNOON", "NO_LUNCH"])("settles a makeup without a lunch to review: %s", async (mode) => {
     const t = await setup();
     await t.mutation(api.db.patchById, { secret, table: "children", id: "child", patch: {

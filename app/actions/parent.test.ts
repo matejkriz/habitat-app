@@ -381,6 +381,19 @@ describe("submitMakeup", () => {
     mocks.createParentExcuses.mockResolvedValue([{ ...makeExcuse("child-1"), kind: "MAKEUP", cancelLunch: false, submittedAt: new Date(2026, 8, 9, 10) }]);
     await expect(submitMakeup(form())).resolves.toMatchObject({ success: true, summary: { schoolDayCount: 1, lateDayCount: 1 } });
   });
+  it("stores a declined lunch without reporting it as late or enrolled", async () => {
+    const value = form(); value.set("registerLunch", "false");
+    mocks.createParentExcuses.mockResolvedValue([{ ...makeExcuse("child-1"), kind: "MAKEUP", cancelLunch: true, submittedAt: new Date(2026, 8, 9, 10), lateApprovedAt: new Date(2026, 8, 9, 10) }]);
+    await expect(submitMakeup(value)).resolves.toMatchObject({ success: true, summary: {
+      cancelLunch: true, schoolDayCount: 1, lateDayCount: 0, onTimeDayCount: 0,
+    } });
+    expect(mocks.createParentExcuses).toHaveBeenCalledWith(expect.objectContaining({ cancelLunch: true }), expect.any(Array));
+  });
+  it("rejects an invalid lunch registration choice before saving", async () => {
+    const value = form(); value.set("registerLunch", "on");
+    await expect(submitMakeup(value)).resolves.toEqual({ success: false, error: "Neplatná volba pro přihlášení oběda." });
+    expect(mocks.createParentExcuses).not.toHaveBeenCalled();
+  });
   it("does not promise a lunch for an afternoon makeup", async () => {
     const value = form(); value.set("dayPart", "AFTERNOON");
     mocks.createParentExcuses.mockResolvedValue([{ ...makeExcuse("child-1"), kind: "MAKEUP", dayPart: "AFTERNOON", cancelLunch: false }]);

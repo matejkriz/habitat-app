@@ -24,12 +24,17 @@ async function setRegularTuesday(page: Page, attends: boolean) {
 
 async function openCalendarDay(page: Page, date: string) {
   await page.goto("/kalendar");
-  const label = new Date(`${date}T12:00:00`).toLocaleDateString("cs-CZ", {
+  const targetDate = new Date(`${date}T12:00:00`);
+  const label = targetDate.toLocaleDateString("cs-CZ", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
   const day = page.getByRole("button", { name: new RegExp(`^${label}`) });
-  if (!(await day.isVisible())) {
+  const targetMonth = targetDate.toLocaleDateString("cs-CZ", { month: "long", year: "numeric" });
+  const monthHeading = page.getByRole("heading", { level: 2 });
+  await expect(monthHeading).toBeVisible();
+  if ((await monthHeading.innerText()).toLocaleLowerCase("cs-CZ").trim() !== targetMonth) {
     await page.getByRole("button", { name: "Další měsíc", exact: true }).click();
+    await expect(monthHeading).toHaveText(targetMonth);
   }
   await day.click();
   return page.getByRole("dialog");
@@ -186,6 +191,71 @@ test("regular day off → parent makeup → staff plan and enrolled lunch withou
     if (created) {
       await page.goto("/reditel/omluvenky");
       const record = page.locator("div.rounded-lg").filter({ has: page.getByText(`Důvod: ${marker}`, { exact: true }) }).last();
+      page.once("dialog", dialog => dialog.accept());
+      await record.getByRole("button", { name: "Smazat", exact: true }).click();
+      await expect(page.getByText(`Důvod: ${marker}`, { exact: true })).toHaveCount(0);
+    }
+    await setRegularTuesday(page, true);
+  }
+});
+
+test("parent can submit a timely makeup without enrolling lunch", async ({ page }) => {
+  test.skip(process.env.E2E_LOCAL !== "true", "Writes only to the isolated local seeded E2E database.");
+  const date = futureTuesday();
+  const month = date.slice(0, 7);
+  const dayNumber = Number(date.slice(-2));
+  const marker = `E2EMakeupNoLunch${Date.now()}`;
+  let created = false;
+
+  await persona(page, "director-bohumil");
+  try {
+    await setRegularTuesday(page, false);
+    await page.goto(`/reditel/obedy?month=${month}`);
+    const lunchRow = page.getByRole("row").filter({
+      has: page.getByRole("rowheader", { name: childName, exact: true }),
+    });
+    await expect(lunchRow.getByRole("img", { name: `${dayNumber}.: Nechodí`, exact: true })).toBeVisible();
+    const payableLunches = await lunchRow.getByRole("cell").nth(-3).innerText();
+    const lunchAmount = await lunchRow.getByRole("cell").nth(-2).innerText();
+
+    await persona(page, "parent-roza");
+    await page.goto(`/rodic/omluvenka?child=${childId}&kind=makeup&date=${date}`);
+    await expect(page.getByRole("heading", { name: "Nová náhrada", exact: true })).toBeVisible();
+    const registerLunch = page.getByRole("switch", { name: /Přihlásit oběd/ });
+    await expect(registerLunch).toBeChecked();
+    await registerLunch.uncheck({ force: true });
+    await expect(registerLunch).not.toBeChecked();
+    await page.getByLabel("Poznámka (volitelné)").fill(marker);
+    await page.getByRole("button", { name: "Odeslat náhradu", exact: true }).click();
+    await expect(page).toHaveURL(/\/rodic\?child=/);
+    created = true;
+
+    await persona(page, "teacher-kveta");
+    await page.goto(`/ucitel/dochazka?date=${date}`);
+    await page.reload();
+    const plannedChild = page.locator("label").filter({ hasText: childName });
+    await expect(plannedChild.getByText("Náhrada", { exact: true })).toBeVisible();
+    await expect(plannedChild.getByText("Přítomen", { exact: true })).toBeVisible();
+
+    await persona(page, "director-bohumil");
+    await page.goto("/reditel/omluvenky");
+    const record = page.locator("div.rounded-lg").filter({
+      has: page.getByText(`Důvod: ${marker}`, { exact: true }),
+    }).last();
+    await expect(record.getByText("Náhrada", { exact: true })).toBeVisible();
+    await expect(record.getByRole("button", { name: "Přihlásit oběd", exact: true })).toHaveCount(0);
+    await page.goto(`/reditel/obedy?month=${month}`);
+    await page.reload();
+    await expect(lunchRow.getByRole("img", { name: `${dayNumber}.: Náhrada bez oběda`, exact: true })).toBeVisible();
+    await expect(lunchRow.getByRole("cell").nth(-3)).toHaveText(payableLunches);
+    await expect(lunchRow.getByRole("cell").nth(-2)).toHaveText(lunchAmount);
+  } finally {
+    await persona(page, "director-bohumil");
+    if (created) {
+      await page.goto("/reditel/omluvenky");
+      const record = page.locator("div.rounded-lg").filter({
+        has: page.getByText(`Důvod: ${marker}`, { exact: true }),
+      }).last();
       page.once("dialog", dialog => dialog.accept());
       await record.getByRole("button", { name: "Smazat", exact: true }).click();
       await expect(page.getByText(`Důvod: ${marker}`, { exact: true })).toHaveCount(0);

@@ -4,7 +4,10 @@ import { isDefaultClosedDay } from "./school-calendar";
 import { ExcuseDayPart, type ExcuseKind } from "./types";
 
 export const DEFAULT_ATTENDANCE_DAYS = [1, 2, 3, 4] as const;
-export type AttendanceSchedule = { readonly attendanceDays?: ReadonlyArray<number> };
+export type AttendanceSchedule = {
+  readonly attendanceDays?: ReadonlyArray<number>;
+  readonly doesNotTakeLunch?: boolean;
+};
 
 export function getAttendanceDays(child: AttendanceSchedule): ReadonlyArray<number> {
   return child.attendanceDays ?? DEFAULT_ATTENDANCE_DAYS;
@@ -49,14 +52,15 @@ export function getChildDayPlan(child: AttendanceSchedule, records: ReadonlyArra
   const afternoon = getDayPartCoverage(records, day, ExcuseDayPart.AFTERNOON);
   const morningMakeups = makeups.filter(record => record.dayPart !== ExcuseDayPart.AFTERNOON);
   const afternoonMakeups = makeups.filter(record => record.dayPart !== ExcuseDayPart.MORNING);
-  const timelyLunch = morningMakeups.some(record => isMakeupLunchOnTime(record.submittedAt, day) || record.lateApprovedAt !== null);
+  const lunchMakeups = child.doesNotTakeLunch ? [] : morningMakeups.filter(record => record.cancelLunch !== true);
+  const timelyLunch = lunchMakeups.some(record => isMakeupLunchOnTime(record.submittedAt, day) || record.lateApprovedAt !== null);
   return {
     scheduled,
     expectedMorning: (scheduled || morningMakeups.length > 0) && !morning.covered,
     expectedAfternoon: (scheduled || afternoonMakeups.length > 0) && !afternoon.covered,
     notScheduled: !closed && !scheduled && makeups.length === 0,
     makeup: makeups.length > 0,
-    lunchEnrolled: (scheduled || timelyLunch) && !morning.lunchCancelled,
-    makeupLate: morningMakeups.length > 0 && !timelyLunch,
+    lunchEnrolled: !child.doesNotTakeLunch && (scheduled || timelyLunch) && !morning.lunchCancelled,
+    makeupLate: lunchMakeups.length > 0 && !timelyLunch,
   };
 }

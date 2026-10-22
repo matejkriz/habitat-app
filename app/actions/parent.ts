@@ -30,6 +30,7 @@ import {
   getExcuseDayPartForRange,
   parseCancelLunchChoice,
   parseExcuseDayPart,
+  parseRegisterLunchChoice,
 } from "@/lib/excuse-input";
 import {
   getDayCoverage,
@@ -362,7 +363,9 @@ async function createParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
   const toDateStr = formData.get("toDate");
   const reasonValue = formData.get("reason");
   const requestedDayPart = parseExcuseDayPart(formData.get("dayPart"));
-  const cancelLunch = kind === "MAKEUP" ? false : parseCancelLunchChoice(formData.get("cancelLunch"));
+  const cancelLunch = kind === "MAKEUP"
+    ? !parseRegisterLunchChoice(formData.get("registerLunch"))
+    : parseCancelLunchChoice(formData.get("cancelLunch"));
 
   if (
     typeof fromDateStr !== "string" ||
@@ -429,13 +432,13 @@ async function createParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
   const automaticallyApprovedDayCount = excuses.reduce((count, excuse) => {
     if (kind === "MAKEUP") {
       const child = makeupChildren.find(child => child.id === excuse.childId);
-      return count + (child?.doesNotTakeLunch || dayPart === "AFTERNOON" ? daysForRecord(excuse).length : 0);
+      return count + (excuse.cancelLunch || child?.doesNotTakeLunch || dayPart === "AFTERNOON" ? daysForRecord(excuse).length : 0);
     }
     return count + (excuse.lateApprovedAt === null ? 0 : schoolDays.length);
   }, 0);
   const lateDayCount = excuses.reduce((count, excuse) => {
     const child = makeupChildren.find(child => child.id === excuse.childId);
-    if (excuse.lateApprovedAt !== null || (kind === "MAKEUP" && (child?.doesNotTakeLunch || dayPart === "AFTERNOON"))) return count;
+    if (excuse.lateApprovedAt !== null || (kind === "MAKEUP" && (excuse.cancelLunch || child?.doesNotTakeLunch || dayPart === "AFTERNOON"))) return count;
     return count + getLateDays(excuse, daysForRecord(excuse)).length;
   }, 0);
 

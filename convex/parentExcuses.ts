@@ -121,7 +121,7 @@ export const createParentExcuses = mutation({
     const excuses = [];
     for (const child of children) {
       const id: string = `parent-${args.parentId}-${args.requestId}-${excuses.length}`;
-      const cancelLunch = isMakeup ? false : child.doesNotTakeLunch ? true : args.cancelLunch;
+      const cancelLunch = child.doesNotTakeLunch ? true : args.cancelLunch;
       const dayPart = args.fromDate === args.toDate ? args.dayPart ?? "FULL_DAY" : "FULL_DAY";
       const value = {
         id,
@@ -134,7 +134,7 @@ export const createParentExcuses = mutation({
         cancelLunch,
         submittedById: args.parentId,
         submittedAt: now,
-        lateApprovedAt: child.doesNotTakeLunch || (isMakeup ? dayPart === "AFTERNOON" : !cancelLunch) ? now : null,
+        lateApprovedAt: child.doesNotTakeLunch || (isMakeup ? cancelLunch || dayPart === "AFTERNOON" : !cancelLunch) ? now : null,
         lateApprovedById: null,
         createdAt: now,
         updatedAt: now,

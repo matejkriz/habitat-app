@@ -112,6 +112,19 @@ describe("updateExcuse", () => {
     expect(mocks.updateExcuse).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ lateApprovedAt: null }) }));
   });
 
+  it("preserves a lunch opt-out and its settlement when adding the morning", async () => {
+    const makeup = {
+      ...currentExcuse, kind: "MAKEUP" as const, dayPart: "AFTERNOON" as const, cancelLunch: true,
+      fromDate: new Date(2026, 8, 22), toDate: new Date(2026, 8, 22),
+      lateApprovedAt: new Date(2026, 8, 22, 10),
+    };
+    mocks.getExcuse.mockResolvedValue(makeup);
+    mocks.updateExcuse.mockImplementation((args: { data: object }) => Promise.resolve({ ...makeup, ...args.data }));
+    const updated = await updateExcuse(makeup.id, { dayPart: "FULL_DAY" }, "parent-1");
+    expect(updated.cancelLunch).toBe(true);
+    expect(updated.lateApprovedAt).toEqual(makeup.lateApprovedAt);
+  });
+
   it("sends updated excuse details to Slack after saving", async () => {
     const updated = await updateExcuse(currentExcuse.id, {
       fromDate: new Date(2024, 0, 3),

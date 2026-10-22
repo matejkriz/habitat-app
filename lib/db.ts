@@ -313,7 +313,7 @@ const fromRawExcuse = (raw: RawExcuse): Excuse => {
     reason: raw.reason ?? null,
     kind: raw.kind ?? "EXCUSE",
     dayPart: raw.dayPart ?? "FULL_DAY",
-    cancelLunch: raw.cancelLunch ?? true,
+    cancelLunch: raw.cancelLunch ?? raw.kind !== "MAKEUP",
     submittedById: raw.submittedById,
     submittedAt: new Date(raw.submittedAt),
     lateApprovedAt,
@@ -1095,7 +1095,7 @@ export const db: any = {
         reason: data.reason == null ? null : String(data.reason),
         kind: (data.kind as ExcuseKind | undefined) ?? "EXCUSE",
         dayPart: (data.dayPart as ExcuseDayPart | undefined) ?? "FULL_DAY",
-        cancelLunch: data.cancelLunch !== false,
+        cancelLunch: typeof data.cancelLunch === "boolean" ? data.cancelLunch : data.kind !== "MAKEUP",
         submittedById: String(data.submittedById),
         submittedAt: data.submittedAt ? toTimestamp(data.submittedAt) : now,
         lateApprovedAt:
