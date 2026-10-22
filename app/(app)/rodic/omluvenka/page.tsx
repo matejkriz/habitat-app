@@ -21,7 +21,6 @@ import {
   type ParentVisibleChild,
 } from "@/app/actions/parent";
 import { parseExcuseDate } from "@/lib/excuse-rules";
-import { formatMakeupLunchDeadline, isMakeupLunchOnTime } from "@/lib/makeup-rules";
 import { DEFAULT_ATTENDANCE_DAYS, getAttendanceDateDisabledReason, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import {
   ExcuseDayPart,
@@ -109,12 +108,6 @@ export default function NewExcusePage() {
   const canRegisterMakeupLunch = selectedMakeupChildren.some((child) => !child.doesNotTakeLunch)
     && (hasMultipleDays || dayPart !== ExcuseDayPart.AFTERNOON);
   const makeupTakesLunch = canRegisterMakeupLunch && registerLunch;
-  const makeupOnTime = fromDate
-    ? isMakeupLunchOnTime(new Date(), parseExcuseDate(fromDate))
-    : null;
-  const makeupDeadline = fromDate
-    ? formatMakeupLunchDeadline(parseExcuseDate(fromDate))
-    : "";
 
   const getDisabledReason = (date: Date, selected = selectedChildren, makeup = isMakeup): string | null =>
     selected.length === 0
@@ -445,9 +438,6 @@ export default function NewExcusePage() {
                 disabled={isSubmitting}
                 onChange={(event) => setRegisterLunch(event.target.checked)}
                 label="Přihlásit oběd"
-                description={registerLunch
-                  ? "Oběd se přihlásí podle běžných pravidel."
-                  : "Oběd nebude přihlášen."}
               />
             </div>}
 
@@ -471,14 +461,6 @@ export default function NewExcusePage() {
 
             {isMakeup && fromDate && selectedChildren.length > 0 && !hasMakeupDays && (
               <p className="rounded-lg bg-gold/10 p-3 text-sm text-charcoal">Vyberte den, kdy dítě běžně nechodí.</p>
-            )}
-            {isMakeup && fromDate && !hasMultipleDays && makeupTakesLunch && (
-              <div className={`rounded-lg border p-4 ${makeupOnTime ? "border-sage/20 bg-sage/10" : "border-gold/20 bg-gold/10"}`}>
-                <p className="font-semibold text-charcoal">{makeupOnTime ? "Oběd bude přihlášen" : "Termín pro přihlášení oběda uplynul"}</p>
-                <p className="mt-1 text-sm text-charcoal-light">
-                  {makeupOnTime ? `Pro zajištění oběda odešlete náhradu do ${makeupDeadline}.` : `Termín byl do ${makeupDeadline}. Náhradu můžete zadat, ale oběd už není zajištěný.`}
-                </p>
-              </div>
             )}
 
             {/* Info box */}

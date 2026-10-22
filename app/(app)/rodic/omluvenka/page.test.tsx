@@ -173,6 +173,25 @@ describe("NewExcusePage", () => {
     expect(screen.queryByRole("tab", { name: "Náhrada" })).toBeNull();
   });
 
+  it.each([
+    { scenario: "timely lunch enrollment", now: new Date(2026, 8, 9, 8), registerLunch: true },
+    { scenario: "late lunch enrollment", now: new Date(2026, 8, 10, 10), registerLunch: true },
+    { scenario: "no lunch enrollment", now: new Date(2026, 8, 10, 10), registerLunch: false },
+  ])("keeps the makeup form free of lunch previews and approval notices for $scenario", async ({ now, registerLunch }) => {
+    vi.setSystemTime(now);
+    mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-10";
+    mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
+    render(<NewExcusePage />);
+
+    const lunchToggle = await screen.findByRole("switch", { name: /Přihlásit oběd/ });
+    if (!registerLunch) fireEvent.click(lunchToggle);
+
+    expect(screen.queryAllByText(/Oběd bude přihlášen|Termín pro přihlášení oběda uplynul|Termín byl do/)).toHaveLength(0);
+    expect(screen.getByRole("switch", { name: "Přihlásit oběd" })).toHaveProperty("checked", registerLunch);
+    expect(screen.queryAllByText(/schvál|promin/i)).toHaveLength(0);
+    if (registerLunch) expect(screen.getByText("Pravidla pro přihlášení oběda")).toBeTruthy();
+  });
+
   it("submits makeup arrival and explains late lunch without approval text", async () => {
     mocks.searchParams = "child=child-1&kind=makeup&date=2026-09-10";
     mocks.getParentChildren.mockResolvedValueOnce([{ ...children[0], attendanceDays: [1, 2, 3] }]);
@@ -193,7 +212,7 @@ describe("NewExcusePage", () => {
     expect(formData.get("registerLunch")).toBe("true");
     expect(formData.get("requestId")).toEqual(expect.any(String));
     expect(screen.getByText(/Oběd není zajištěný/)).toBeTruthy();
-    expect(screen.queryByText(/schválen/i)).toBeNull();
+    expect(screen.queryAllByText(/schvál|promin/i)).toHaveLength(0);
   });
 
   it("submits a makeup without lunch and hides the lunch deadline", async () => {
