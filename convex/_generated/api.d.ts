@@ -9,6 +9,8 @@
  */
 
 import type * as attendanceMigration from "../attendanceMigration.js";
+import type * as attendanceStart from "../attendanceStart.js";
+import type * as attendanceStartMigration from "../attendanceStartMigration.js";
 import type * as crons from "../crons.js";
 import type * as db from "../db.js";
 import type * as mcp from "../mcp.js";
@@ -31,6 +33,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   attendanceMigration: typeof attendanceMigration;
+  attendanceStart: typeof attendanceStart;
+  attendanceStartMigration: typeof attendanceStartMigration;
   crons: typeof crons;
   db: typeof db;
   mcp: typeof mcp;

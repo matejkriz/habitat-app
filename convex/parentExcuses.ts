@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { requireChildAttendanceStarted } from "./attendanceStart";
 import { mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireServerSecret } from "./serverSecret";
@@ -64,6 +65,7 @@ export const createParentExcuses = mutation({
         .unique();
       if (!child?.active || !link)
         throw new Error("Dítě nebylo nalezeno nebo k němu nemáte přístup");
+      requireChildAttendanceStarted(child, args.fromDate);
       children.push(child);
     }
     const fingerprintValues = [

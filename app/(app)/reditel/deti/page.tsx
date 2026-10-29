@@ -25,6 +25,8 @@ import {
 import { ChildFund } from "./child-fund";
 import { InviteParent } from "./invite-parent";
 import type { ChildGender } from "@/lib/types";
+import { getAttendanceStartDate } from "@/lib/attendance-start";
+import { parseDayDate } from "@/lib/day-details";
 
 type Parent = {
   id: string;
@@ -41,6 +43,7 @@ export default function ChildrenManagementPage() {
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newGender, setNewGender] = useState<ChildGender | "">("");
+  const [newAttendanceStartDate, setNewAttendanceStartDate] = useState("");
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -51,6 +54,8 @@ export default function ChildrenManagementPage() {
   const [editGender, setEditGender] = useState<ChildGender | "">("");
   const [editDoesNotTakeLunch, setEditDoesNotTakeLunch] = useState(false);
   const [editAttendanceDays, setEditAttendanceDays] = useState<number[]>([1, 2, 3, 4]);
+  const [editAttendanceStartDate, setEditAttendanceStartDate] = useState("");
+  const [editError, setEditError] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Assign parent modal
@@ -92,7 +97,7 @@ export default function ChildrenManagementPage() {
       if (!newGender) {
         throw new Error("Vyberte pohlaví dítěte");
       }
-      const newChild = await createChild(newFirstName, newLastName, newGender);
+      const newChild = await createChild(newFirstName, newLastName, newGender, newAttendanceStartDate);
       setChildren((prev) => [
         ...prev,
         { ...newChild, parents: [] },
@@ -103,6 +108,7 @@ export default function ChildrenManagementPage() {
       setNewFirstName("");
       setNewLastName("");
       setNewGender("");
+      setNewAttendanceStartDate("");
     } catch (err) {
       setAddError(
         err instanceof Error ? err.message : "Nepodařilo se přidat dítě"
@@ -114,6 +120,8 @@ export default function ChildrenManagementPage() {
 
   const handleStartEdit = (child: ChildWithParents) => {
     setEditingChildId(child.id);
+    setEditError("");
+    setEditAttendanceStartDate(getAttendanceStartDate(child));
     setEditFirstName(child.firstName);
     setEditLastName(child.lastName);
     setEditGender(child.gender ?? "");
@@ -130,7 +138,8 @@ export default function ChildrenManagementPage() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingChildId || !editGender) return;
+    if (!editingChildId || !editGender || !editAttendanceStartDate) return;
+    setEditError("");
     setIsSavingEdit(true);
 
     try {
@@ -140,6 +149,7 @@ export default function ChildrenManagementPage() {
         gender: editGender,
         doesNotTakeLunch: editDoesNotTakeLunch,
         attendanceDays: editAttendanceDays,
+        attendanceStartDate: editAttendanceStartDate,
       });
       setChildren((prev) =>
         prev
@@ -152,6 +162,7 @@ export default function ChildrenManagementPage() {
                   gender: editGender,
                   doesNotTakeLunch: editDoesNotTakeLunch,
                   attendanceDays: editAttendanceDays,
+                  attendanceStartDate: editAttendanceStartDate,
                 }
               : c
           )
@@ -162,7 +173,7 @@ export default function ChildrenManagementPage() {
       );
       handleCancelEdit();
     } catch (err) {
-      console.error("Failed to update child:", err);
+      setEditError(err instanceof Error ? err.message : "Nepodařilo se upravit dítě");
     } finally {
       setIsSavingEdit(false);
     }
@@ -312,7 +323,7 @@ export default function ChildrenManagementPage() {
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Input
                 label="Jméno"
                 value={newFirstName}
@@ -338,7 +349,16 @@ export default function ChildrenManagementPage() {
                 ]}
                 required
               />
+              <Input
+                id="new-child-attendance-start"
+                label="Datum nástupu"
+                type="date"
+                value={newAttendanceStartDate}
+                onChange={(event) => setNewAttendanceStartDate(event.target.value)}
+                required
+              />
             </div>
+            <p className="text-sm text-charcoal-light">Docházka a obědy se počítají až od data nástupu.</p>
 
             <Button type="submit" isLoading={isAddingChild}>
               <svg
@@ -400,6 +420,9 @@ export default function ChildrenManagementPage() {
                   editLastName={editLastName}
                   editGender={editGender}
                   editDoesNotTakeLunch={editDoesNotTakeLunch}
+                  editAttendanceStartDate={editAttendanceStartDate}
+                  setEditAttendanceStartDate={setEditAttendanceStartDate}
+                  editError={editError}
                   editAttendanceDays={editAttendanceDays}
                   setEditAttendanceDays={setEditAttendanceDays}
                   setEditFirstName={setEditFirstName}
@@ -442,6 +465,9 @@ export default function ChildrenManagementPage() {
                   editLastName={editLastName}
                   editGender={editGender}
                   editDoesNotTakeLunch={editDoesNotTakeLunch}
+                  editAttendanceStartDate={editAttendanceStartDate}
+                  setEditAttendanceStartDate={setEditAttendanceStartDate}
+                  editError={editError}
                   editAttendanceDays={editAttendanceDays}
                   setEditAttendanceDays={setEditAttendanceDays}
                   setEditFirstName={setEditFirstName}
@@ -541,6 +567,9 @@ interface ChildRowProps {
   editLastName: string;
   editGender: ChildGender | "";
   editDoesNotTakeLunch: boolean;
+  editAttendanceStartDate: string;
+  setEditAttendanceStartDate: (value: string) => void;
+  editError: string;
   editAttendanceDays: number[];
   setEditAttendanceDays: (value: number[]) => void;
   setEditFirstName: (value: string) => void;
@@ -567,6 +596,9 @@ function ChildRow({
   editLastName,
   editGender,
   editDoesNotTakeLunch,
+  editAttendanceStartDate,
+  setEditAttendanceStartDate,
+  editError,
   editAttendanceDays,
   setEditAttendanceDays,
   setEditFirstName,
@@ -597,6 +629,7 @@ function ChildRow({
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         {isEditing ? (
           <div className="flex-1 space-y-3">
+            {editError && <p role="alert" className="text-sm text-coral">{editError}</p>}
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 value={editFirstName}
@@ -627,7 +660,7 @@ function ChildRow({
                   size="sm"
                   onClick={onSaveEdit}
                   isLoading={isSavingEdit}
-                  disabled={!editGender}
+                  disabled={!editGender || !editAttendanceStartDate}
                 >
                   Uložit
                 </Button>
@@ -641,6 +674,15 @@ function ChildRow({
                 </Button>
               </div>
             </div>
+            <Input
+              id={`edit-child-attendance-start-${child.id}`}
+              label="Datum nástupu"
+              type="date"
+              value={editAttendanceStartDate}
+              onChange={(event) => setEditAttendanceStartDate(event.target.value)}
+              disabled={isSavingEdit}
+              required
+            />
             <Toggle
               label="Neodebírá obědy"
               description="Omluvenky se schválí automaticky a dítě nebude v přehledu Obědy."
@@ -697,6 +739,7 @@ function ChildRow({
                 </Badge>
               )}
             </div>
+            <p className="mt-1 text-sm text-charcoal-light">Nástup: {parseDayDate(getAttendanceStartDate(child)).toLocaleDateString("cs-CZ")}</p>
           </div>
         )}
 

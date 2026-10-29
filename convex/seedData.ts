@@ -84,6 +84,7 @@ export const developmentSeed = {
       lastName: "Žížalka",
       gender: "FEMALE",
       doesNotTakeLunch: false,
+      attendanceStartDate: "2026-09-01",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -94,6 +95,7 @@ export const developmentSeed = {
       lastName: "Okurka",
       gender: "MALE",
       doesNotTakeLunch: false,
+      attendanceStartDate: "2026-09-01",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -104,6 +106,7 @@ export const developmentSeed = {
       lastName: "Bublina",
       gender: "FEMALE",
       doesNotTakeLunch: false,
+      attendanceStartDate: "2026-09-01",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -114,6 +117,7 @@ export const developmentSeed = {
       lastName: "Mlsoun",
       gender: "MALE",
       doesNotTakeLunch: false,
+      attendanceStartDate: "2026-09-01",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -124,6 +128,7 @@ export const developmentSeed = {
       lastName: "Tornádo",
       gender: "MALE",
       doesNotTakeLunch: false,
+      attendanceStartDate: "2026-09-01",
       active: true,
       createdAt: SEED_TIMESTAMP,
       updatedAt: SEED_TIMESTAMP,
@@ -175,6 +180,7 @@ export const developmentSeed = {
     lastName: string;
     gender: "MALE" | "FEMALE";
     doesNotTakeLunch: boolean;
+    attendanceStartDate: string;
     active: boolean;
     createdAt: number;
     updatedAt: number;

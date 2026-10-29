@@ -28,6 +28,11 @@ function getStatusDetails(gender: ChildGender | null): StatusDetails {
   const lateExcuseLabel = gender === "FEMALE" ? "Omluvena pozdě" : gender === "MALE" ? "Omluven pozdě" : "Pozdní omluva";
 
   return {
+  BEFORE_START: {
+    label: "Před nástupem", shortLabel: "Před nástupem",
+    className: "bg-[#f3f3f1] text-[#92928d] opacity-65",
+    dotClassName: "bg-[#b6b6b0]",
+  },
   NOT_SCHEDULED: {
     label: "Nechodí", shortLabel: "Nechodí",
     className: "bg-[#a9c9dc]/35 text-[#436b82] hover:bg-[#a9c9dc]/50",
@@ -214,7 +219,7 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
             const details = partialLabel
               ? { ...baseDetails, label: partialLabel, shortLabel: partialLabel }
               : baseDetails;
-            const disabled = day.status === "CLOSED";
+            const disabled = day.status === "CLOSED" || day.status === "BEFORE_START";
             const weekdayIndex = (leadingEmptyDays + day.dayNumber - 1) % 7;
             return (
               <button
@@ -228,7 +233,9 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
                   }
                   openExcuse(day.date);
                 }}
-                onPointerDown={() => startLongPress(day.date)}
+                onPointerDown={() => {
+                  if (!disabled && !isNavigating) startLongPress(day.date);
+                }}
                 onPointerUp={cancelLongPress}
                 onPointerLeave={cancelLongPress}
                 onPointerCancel={cancelLongPress}

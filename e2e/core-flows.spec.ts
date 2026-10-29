@@ -112,6 +112,7 @@ test("director assigns a child and only the linked family sees it", async ({
   await page.getByLabel("Jméno", { exact: true }).fill(firstName);
   await page.getByLabel("Příjmení", { exact: true }).fill(lastName);
   await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
+  await page.getByLabel("Datum nástupu", { exact: true }).fill(date);
   await page.getByRole("button", { name: "Ulož dítě", exact: true }).click();
   const child = page
     .locator("div.rounded-lg")

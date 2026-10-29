@@ -134,6 +134,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
       const childExcuses = excusesByChild.get(child.id) ?? [];
       const statuses = days.map((day) => {
         const plan = getChildDayPlan(child, childExcuses, day.date);
+        if (plan.beforeStart) return LunchStatus.BEFORE_START;
         if (plan.notScheduled) return LunchStatus.NOT_SCHEDULED;
         const wholeDayCoverage = getDayCoverage(childExcuses, day.date);
         const morningCoverage = getDayPartCoverage(

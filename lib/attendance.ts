@@ -7,6 +7,7 @@ import { Presence, type Attendance } from "./types";
 import { isClosedDay, getSchoolDaysInRange } from "./school-days";
 import { getDayCoverage, toDayKey } from "./excuse-coverage";
 import { getExcusesOverlapping } from "./excuse";
+import { hasStartedAttendance } from "./attendance-start";
 
 export type AttendanceWithChild = Attendance & {
   child: {
@@ -147,11 +148,13 @@ export async function getChildAttendanceStats(
   unexcusedDays: number;
   attendanceRate: number;
 }> {
-  const [schoolDays, attendance, excuses] = await Promise.all([
+  const [schoolDays, attendance, excuses, child] = await Promise.all([
     getSchoolDaysInRange(startDate, endDate),
     getChildAttendance(childId, startDate, endDate),
     getExcusesOverlapping({ childId, from: startDate, to: endDate }),
+    db.children.get({ where: { id: childId }, select: { attendanceStartDate: true } }),
   ]);
+  const attendanceDays = schoolDays.filter(day => hasStartedAttendance(child ?? {}, day));
 
   const attendanceMap = new Map(attendance.map((a) => [toDayKey(a.date), a]));
 
@@ -160,7 +163,7 @@ export async function getChildAttendanceStats(
   let excusedDays = 0;
   let unexcusedDays = 0;
 
-  for (const day of schoolDays) {
+  for (const day of attendanceDays) {
     const record = attendanceMap.get(toDayKey(day));
     if (!record) continue;
 
@@ -176,7 +179,7 @@ export async function getChildAttendanceStats(
     }
   }
 
-  const totalDays = schoolDays.length;
+  const totalDays = attendanceDays.length;
   const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
 
   return {
@@ -200,12 +203,15 @@ export async function getTodayStatus(childId: string): Promise<{
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const closed = await isClosedDay(today);
+  const [closed, child] = await Promise.all([
+    isClosedDay(today),
+    db.children.get({ where: { id: childId }, select: { attendanceStartDate: true } }),
+  ]);
 
-  if (closed) {
+  if (closed || !child || !hasStartedAttendance(child, today)) {
     return {
       isSchoolDay: false,
-      isClosed: true,
+      isClosed: closed,
       attendance: null,
     };
   }

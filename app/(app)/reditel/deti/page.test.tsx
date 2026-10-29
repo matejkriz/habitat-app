@@ -42,6 +42,27 @@ describe("ChildrenManagementPage", () => {
     mocks.inviteParentToChild.mockResolvedValue({ parent: invitedParent, emailSent: true });
   });
 
+  it("submits the selected start date when adding a child", async () => {
+    mocks.createChild.mockResolvedValue({ id: "eva", firstName: "Eva", lastName: "Nová", gender: "FEMALE", attendanceStartDate: "2026-11-02", active: true });
+    render(<ChildrenManagementPage />);
+    await screen.findByRole("button", { name: "Upravit Anna Malá" });
+    fireEvent.change(screen.getByLabelText("Jméno"), { target: { value: "Eva" } });
+    fireEvent.change(screen.getByLabelText("Příjmení"), { target: { value: "Nová" } });
+    fireEvent.change(screen.getByLabelText("Pohlaví"), { target: { value: "FEMALE" } });
+    fireEvent.change(screen.getByLabelText("Datum nástupu"), { target: { value: "2026-11-02" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ulož dítě" }));
+    await waitFor(() => expect(mocks.createChild).toHaveBeenCalledWith("Eva", "Nová", "FEMALE", "2026-11-02"));
+    expect(await screen.findByText("Nástup: 2. 11. 2026")).toBeTruthy();
+  });
+  it("allows the director to correct a child's start date", async () => {
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upravit Anna Malá" }));
+    fireEvent.change(screen.getAllByLabelText("Datum nástupu")[1], { target: { value: "2026-10-13" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
+    await waitFor(() => expect(mocks.updateChild).toHaveBeenCalledWith("anna", expect.objectContaining({ attendanceStartDate: "2026-10-13" })));
+    expect(await screen.findByText("Nástup: 13. 10. 2026")).toBeTruthy();
+  });
+
   it("saves the no-lunch setting from child editing", async () => {
     render(<ChildrenManagementPage />);
 
@@ -60,6 +81,7 @@ describe("ChildrenManagementPage", () => {
         gender: "FEMALE",
         doesNotTakeLunch: true,
         attendanceDays: [1, 2, 3, 4],
+        attendanceStartDate: "2026-09-01",
       }),
     );
     expect(await screen.findByText("Bez obědů")).toBeTruthy();
@@ -161,6 +183,7 @@ describe("ChildrenManagementPage", () => {
     fireEvent.change(screen.getByLabelText("Jméno"), { target: { value: "Eva" } });
     fireEvent.change(screen.getByLabelText("Příjmení"), { target: { value: "Nová" } });
     fireEvent.change(screen.getByLabelText("Pohlaví"), { target: { value: "FEMALE" } });
+    fireEvent.change(screen.getByLabelText("Datum nástupu"), { target: { value: "2026-09-01" } });
     fireEvent.click(screen.getByRole("button", { name: /^(?:Přidat dítě|Ulož dítě)$/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Pozvat rodiče Eva Nová" }));
     fireEvent.change(screen.getByLabelText("E-mail rodiče"), { target: { value: invitedParent.email } });

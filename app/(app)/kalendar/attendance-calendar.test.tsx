@@ -25,8 +25,8 @@ import { getAttendanceCalendarMonth } from "@/app/actions/calendar";
 import { AttendanceCalendar } from "./attendance-calendar";
 
 const children = [
-  { id: "ada", firstName: "Ada", lastName: "Nováková" },
-  { id: "bo", firstName: "Bo", lastName: "Svoboda" },
+  { id: "ada", firstName: "Ada", lastName: "Nováková", attendanceStartDate: "2026-01-01" },
+  { id: "bo", firstName: "Bo", lastName: "Svoboda", attendanceStartDate: "2026-01-01" },
 ];
 
 function calendarExcuse(

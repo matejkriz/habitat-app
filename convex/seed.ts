@@ -33,7 +33,7 @@ async function upsertChildren(db: MutationCtx["db"]): Promise<void> {
       .unique();
 
     if (existing) {
-      await db.replace(existing._id, child);
+      await db.replace(existing._id, { ...child, attendanceStartDate: existing.attendanceStartDate ?? child.attendanceStartDate });
     } else {
       await db.insert("children", child);
     }

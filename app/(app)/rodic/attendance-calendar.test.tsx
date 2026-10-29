@@ -223,3 +223,19 @@ describe("AttendanceCalendar", () => {
     );
   });
 });
+
+it("shows pre-start days without offering an excuse or makeup", () => {
+  vi.useFakeTimers();
+  mocks.push.mockReset();
+  render(<AttendanceCalendar childId="child" childName="Nové dítě" childGender={null} month="2026-09" days={[
+    { date: "2026-09-14", dayNumber: 14, status: "BEFORE_START", isToday: false },
+  ]} />);
+  const day = screen.getByRole("button", { name: /pondělí 14. září, Před nástupem/i });
+  expect((day as HTMLButtonElement).disabled).toBe(true);
+  expect(day.getAttribute("aria-label")).not.toContain("zadat");
+  fireEvent.pointerDown(day);
+  vi.advanceTimersByTime(550);
+  fireEvent.pointerUp(day);
+  expect(mocks.push).not.toHaveBeenCalled();
+  vi.useRealTimers();
+});

@@ -5,9 +5,9 @@ import {
 } from "./attendance-calendar";
 
 const children = [
-  { id: "ada", firstName: "Ada", lastName: "Nováková" },
-  { id: "bo", firstName: "Bo", lastName: "Svoboda" },
-  { id: "cyril", firstName: "Cyril", lastName: "Dvořák" },
+  { id: "ada", firstName: "Ada", lastName: "Nováková", attendanceStartDate: "2026-01-01" },
+  { id: "bo", firstName: "Bo", lastName: "Svoboda", attendanceStartDate: "2026-01-01" },
+  { id: "cyril", firstName: "Cyril", lastName: "Dvořák", attendanceStartDate: "2026-01-01" },
 ];
 
 const excuse = (overrides: {
@@ -232,4 +232,21 @@ describe("regular attendance schedules", () => {
     expect(day.counts).toMatchObject({ expected: 1, expectedMorning: 0, expectedAfternoon: 1, pending: 0 });
     expect(day.children.expected[0]).toMatchObject({ childId: "ada", reason: "Náhrada" });
   });
+});
+
+it("excludes children before their start date from every day count despite stale records", () => {
+  const days = buildAttendanceCalendar({
+    month: new Date(2026, 8, 1), today: new Date(2026, 8, 16),
+    children: [{ id: "new", firstName: "Nové", lastName: "Dítě", attendanceStartDate: "2026-09-16" }],
+    attendance: [{ childId: "new", date: new Date(2026, 8, 14), presence: "PRESENT" }],
+    excuses: [{ id: "old", childId: "new", fromDate: new Date(2026, 8, 15), toDate: new Date(2026, 8, 15), dayPart: "AFTERNOON", submittedAt: new Date(2026, 8, 1), lateApprovedAt: null }],
+    closedDays: [], noLunchDays: [],
+  });
+  for (const dateKey of ["2026-09-14", "2026-09-15"]) {
+    const day = days.find(day => day.dateKey === dateKey)!;
+    expect(Object.values(day.counts).every(count => count === 0)).toBe(true);
+    expect(Object.values(day.children).every(children => children.length === 0)).toBe(true);
+    expect(day.isResolved).toBe(true);
+  }
+  expect(days.find(day => day.dateKey === "2026-09-16")?.counts.expected).toBe(1);
 });

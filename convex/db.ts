@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { DEFAULT_ATTENDANCE_START_DATE, parseAttendanceStartDate } from "../lib/attendance-start";
+import { hasChildStartedAttendance, requireChildAttendanceStarted } from "./attendanceStart";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { validateCrowns, validateDayDetails, validateExtraFundPersonPatch, type TripFundOverview } from "../lib/day-details";
 import { requireServerSecret } from "./serverSecret";
@@ -327,8 +329,18 @@ export const insert = mutation({
   returns: v.string(),
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
-    if (args.table === "children") validateAttendanceDays(args.value.attendanceDays);
-    return await db.insert(args.table, args.value);
+    const value = { ...args.value };
+    if (args.table === "children") {
+      validateAttendanceDays(value.attendanceDays);
+      value.attendanceStartDate = parseAttendanceStartDate(value.attendanceStartDate === undefined ? DEFAULT_ATTENDANCE_START_DATE : value.attendanceStartDate);
+    }
+    if (args.table === "attendance" || args.table === "excuses") {
+      const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", value.childId)).unique();
+      if (!child) throw new Error("Dítě nebylo nalezeno");
+      requireChildAttendanceStarted(child, args.table === "attendance" ? value.date : value.fromDate);
+      if (args.table === "excuses") requireChildAttendanceStarted(child, value.toDate);
+    }
+    return await db.insert(args.table, value);
   },
 });
 
@@ -344,6 +356,8 @@ export const createExcuse = mutation({
       .withIndex("by_app_id", (query) => query.eq("id", value.childId))
       .unique();
     if (!child) throw new Error("Child not found");
+    requireChildAttendanceStarted(child, value.fromDate);
+    requireChildAttendanceStarted(child, value.toDate);
 
     const isMakeup = value.kind === "MAKEUP";
     const cancelLunch = child.doesNotTakeLunch ? true : value.cancelLunch ?? !isMakeup;
@@ -384,7 +398,19 @@ export const patchById = mutation({
       throw new Error(`Document not found in ${args.table} for id ${args.id}`);
     }
 
-    if (args.table === "children") validateAttendanceDays(args.patch.attendanceDays);
+    if (args.table === "children") {
+      validateAttendanceDays(args.patch.attendanceDays);
+      if (args.patch.attendanceStartDate !== undefined) parseAttendanceStartDate(args.patch.attendanceStartDate);
+    }
+    const changesExcuseDates = args.table === "excuses" &&
+      ["childId", "fromDate", "toDate"].some(field => field in args.patch);
+    if (args.table === "attendance" || changesExcuseDates) {
+      const value = { ...current, ...args.patch };
+      const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", value.childId)).unique();
+      if (!child) throw new Error("Dítě nebylo nalezeno");
+      requireChildAttendanceStarted(child, args.table === "attendance" ? value.date : value.fromDate);
+      if (args.table === "excuses") requireChildAttendanceStarted(child, value.toDate);
+    }
 
     if (args.table === "excuses") {
       const previous = current as Doc<"excuses">;
@@ -540,7 +566,7 @@ async function readTripFundOverview(db: QueryCtx["db"], includeExtraPeople = fal
     children: children.map(child => {
       const amounts = tripDays.map(day => {
         const key = `${child.id}:${day.date}`;
-        return present.has(key) ? individual.get(key) ?? day.expense ?? 0 : null;
+        return hasChildStartedAttendance(child, day.date) && present.has(key) ? individual.get(key) ?? day.expense ?? 0 : null;
       });
       const fundSpent = amounts.reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
       return {
@@ -636,7 +662,7 @@ export const getDayTripExpenses = query({
     const individual = new Map(overrides.map(row => [row.childId, row.amount]));
     const rows = await Promise.all(attendance.filter(record => record.presence === "PRESENT").map(async record => {
       const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", record.childId)).unique();
-      if (!child) return null;
+      if (!child || !hasChildStartedAttendance(child, args.date)) return null;
       return { childId: child.id, name: `${child.firstName} ${child.lastName}`,
         amount: individual.get(child.id) ?? day?.expense ?? 0, override: individual.get(child.id) ?? null };
     }));
@@ -653,6 +679,7 @@ export const setChildTripExpense = mutation({
     if (args.amount !== null) validateCrowns(args.amount);
     const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", args.childId)).unique();
     if (!child) throw new Error("Dítě nebylo nalezeno");
+    requireChildAttendanceStarted(child, args.date);
     const attendance = await db.query("attendance").withIndex("by_child_date", q => q.eq("childId", args.childId).eq("date", args.date)).unique();
     if (attendance?.presence !== "PRESENT") throw new Error("Nejprve dítě označte jako přítomné a uložte docházku");
     const current = await db.query("childTripExpenses").withIndex("by_child_date", q => q.eq("childId", args.childId).eq("date", args.date)).unique();
@@ -696,6 +723,7 @@ export const createTripExpense = mutation({
     for (const row of args.overrides) {
       const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", row.childId)).unique();
       if (!child) throw new Error("Dítě nebylo nalezeno");
+      requireChildAttendanceStarted(child, args.date);
       if (!present.has(row.childId)) throw new Error("Individuální útratu lze uložit jen přítomnému dítěti. Zkontrolujte docházku.");
     }
     const updatedAt = Date.now();
@@ -765,6 +793,7 @@ export const saveAttendanceDay = mutation({
         .unique();
       if (!child?.active)
         throw new Error("Dítě nebylo nalezeno nebo není aktivní");
+      requireChildAttendanceStarted(child, args.date);
       const existing = await db
         .query("attendance")
         .withIndex("by_child_date", (q) =>
