@@ -49,6 +49,7 @@ describe("createExcuse push notification", () => {
     mocks.getChild.mockResolvedValue({
       firstName: "Eliška",
       lastName: "Malá",
+      attendanceStartDate: "2026-08-01",
       doesNotTakeLunch: false,
     });
     mocks.getUser.mockResolvedValue({ name: "Petr Malý" });
@@ -132,6 +133,7 @@ describe("createExcuse push notification", () => {
     mocks.getChild.mockResolvedValue({
       firstName: "Eliška",
       lastName: "Malá",
+      attendanceStartDate: "2026-08-01",
       doesNotTakeLunch: true,
     });
 

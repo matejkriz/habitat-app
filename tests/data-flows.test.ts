@@ -24,7 +24,7 @@ vi.mock("@/lib/slack", () => ({
   sendExcuseNotification: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { saveAttendance } from "../app/actions/teacher";
+import { getAttendanceForDate, saveAttendance } from "../app/actions/teacher";
 import {
   submitExcuse, submitMakeup,
   getChildAttendanceHistory,
@@ -229,7 +229,7 @@ describe("parent isolation at the server action boundary", () => {
     },
   );
   it("denies child administration to a teacher", async () => {
-    await expect(createChild("Nové", "Dítě", "FEMALE")).rejects.toThrow(
+    await expect(createChild("Nové", "Dítě", "FEMALE", "2026-09-01")).rejects.toThrow(
       "Unauthorized",
     );
     expect(
@@ -330,7 +330,7 @@ describe("director workflows", () => {
     transport.user = { id: "director", role: "DIRECTOR" };
   });
   it("assigns and removes a parent's access to a newly created child", async () => {
-    const child = await createChild("Nové", "Dítě", "FEMALE");
+    const child = await createChild("Nové", "Dítě", "FEMALE", "2026-09-01");
     await assignParentToChild("parent", child.id);
     transport.user = { id: "parent", role: "PARENT" };
     await expect(getChildExcuses(child.id)).resolves.toEqual([]);
@@ -380,8 +380,8 @@ describe("director workflows", () => {
   });
 
   it("neutralizes formula-leading values in attendance CSV exports", async () => {
-    const first = await createChild("=2+2", "+SUM(1,1)", "FEMALE");
-    const second = await createChild("-10", "@command", "MALE");
+    const first = await createChild("=2+2", "+SUM(1,1)", "FEMALE", "2026-09-01");
+    const second = await createChild("-10", "@command", "MALE", "2026-09-01");
     await saveAttendance(attendance(first.id, second.id));
 
     const csv = await exportAttendanceCSV(day, day);
@@ -409,6 +409,29 @@ it("persists extra fund people through server actions, adapter and Convex", asyn
 
 
 describe("regular attendance and makeup through the whole data flow", () => {
+  it("respects an edited start date across lunches, calendars, stats, history and teacher entry", async () => {
+    await saveAttendance(attendance("a"));
+    transport.user = { id: "director", role: "DIRECTOR" };
+    await updateChild("a", { attendanceStartDate: "2026-09-21" });
+    const directorLunches = await getLunchOverview("2026-09");
+    const row = directorLunches.children.find(child => child.id === "a")!;
+    expect(row.statuses.slice(0, directorLunches.days.findIndex(item => item.key === "2026-09-21"))).toEqual(expect.arrayContaining(["before-start"]));
+    expect(row.payableLunches).toBe(directorLunches.days.filter(item => item.key >= "2026-09-21").length);
+    const csv = await exportAttendanceCSV("2026-09-01", "2026-09-30");
+    expect(csv.split("\n").filter(line => line.includes('"a"'))).toHaveLength(0);
+    transport.user = { id: "parent", role: "PARENT" };
+    expect((await getParentLunchOverview("2026-09")).children.find(child => child.id === "a")).toEqual(row);
+    expect((await getChildCalendarMonth("a", "2026-09")).find(item => item.date === day)?.status).toBe("BEFORE_START");
+    expect(await getChildStats("a")).toMatchObject({ totalRecords: 0, present: 0, absent: 0, unexcused: 0 });
+    expect(await getChildAttendanceHistory("a")).toEqual([]);
+    expect(await getChildTodayStatus("a")).toMatchObject({ beforeStart: true, attendance: null });
+    expect(await submitExcuse(excuse("a"))).toMatchObject({ success: false });
+    transport.user = { id: "teacher", role: "TEACHER" };
+    expect(await getAttendanceForDate(day)).toMatchObject({ attendance: [], excuses: expect.arrayContaining([expect.objectContaining({ childId: "a", kind: "BEFORE_START" })]) });
+    await expect(saveAttendance(attendance("b", "a"))).rejects.toThrow();
+    expect((await t.run(({ db }) => db.query("attendance").collect())).some(record => record.childId === "b")).toBe(false);
+  });
+
   it("removes a regular off day and restores a timely makeup in calendars and lunches", async () => {
     vi.setSystemTime(new Date("2026-09-16T06:00:00Z"));
     transport.user = { id: "director", role: "DIRECTOR" };

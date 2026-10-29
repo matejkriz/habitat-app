@@ -17,6 +17,7 @@ import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
 import { getAttendanceDateDisabledReason, isRegularAttendanceDay } from "./attendance-schedule";
+import { hasStartedAttendance } from "./attendance-start";
 
 export type ExcuseWithChild = Excuse & {
   child: {
@@ -90,6 +91,9 @@ export async function createExcuse(
     select: {
       firstName: true,
       lastName: true,
+      attendanceStartDate: true,
+      attendanceDays: true,
+      doesNotTakeLunch: true,
     },
   });
   const parentPromise = db.users.get({
@@ -104,6 +108,10 @@ export async function createExcuse(
   );
   const isMakeup = options?.kind === "MAKEUP";
   const cancelLunch = options?.cancelLunch ?? !isMakeup;
+  const child = await childPromise;
+  if (child && !hasStartedAttendance(child, normalizedFrom)) {
+    throw new ExcuseValidationError("Dítě ještě nenastoupilo do Habitatu.");
+  }
 
   // Director-created, no-lunch, and lunch-preserving excuses are approved in
   // the initial write.
@@ -129,9 +137,8 @@ export async function createExcuse(
   // from this record whenever it is read.
   const openSchoolDays =
     schoolDays ?? (await getSchoolDaysInRange(normalizedFrom, normalizedTo));
-  const child = await childPromise;
-  const relevantDays = isMakeup && child
-    ? openSchoolDays.filter(day => !isRegularAttendanceDay(child, day))
+  const relevantDays = child
+    ? openSchoolDays.filter(day => hasStartedAttendance(child, day) && (!isMakeup || !isRegularAttendanceDay(child, day)))
     : openSchoolDays;
   const isOnTime = getLateDays(excuse, relevantDays).length === 0;
 
@@ -207,6 +214,9 @@ export async function createMakeup(
     schoolDays ? Promise.resolve(schoolDays) : getSchoolDaysInRange(fromDate, toDate),
   ]);
   if (!child?.active) throw new ExcuseValidationError("Dítě nebylo nalezeno nebo není aktivní.");
+  if (!hasStartedAttendance(child, fromDate)) {
+    throw new ExcuseValidationError("Dítě ještě nenastoupilo do Habitatu.");
+  }
   if (!areExcuseEndpointsOpen(fromDate, toDate, openDays)) {
     throw new ExcuseValidationError("Začátek i konec náhrady musí být v den, kdy je Habitat otevřený.");
   }
@@ -329,8 +339,11 @@ export async function updateExcuse(
   }
 
   if (startOfDay(newFromDate) !== startOfDay(current.fromDate) || startOfDay(newToDate) !== startOfDay(current.toDate)) {
-    const child = await db.children.get({ where: { id: current.childId }, select: { attendanceDays: true } });
+    const child = await db.children.get({ where: { id: current.childId }, select: { attendanceDays: true, attendanceStartDate: true } });
     if (!child) throw new ExcuseValidationError("Dítě nebylo nalezeno.");
+    if (!hasStartedAttendance(child, newFromDate)) {
+      throw new ExcuseValidationError("Dítě ještě nenastoupilo do Habitatu.");
+    }
     const kind = current.kind ?? "EXCUSE";
     if ([newFromDate, newToDate].some(day => getAttendanceDateDisabledReason(child, day, kind))) {
       throw new ExcuseValidationError(kind === "MAKEUP"
@@ -395,7 +408,7 @@ export async function updateExcuse(
       const [child, parent, schoolDays] = await Promise.all([
         db.children.get({
           where: { id: updated.childId },
-          select: { firstName: true, lastName: true },
+          select: { firstName: true, lastName: true, attendanceDays: true, attendanceStartDate: true, doesNotTakeLunch: true },
         }),
         db.users.get({
           where: { id: updated.submittedById },
@@ -414,9 +427,8 @@ export async function updateExcuse(
           reason: updated.reason,
           dayPart: updated.dayPart,
           cancelLunch: updated.cancelLunch,
-          isOnTime: getLateDays(updated, updated.kind === "MAKEUP"
-            ? schoolDays.filter(day => !isRegularAttendanceDay(child, day))
-            : schoolDays).length === 0,
+          isOnTime: getLateDays(updated, schoolDays.filter(day => hasStartedAttendance(child, day) &&
+            (updated.kind !== "MAKEUP" || !isRegularAttendanceDay(child, day)))).length === 0,
           automaticallyApproved:
             updated.lateApprovedAt !== null && updated.lateApprovedById === null,
           ...(updated.kind === "MAKEUP" ? { kind: "MAKEUP", doesNotTakeLunch: child.doesNotTakeLunch } : {}),
@@ -547,9 +559,8 @@ export async function createParentExcuses(
             reason: excuse.reason,
             cancelLunch: excuse.cancelLunch,
             dayPart: excuse.dayPart,
-            isOnTime: getLateDays(excuse, excuse.kind === "MAKEUP"
-              ? schoolDays.filter(day => !isRegularAttendanceDay(child, day))
-              : schoolDays).length === 0,
+            isOnTime: getLateDays(excuse, schoolDays.filter(day => hasStartedAttendance(child, day) &&
+              (excuse.kind !== "MAKEUP" || !isRegularAttendanceDay(child, day)))).length === 0,
             automaticallyApproved: excuse.lateApprovedAt !== null,
             ...(excuse.kind === "MAKEUP" ? { kind: "MAKEUP", doesNotTakeLunch: child.doesNotTakeLunch } : {}),
           }).catch((error) =>

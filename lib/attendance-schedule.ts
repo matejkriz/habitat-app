@@ -2,11 +2,15 @@ import { coversDay, getDayPartCoverage, type CoveringExcuse } from "./excuse-cov
 import { isMakeupLunchOnTime } from "./makeup-rules";
 import { isDefaultClosedDay } from "./school-calendar";
 import { ExcuseDayPart, type ExcuseKind } from "./types";
+import { hasStartedAttendance } from "./attendance-start";
+
+export { DEFAULT_ATTENDANCE_START_DATE, getAttendanceStartDate, hasStartedAttendance } from "./attendance-start";
 
 export const DEFAULT_ATTENDANCE_DAYS = [1, 2, 3, 4] as const;
 export type AttendanceSchedule = {
   readonly attendanceDays?: ReadonlyArray<number>;
   readonly doesNotTakeLunch?: boolean;
+  readonly attendanceStartDate?: string;
 };
 
 export function getAttendanceDays(child: AttendanceSchedule): ReadonlyArray<number> {
@@ -29,12 +33,14 @@ export function isRegularAttendanceDay(child: AttendanceSchedule, day: Date): bo
 }
 
 export function getAttendanceDateDisabledReason(child: AttendanceSchedule, day: Date, kind: ExcuseKind = "EXCUSE"): string | null {
+  if (!hasStartedAttendance(child, day)) return "Dítě ještě nenastoupilo do Habitatu.";
   const scheduled = isRegularAttendanceDay(child, day);
   if (kind === "MAKEUP") return scheduled ? "Dítě tento den běžně chodí." : null;
   return scheduled ? null : "Dítě tento den běžně nechodí.";
 }
 
 export type ChildDayPlan = {
+  readonly beforeStart: boolean;
   readonly scheduled: boolean;
   readonly expectedMorning: boolean;
   readonly expectedAfternoon: boolean;
@@ -45,6 +51,18 @@ export type ChildDayPlan = {
 };
 
 export function getChildDayPlan(child: AttendanceSchedule, records: ReadonlyArray<CoveringExcuse>, day: Date): ChildDayPlan {
+  if (!hasStartedAttendance(child, day)) {
+    return {
+      beforeStart: true,
+      scheduled: false,
+      expectedMorning: false,
+      expectedAfternoon: false,
+      notScheduled: true,
+      makeup: false,
+      lunchEnrolled: false,
+      makeupLate: false,
+    };
+  }
   const closed = isDefaultClosedDay(day);
   const scheduled = !closed && isRegularAttendanceDay(child, day);
   const makeups = closed || scheduled ? [] : records.filter(record => record.kind === "MAKEUP" && coversDay(record, day));
@@ -55,6 +73,7 @@ export function getChildDayPlan(child: AttendanceSchedule, records: ReadonlyArra
   const lunchMakeups = child.doesNotTakeLunch ? [] : morningMakeups.filter(record => record.cancelLunch !== true);
   const timelyLunch = lunchMakeups.some(record => isMakeupLunchOnTime(record.submittedAt, day) || record.lateApprovedAt !== null);
   return {
+    beforeStart: false,
     scheduled,
     expectedMorning: (scheduled || morningMakeups.length > 0) && !morning.covered,
     expectedAfternoon: (scheduled || afternoonMakeups.length > 0) && !afternoon.covered,

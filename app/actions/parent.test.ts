@@ -115,6 +115,7 @@ describe("submitExcuse", () => {
   });
 
   it("preserves a mixed on-time and late result per school day", async () => {
+    mocks.listParentLinks.mockResolvedValue([{ child: { id: "child-1", active: true, attendanceStartDate: "2026-08-01" } }]);
     const formData = makeFormData();
     formData.set("fromDate", "2026-08-19");
     formData.set("toDate", "2026-08-20");
@@ -144,6 +145,7 @@ describe("submitExcuse", () => {
   });
 
   it("does not leave late days pending for a child without lunches", async () => {
+    mocks.listParentLinks.mockResolvedValue([{ child: { id: "child-1", active: true, attendanceStartDate: "2026-08-01" } }]);
     const formData = makeFormData();
     formData.delete("childIds");
     formData.append("childIds", "child-1");
@@ -351,6 +353,7 @@ describe("getParentChildren", () => {
         gender: ChildGender.FEMALE,
         doesNotTakeLunch: true,
         attendanceDays: [1, 2, 3, 4],
+        attendanceStartDate: "2026-09-01",
       },
     ]);
   });
@@ -460,7 +463,7 @@ describe("getChildExcuses schedule for editing", () => {
     mocks.childrenGet.mockResolvedValue({ attendanceDays: [1, 3, 4], secret: "private" });
     mocks.excusesList.mockResolvedValue([makeExcuse("child-1")]);
     await expect(getChildExcuses("child-1")).resolves.toEqual([
-      expect.objectContaining({ child: { attendanceDays: [1, 3, 4] } }),
+      expect.objectContaining({ child: { attendanceDays: [1, 3, 4], attendanceStartDate: "2026-09-01" } }),
     ]);
   });
 });

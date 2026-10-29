@@ -3,6 +3,8 @@ import type { Excuse } from "./types";
 
 const mocks = vi.hoisted(() => ({
   getExcuse: vi.fn(),
+  createExcuse: vi.fn(),
+  enqueueExcuse: vi.fn(),
   listOverlappingExcuses: vi.fn(),
   updateExcuse: vi.fn(),
   createAuditLog: vi.fn(),
@@ -16,6 +18,7 @@ vi.mock("./db", () => ({
   db: {
     excuses: {
       get: mocks.getExcuse,
+      create: mocks.createExcuse,
       listOverlapping: mocks.listOverlappingExcuses,
       update: mocks.updateExcuse,
     },
@@ -27,6 +30,7 @@ vi.mock("./db", () => ({
     },
     children: { get: mocks.getChild },
     users: { get: mocks.getUser },
+    notifications: { enqueueExcuse: mocks.enqueueExcuse },
   },
 }));
 
@@ -42,6 +46,7 @@ import {
   canManageExcuse,
   canManageExcuses,
   createMakeup,
+  createExcuse,
   getExcusesOverlapping,
   updateExcuse,
 } from "./excuse";
@@ -80,10 +85,29 @@ describe("getExcusesOverlapping", () => {
 });
 
 describe("createMakeup endpoints", () => {
+  it("explains that an arrival cannot start before the child's attendance begins", async () => {
+    mocks.getChild.mockResolvedValue({ active: true, attendanceDays: [1, 3, 4], attendanceStartDate: "2026-09-23" });
+    await expect(createMakeup("child-1", new Date(2026, 8, 22), new Date(2026, 8, 22), null, "parent-1", [new Date(2026, 8, 22)]))
+      .rejects.toThrow("Dítě ještě nenastoupilo do Habitatu.");
+  });
+
   it("rejects a range beginning on a regular day even if its end is an off day", async () => {
-    mocks.getChild.mockResolvedValue({ active: true, attendanceDays: [1, 3, 4] });
+    mocks.getChild.mockResolvedValue({ active: true, attendanceDays: [1, 3, 4], attendanceStartDate: "2024-01-01" });
     await expect(createMakeup("child-1", new Date(2024, 0, 1), new Date(2024, 0, 2), null, "parent-1", [new Date(2024, 0, 1), new Date(2024, 0, 2)]))
       .rejects.toThrow("Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí.");
+  });
+});
+
+describe("createExcuse attendance start", () => {
+  it("rejects a pre-start absence before writing the excuse", async () => {
+    vi.clearAllMocks();
+    mocks.getChild.mockResolvedValue({ active: true, attendanceStartDate: "2026-09-23" });
+    mocks.createExcuse.mockResolvedValue({ ...currentExcuse, id: "new", fromDate: new Date(2026, 8, 22), toDate: new Date(2026, 8, 22) });
+    mocks.enqueueExcuse.mockResolvedValue(undefined);
+    mocks.getUser.mockResolvedValue(null);
+    await expect(createExcuse("child-1", new Date(2026, 8, 22), new Date(2026, 8, 22), null, "parent-1", []))
+      .rejects.toThrow("Dítě ještě nenastoupilo do Habitatu.");
+    expect(mocks.createExcuse).not.toHaveBeenCalled();
   });
 });
 
@@ -91,12 +115,21 @@ describe("updateExcuse", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getExcuse.mockResolvedValue(currentExcuse);
-    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá" });
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceStartDate: "2024-01-01" });
     mocks.getUser.mockResolvedValue({ name: "Petr Malý" });
     mocks.sendSlack.mockResolvedValue(true);
     mocks.updateExcuse.mockImplementation((args: { data: unknown }) =>
       Promise.resolve({ ...currentExcuse, ...(args.data as object) }),
     );
+  });
+
+  it("uses the child's start date when narrowing a previously saved range", async () => {
+    mocks.getExcuse.mockResolvedValue({ ...currentExcuse, fromDate: new Date(2026, 8, 21), toDate: new Date(2026, 8, 24) });
+    mocks.getChild.mockResolvedValue({ attendanceStartDate: "2026-09-23" });
+    await expect(updateExcuse("excuse-1", { fromDate: new Date(2026, 8, 22) }, "parent-1"))
+      .rejects.toThrow("Dítě ještě nenastoupilo do Habitatu.");
+    expect(mocks.getChild).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ attendanceStartDate: true }) }));
+    expect(mocks.updateExcuse).not.toHaveBeenCalled();
   });
 
   it("clears an afternoon makeup settlement when the parent adds the morning", async () => {
@@ -181,7 +214,7 @@ describe("updateExcuse", () => {
   });
 
   it("rejects changing an excuse endpoint to a regular day off", async () => {
-    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceDays: [1, 3, 4] });
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceStartDate: "2024-01-01", attendanceDays: [1, 3, 4] });
     await expect(updateExcuse(currentExcuse.id, { fromDate: new Date(2024, 0, 2) }, "parent-1"))
       .rejects.toThrow("Začátek i konec omluvenky musí být v den, kdy dítě pravidelně chodí.");
     expect(mocks.updateExcuse).not.toHaveBeenCalled();
@@ -190,14 +223,14 @@ describe("updateExcuse", () => {
 
   it("rejects changing a makeup endpoint to a regular attendance day", async () => {
     mocks.getExcuse.mockResolvedValue({ ...currentExcuse, kind: "MAKEUP" });
-    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceDays: [2] });
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceStartDate: "2024-01-01", attendanceDays: [2] });
     await expect(updateExcuse(currentExcuse.id, { fromDate: new Date(2024, 0, 2) }, "parent-1"))
       .rejects.toThrow("Začátek i konec náhrady musí být v den, kdy dítě pravidelně nechodí.");
     expect(mocks.updateExcuse).not.toHaveBeenCalled();
   });
 
   it("allows a note-only edit if the schedule changed after submission", async () => {
-    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceDays: [] });
+    mocks.getChild.mockResolvedValue({ firstName: "Anna", lastName: "Malá", attendanceStartDate: "2024-01-01", attendanceDays: [] });
     await expect(updateExcuse(currentExcuse.id, { reason: "Kontrola" }, "parent-1"))
       .resolves.toMatchObject({ reason: "Kontrola" });
   });

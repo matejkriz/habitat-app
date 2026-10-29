@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { requireChildAttendanceStarted } from "./attendanceStart";
 import type { GenericDatabaseReader } from "convex/server";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -157,6 +158,7 @@ export const createParentExcuses = mutation({
           .unique(),
       ]);
       if (!link || !child?.active) throw new Error("MCP child access denied");
+      requireChildAttendanceStarted(child, args.fromDate);
       childrenById.set(childId, child);
     }
 

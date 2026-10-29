@@ -68,6 +68,8 @@ export type Child = {
   doesNotTakeLunch: boolean;
   /** Regular school weekdays (1 = Monday through 4 = Thursday); absent means all. */
   attendanceDays?: number[];
+  /** First day enrolled in Habitat, as a local YYYY-MM-DD date. */
+  attendanceStartDate?: string;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

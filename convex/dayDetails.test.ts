@@ -96,7 +96,7 @@ describe("day details and trip funds", () => {
     const later = date + 86400000;
     const attendanceId = await t.run(async ({ db }) => {
       for (const id of ["present", "absent", "unknown"]) {
-        await db.insert("children", { id, firstName: id, lastName: "Test", active: true, fundSent: 500, createdAt: date, updatedAt: date });
+        await db.insert("children", { id, firstName: id, lastName: "Test", active: true, attendanceStartDate: "2026-08-01", fundSent: 500, createdAt: date, updatedAt: date });
       }
       await db.insert("attendance", { id: "absent", childId: "absent", date, presence: "ABSENT", createdAt: date, updatedAt: date });
       await db.insert("attendance", { id: "earlier", childId: "present", date: earlier, presence: "PRESENT", createdAt: date, updatedAt: date });

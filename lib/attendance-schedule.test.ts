@@ -92,3 +92,25 @@ describe("makeup lunch cutoff", () => {
     expect(getMakeupLunchDeadline(new Date(2026, 2, 30))).toEqual(new Date("2026-03-29T07:00:00Z"));
   });
 });
+
+describe("attendance start date", () => {
+  it("uses September 1 for legacy children and includes the start date itself", () => {
+    expect(getChildDayPlan({}, [], new Date(2026, 7, 31))).toMatchObject({
+      beforeStart: true, scheduled: false, expectedMorning: false, expectedAfternoon: false, lunchEnrolled: false,
+    });
+    expect(getChildDayPlan({}, [], new Date(2026, 8, 1))).toMatchObject({ beforeStart: false, scheduled: true, lunchEnrolled: true });
+  });
+
+  it("ignores a makeup before the child's start date", () => {
+    expect(getChildDayPlan({ attendanceDays: [1, 3, 4], attendanceStartDate: "2026-09-30" }, [makeup()], tuesday)).toMatchObject({
+      beforeStart: true, scheduled: false, notScheduled: true, expectedMorning: false,
+      expectedAfternoon: false, makeup: false, lunchEnrolled: false, makeupLate: false,
+    });
+  });
+
+  it("blocks excuses and makeups before the start date", () => {
+    const startingChild = { attendanceStartDate: "2026-09-30" };
+    expect(getAttendanceDateDisabledReason(startingChild, tuesday)).toBe("Dítě ještě nenastoupilo do Habitatu.");
+    expect(getAttendanceDateDisabledReason(startingChild, tuesday, "MAKEUP")).toBe("Dítě ještě nenastoupilo do Habitatu.");
+  });
+});

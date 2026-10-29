@@ -15,6 +15,7 @@ export type CalendarChild = {
   readonly firstName: string;
   readonly lastName: string;
   readonly attendanceDays?: readonly number[];
+  readonly attendanceStartDate?: string;
 };
 
 export type CalendarAttendance = {
@@ -146,6 +147,7 @@ function buildOpenDay(
     const childExcuses = excusesByChild.get(child.id) ?? [];
     const coverage = getDayCoverage(childExcuses, date);
     const plan = getChildDayPlan(child, childExcuses, date);
+    if (plan.beforeStart) continue;
     const morning = getDayPartCoverage(childExcuses, date, "MORNING");
     const afternoon = getDayPartCoverage(childExcuses, date, "AFTERNOON");
 

@@ -10,6 +10,7 @@ import { LunchPriceEditor } from "./lunch-price-editor";
 import { LunchPaidCheckbox } from "./lunch-paid-checkbox";
 
 const statusStyles: Record<LunchStatusValue, string> = {
+  [LunchStatus.BEFORE_START]: "bg-cream-dark/60",
   [LunchStatus.NOT_SCHEDULED]: "bg-[#a9c9dc]",
   [LunchStatus.MAKEUP]: "bg-[#588966]",
   [LunchStatus.MAKEUP_NO_LUNCH]: "bg-[#c2dce5]",
@@ -22,6 +23,7 @@ const statusStyles: Record<LunchStatusValue, string> = {
 };
 
 const statusLabels: Record<LunchStatusValue, string> = {
+  [LunchStatus.BEFORE_START]: "Před nástupem",
   [LunchStatus.NOT_SCHEDULED]: "Nechodí",
   [LunchStatus.MAKEUP]: "Náhrada, oběd přihlášen",
   [LunchStatus.MAKEUP_NO_LUNCH]: "Náhrada bez oběda",

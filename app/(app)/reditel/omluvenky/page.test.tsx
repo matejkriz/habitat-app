@@ -59,8 +59,8 @@ describe("ExcuseManagementPage", () => {
   it("filters director-created absence dates and clears dates after selecting another child", async () => {
     mocks.getExcuses.mockResolvedValue([]);
     mocks.getExcuseChildren.mockResolvedValue([
-      { id: "child-1", firstName: "Tobiáš", lastName: "Tornádo", attendanceDays: [1, 3] },
-      { id: "child-2", firstName: "Anna", lastName: "Malá", attendanceDays: [1, 2] },
+      { id: "child-1", firstName: "Tobiáš", lastName: "Tornádo", attendanceStartDate: "2026-01-01", attendanceDays: [1, 3] },
+      { id: "child-2", firstName: "Anna", lastName: "Malá", attendanceStartDate: "2026-01-01", attendanceDays: [1, 2] },
     ]);
     render(<ExcuseManagementPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Přidat omluvenku" }));

@@ -44,6 +44,28 @@ beforeEach(() => {
 });
 
 describe("parent overview actions", () => {
+  it.each([false, true])("charges lunches only from the inclusive start date, despite old records (parent=%s)", async parent => {
+    const startDate = new Date(2026, 8, 14);
+    const child = { id: "own", firstName: "Anna", lastName: "Malá", active: true, doesNotTakeLunch: false, attendanceStartDate: "2026-09-14" };
+    mocks.parentLinks.mockResolvedValue([{ child }]);
+    mocks.children.mockResolvedValue([{ ...child, parents: [] }]);
+    mocks.schoolDays.mockResolvedValue([date, startDate]);
+    mocks.attendance.mockResolvedValue([{ childId: "own", date, presence: "PRESENT" }]);
+    mocks.excuses.mockResolvedValue([{ ...timelyExcuse, kind: "MAKEUP", cancelLunch: false }]);
+
+    const data = await loadLunchOverview("2026-09", parent ? "parent" : undefined);
+
+    expect(data.children[0]).toMatchObject({ statuses: ["before-start", LunchStatus.PRESENT], payableLunches: 1 });
+    expect(data.children[0].payableLunches * data.priceCents).toBe(5500);
+  });
+
+  it("does not assume any lunches in a month before the child's arrival", async () => {
+    mocks.parentLinks.mockResolvedValue([{ child: { id: "own", firstName: "Anna", lastName: "Malá", active: true, attendanceStartDate: "2026-10-01" } }]);
+    mocks.attendance.mockResolvedValue([]);
+    const data = await getParentLunchOverview("2026-09");
+    expect(data.children[0]).toMatchObject({ statuses: ["before-start"], payableLunches: 0 });
+  });
+
   it.each([
     { scenario: "timely whole-day excuse", excuses: [timelyExcuse], expected: LunchStatus.EXCUSED, payableLunches: 0 },
     { scenario: "late whole-day excuse", excuses: [{ ...timelyExcuse, submittedAt: lateSubmission }], expected: LunchStatus.LATE, payableLunches: 1 },

@@ -61,6 +61,12 @@ afterEach(() => {
 });
 
 describe("LunchOverviewSection", () => {
+  it("labels days before arrival without presenting them as missing attendance", () => {
+    const overview = lunchOverview();
+    render(<LunchOverviewView overview={{ ...overview, children: [{ ...overview.children[0], statuses: ["before-start"], payableLunches: 0 }] }} />);
+    expect(screen.getByRole("img", { name: "19.: Před nástupem" })).toBeTruthy();
+  });
+
   it("saves a child's paid status for the displayed month and disables it while saving", async () => {
     let finish!: () => void;
     mocks.updateLunchPaid.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));

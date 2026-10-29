@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { getAttendanceStartDate, parseAttendanceStartDate } from "./attendance-start";
 import { ConvexHttpClient } from "convex/browser";
 import { getFunctionName, type FunctionReference } from "convex/server";
 import { api } from "../convex/_generated/api";
@@ -49,6 +50,7 @@ type RawChild = {
   readonly gender?: ChildGender;
   readonly doesNotTakeLunch?: boolean;
   readonly attendanceDays?: number[];
+  readonly attendanceStartDate?: string;
   readonly active: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -270,6 +272,7 @@ const fromRawChild = (raw: RawChild): Child => ({
   gender: raw.gender ?? null,
   doesNotTakeLunch: raw.doesNotTakeLunch ?? false,
   attendanceDays: raw.attendanceDays ?? [1, 2, 3, 4],
+  attendanceStartDate: getAttendanceStartDate(raw),
   active: raw.active,
   createdAt: new Date(raw.createdAt),
   updatedAt: new Date(raw.updatedAt),
@@ -653,6 +656,7 @@ export const db: any = {
         gender: args.data.gender as ChildGender,
         doesNotTakeLunch: Boolean(args.data.doesNotTakeLunch),
         attendanceDays: (args.data.attendanceDays as number[] | undefined) ?? [1, 2, 3, 4],
+        attendanceStartDate: parseAttendanceStartDate(args.data.attendanceStartDate ?? getAttendanceStartDate({})),
         active: args.data.active === undefined ? true : Boolean(args.data.active),
         createdAt: now,
         updatedAt: now,
