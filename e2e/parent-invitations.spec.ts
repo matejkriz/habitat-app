@@ -7,7 +7,7 @@ const workosHeaders = { Authorization: "Bearer sk_test_default" };
 
 test("director invites a new parent, resends the invitation and links their first sign-in to only their child", async ({
   page, browser, request,
-}) => {
+}, testInfo) => {
   test.skip(process.env.E2E_LOCAL !== "true", "Uses only the isolated local database and WorkOS emulator.");
   const baseUrl = new URL(process.env.E2E_BASE_URL!);
   const convexUrl = new URL(process.env.CONVEX_URL!);
@@ -36,6 +36,11 @@ test("director invites a new parent, resends the invitation and links their firs
   const inviteButton = childCard.getByRole("button", { name: `Pozvat rodiče ${firstName} ${lastName}`, exact: true });
   await inviteButton.click();
   await childCard.getByLabel("E-mail rodiče", { exact: true }).fill(email.toUpperCase());
+  await childCard.screenshot({ path: testInfo.outputPath("invitation-desktop.png") });
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await childCard.screenshot({ path: testInfo.outputPath("invitation-mobile.png") });
+  await page.setViewportSize(viewport);
   await childCard.getByRole("button", { name: "Odeslat pozvánku", exact: true }).click();
   await expect(childCard.getByRole("status")).toContainText(`Pozvánka byla odeslána na ${email}.`);
   await expect(childCard.getByText(email, { exact: true })).toHaveCount(1);
@@ -103,13 +108,12 @@ test("director invites a new parent, resends the invitation and links their firs
     await parentPage.goto("/login");
     await parentPage.getByLabel("Email", { exact: true }).fill(email.toUpperCase());
     await parentPage.getByRole("button", { name: "Continue", exact: true }).click();
-    await expect(parentPage).toHaveURL(/\/rodic/);
+    await expect(parentPage).toHaveURL(new URL("/", baseUrl).toString());
     await expect(parentPage.getByRole("heading", { level: 1, name: firstName, exact: true })).toBeVisible();
     await expect(parentPage.getByRole("combobox", { name: "Testovací identita" })).toHaveCount(0);
-    await parentPage.goto("/rodic?child=seed-child-bozena");
-    await expect(parentPage.getByRole("heading", { level: 1, name: firstName, exact: true })).toBeVisible();
-    await expect(parentPage.getByRole("heading", { level: 1, name: "Božena", exact: true })).toHaveCount(0);
-    await expect(parentPage.getByRole("heading", { level: 1, name: "Žofie", exact: true })).toHaveCount(0);
+    const lunchTable = parentPage.getByRole("table", { name: /^Obědy/ });
+    await expect(lunchTable.getByRole("rowheader", { name: `${firstName} ${lastName}`, exact: true })).toBeVisible();
+    await expect(lunchTable.getByRole("rowheader")).toHaveCount(1);
     const afterSignIn = await convex.query(api.db.findUser, { secret, email });
     if (!afterSignIn) throw new Error("The invited parent disappeared after sign-in.");
     expect(afterSignIn).toMatchObject({ id: beforeSignIn.id, workosId: workosUser.id, email, role: "PARENT" });
