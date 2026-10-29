@@ -21,7 +21,7 @@ test("trip fund persists individual charges and recalculates after attendance co
   await page.getByLabel("Jméno", { exact: true }).fill(firstName);
   await page.getByLabel("Příjmení", { exact: true }).fill("Testovací");
   await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
-  await page.getByRole("button", { name: "Přidat dítě", exact: true }).click();
+  await page.getByRole("button", { name: "Ulož dítě", exact: true }).click();
   const child = page.locator("div.rounded-lg").filter({
     has: page.getByRole("button", { name: `Upravit ${name}`, exact: true }),
   }).last();

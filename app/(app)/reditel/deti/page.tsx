@@ -354,7 +354,7 @@ export default function ChildrenManagementPage() {
                   d="M12 4v16m8-8H4"
                 />
               </svg>
-              Přidat dítě
+              {newFirstName || newLastName || newGender ? "Ulož dítě" : "Přidat dítě"}
             </Button>
           </form>
         </CardContent>
