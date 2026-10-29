@@ -16,8 +16,8 @@ nechtěně by zpřístupnil stejné služby všem feature větvím.
 | `CONVEX_DEPLOY_KEY` | Sensitive | pouze build | Production / Preview (`develop`) | Unikátní deploy klíč příslušného Convex deploymentu. |
 | `CONVEX_URL` | Encrypted | pouze server | Production / Preview (`develop`) | URL odpovídajícího Convex deploymentu; není credential. |
 | `PUSH_INTERNAL_SECRET` | Sensitive | pouze server | Production / Preview (`develop`) | Stejná hodnota musí být jen v odpovídajícím Convex deploymentu. |
-| `WORKOS_CLIENT_ID` | Encrypted | pouze server | Production / Preview (`develop`) | Client ID samostatného WorkOS prostředí. |
-| `WORKOS_API_KEY` | Sensitive | pouze server | Production / Preview (`develop`) | `sk_live_...` v produkci, `sk_test_...` na developu. |
+| `WORKOS_CLIENT_ID` | Encrypted | pouze server | Production / Preview (`develop`) | Client ID aplikace pro dané prostředí. |
+| `WORKOS_API_KEY` | Sensitive | pouze server | Production / Preview (`develop`) | Klíč stejné WorkOS aplikace jako `WORKOS_CLIENT_ID`; `sk_live_...` v produkci, `sk_test_...` na developu. |
 | `WORKOS_COOKIE_PASSWORD` | Sensitive | pouze server | Production / Preview (`develop`) | Unikátní náhodná hodnota, minimálně 32 znaků. |
 | `WORKOS_AUTHKIT_DOMAIN` | Encrypted | pouze server | Production / Preview (`develop`) | HTTPS origin AuthKit domény bez cesty. |
 | `MCP_RESOURCE_URL` | Encrypted | pouze server | Production / Preview (`develop`) | Přesná veřejná URL MCP endpointu; na developu `https://developapp.habitatzbraslav.cz/api/mcp`. |
@@ -41,8 +41,66 @@ ne Vercel runtime konfigurace.
 
 | Prostředí | Aplikace | WorkOS redirect | WorkOS sign-out |
 | --- | --- | --- | --- |
+| local | `https://habitat-app.localhost` | `https://habitat-app.localhost/callback` | `https://habitat-app.localhost/login` |
 | develop | `https://developapp.habitatzbraslav.cz` | `https://developapp.habitatzbraslav.cz/callback` | `https://developapp.habitatzbraslav.cz/login` |
 | production | `https://app.habitatzbraslav.cz` | `https://app.habitatzbraslav.cz/callback` | `https://app.habitatzbraslav.cz/login` |
+
+Pro lokální worktrees zachovejte v allowlistu callback
+`https://*.habitat-app.localhost/callback` a sign-out
+`https://*.habitat-app.localhost/login`. Výchozí OAuth callback sdílené
+Staging aplikace zůstává `https://habitat-app.localhost/callback`.
+
+## WorkOS aplikace a pozvánky
+
+Adresy se nastavují v **Applications → příslušná aplikace → Redirects**.
+Lokální vývoj a `develop` sdílejí výchozí aplikaci **Habitat Docházka** ve
+WorkOS Staging prostředí. Produkce má vlastní aplikaci v Production
+prostředí. Následující tabulka uvádí kanonické cíle aplikace, které používají
+odkazy z e-mailů a zahájení přihlášení.
+
+| WorkOS nastavení | Staging, local i develop | Production |
+| --- | --- | --- |
+| App homepage | `https://developapp.habitatzbraslav.cz` | `https://app.habitatzbraslav.cz` |
+| Initiate Login URI | `https://developapp.habitatzbraslav.cz/login` | `https://app.habitatzbraslav.cz/login` |
+| User Invitation URL | Use AuthKit URL (recommended) | Use AuthKit URL (recommended) |
+
+Lokální přihlášení předává `redirect_uri` podle aktuální Portless URL při
+každém požadavku, takže se po ověření vrátí na příslušný localhost callback
+z tabulky výše. Tím se nemění kanonické cíle e-mailů. Kvůli lokálnímu vývoji
+nepřepisujte App homepage ani Initiate Login URI sdílené Staging aplikace na
+localhost.
+
+`WORKOS_API_KEY` a `WORKOS_CLIENT_ID` musí patřit stejné aplikaci. Podle
+[dokumentace WorkOS Applications](https://workos.com/docs/authkit/applications)
+pozvánka odeslaná přes API přebírá kontext aplikace z API klíče. Samotné
+nastavení `WORKOS_CLIENT_ID` proto neopraví pozvánky vytvořené klíčem jiné
+aplikace. Pozvánky vytvořené ručně v WorkOS dashboardu vždy používají výchozí
+aplikaci prostředí, takže samy o sobě neověří nastavení API pozvánek Habitatu.
+
+WorkOS doporučuje pro User Invitation URL výchozí hostovanou AuthKit adresu,
+která obslouží přijetí pozvánky. Volba **Use AuthKit URL (recommended)** může
+v přehledu zobrazovat User Invitation URL jako **Not set**; znamená to
+použití výchozí adresy. Pokud je nastavena Initiate Login URI, odkaz
+z pozvánky vede nejprve na ni. Ve Staging proto musí ukazovat na veřejný
+develop. User Invitation URL, Initiate Login URI a OAuth callback jsou
+samostatná nastavení. Viz
+[WorkOS User invitation URL](https://workos.com/docs/authkit/custom-emails#set-up-your-user-invitation-url).
+
+Nastavený přihlašovací cíl lze ověřit veřejným požadavkem
+`GET https://api.workos.com/user_management/initiate_login?client_id=client_...`
+s Client ID dané aplikace. Odpověď `302` musí v hlavičce `Location` obsahovat
+příslušnou Initiate Login URI z tabulky. Kontrola nevyžaduje API klíč ani
+osobní token pozvánky a neodesílá e-mail. Ověří přihlašovací cíl pro toto
+Client ID; vazbu API klíče na aplikaci zkontrolujte samostatně v dashboardu.
+
+Před nasazením pozvánek do dalšího prostředí zkontrolujte v příslušné WorkOS
+aplikaci všechny tři hodnoty a vazbu nasazeného API klíče na Client ID. U
+existující pozvánky vytvořené aplikací ověřte `accept_invitation_url` a v
+odhlášeném prohlížeči zkontrolujte hostovanou stránku i cíl návratu do
+Habitatu. Develop musí vracet na `developapp.habitatzbraslav.cz`, produkce na
+`app.habitatzbraslav.cz`. Kvůli této kontrole nevytvářejte ani znovu
+neodesílejte pozvánky skutečným rodičům. Ověření samotného `/login` nebo
+lokálního emulátoru nepotvrzuje cíl odkazu v pozvánce ze skutečného WorkOS.
 
 ## MCP pro rodičovské omluvenky
 
