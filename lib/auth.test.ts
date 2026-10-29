@@ -175,6 +175,7 @@ describe("getDbUser development personas", () => {
       user: {
         id: "user_workos",
         email: "parent@example.test",
+        emailVerified: true,
         name: "Rodič Z WorkOS",
         firstName: "Rodič",
         lastName: "Z WorkOS",
@@ -219,6 +220,7 @@ describe("getDbUser development personas", () => {
       user: {
         id: "user_workos",
         email: "parent@example.test",
+        emailVerified: true,
         name: "Rodič Z WorkOS",
         firstName: "Rodič",
         lastName: "Z WorkOS",
@@ -246,5 +248,58 @@ describe("getDbUser development personas", () => {
         image: null,
       },
     });
+  });
+});
+
+describe("invited parent identity linking", () => {
+  const invitedParent = {
+    id: "invited-parent", workosId: "", email: "parent@example.test",
+    name: null, image: null, role: "PARENT" as const,
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.startRequest();
+    vi.stubEnv("DEV_PERSONA_SWITCHER", "false");
+    mocks.withAuth.mockResolvedValue({ user: {
+      id: "user_parent", email: "Parent@Example.Test", emailVerified: true,
+      name: "Rodič", profilePictureUrl: null,
+    } });
+    mocks.userGet.mockImplementation(async ({ where }) =>
+      where.email === invitedParent.email ? invitedParent : null,
+    );
+    mocks.userUpdate.mockResolvedValue({ ...invitedParent, workosId: "user_parent", name: "Rodič" });
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("claims the invited application user using its normalized verified email", async () => {
+    await expect(getDbUser()).resolves.toMatchObject({ id: "invited-parent", workosId: "user_parent", role: "PARENT" });
+    expect(mocks.userGet).toHaveBeenCalledWith({ where: { email: invitedParent.email } });
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not claim an invitation using an unverified email", async () => {
+    mocks.withAuth.mockResolvedValue({ user: {
+      id: "user_parent", email: invitedParent.email, emailVerified: false,
+    } });
+    await expect(getDbUser()).resolves.toBeNull();
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not replace an existing WorkOS identity with another user's ID", async () => {
+    mocks.userGet.mockImplementation(async ({ where }) => where.email === invitedParent.email
+      ? { ...invitedParent, workosId: "user_another" } : null);
+    await expect(getDbUser()).resolves.toBeNull();
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+  });
+
+  it("stores the normalized email for a new parent who has no invitation", async () => {
+    mocks.userGet.mockResolvedValue(null);
+    mocks.userCreate.mockResolvedValue({ ...invitedParent, id: "new-parent", workosId: "user_parent" });
+    await getDbUser();
+    expect(mocks.userCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ email: invitedParent.email }) });
   });
 });

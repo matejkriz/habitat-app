@@ -6,7 +6,7 @@ Systém docházky a omluvenek pro Dětskou vzdělávací skupinu Habitat Zbrasla
 
 - **Rodič**: Přehled docházky dětí, odesílání omluvenek
 - **Učitel**: Zápis denní docházky
-- **Ředitel**: Správa omluvenek, volných dnů, export dat, audit log
+- **Ředitel**: Správa dětí a rodičů, e-mailové pozvánky rodičům, správa omluvenek, volných dnů, export dat, audit log
 
 ## Technologie
 
@@ -85,11 +85,14 @@ doménu nastavte branch-specific `NEXT_PUBLIC_WORKOS_REDIRECT_URI`.
 
 5. Nastavení WorkOS AuthKit:
    - Vytvořte projekt na [dashboard.workos.com](https://dashboard.workos.com)
+   - Ve Staging prostředí otevřete sdílenou aplikaci **Habitat Docházka** v **Applications**
    - Povolte **Magic Auth** (šestimístný e-mailový kód) a **Google OAuth**
-   - Přidejte default redirect URI `https://habitat-app.localhost/callback`
+   - Pro sdílenou Staging aplikaci ponechte App homepage `https://developapp.habitatzbraslav.cz` a Initiate Login URI `https://developapp.habitatzbraslav.cz/login`, i při lokálním vývoji
+   - Ponechte default redirect URI `https://habitat-app.localhost/callback`
    - Přidejte staging wildcard `https://*.habitat-app.localhost/callback`
    - Pro sign-out URI použijte stejné apex a wildcard adresy s cestou `/login`
-   - Zkopírujte Client ID a staging API key do `.env.local`
+   - V **Applications → Habitat Docházka → Redirects** ponechte User Invitation URL na **Use AuthKit URL (recommended)**
+   - Zkopírujte Client ID a staging API key této stejné aplikace do `.env.local`
    - Cookie heslo vygenerujte například příkazem `openssl rand -base64 32`
 
 6. Připravte Convex deployment:
@@ -100,26 +103,37 @@ pnpm convex:dev
 
 ### WorkOS prostředí a Vercel
 
-WorkOS odděluje `Staging` a `Production`. Pro lokální vývoj a Vercel Preview
-používejte staging Client ID a klíč `sk_test_...`. Pro Vercel Production
+WorkOS odděluje `Staging` a `Production`. Lokální vývoj a `develop` sdílejí
+výchozí aplikaci **Habitat Docházka** ve Staging prostředí. Pozvánky z API
+přebírají kontext aplikace z použitého API klíče. `WORKOS_API_KEY` proto musí
+patřit ke stejné aplikaci jako `WORKOS_CLIENT_ID`. Pro Vercel Production
 použijte samostatný production Client ID, klíč `sk_live_...` a nové cookie
 heslo. Tajné hodnoty nikdy necommitujte do Git repozitáře; nastavte je přímo
 ve Vercel Environment Variables se správným rozsahem `Preview` nebo
 `Production`.
 
+Ve sdílené Staging aplikaci musí App homepage ukazovat na
+`https://developapp.habitatzbraslav.cz` a Initiate Login URI na
+`https://developapp.habitatzbraslav.cz/login`. Pozvánky tak vedou na veřejný
+develop. Lokální přihlášení předává vlastní callback podle Portless URL při
+každém požadavku. Kvůli lokálnímu vývoji proto neměňte kanonickou Initiate
+Login URI zpět na localhost. Přehled adres včetně User Invitation URL je v
+[`docs/environments.md`](docs/environments.md#workos-aplikace-a-pozvánky).
+
 Staging WorkOS aplikace musí povolit callback a sign-out wildcardy odpovídající
 Vercel branch a deployment URL. Stabilní vlastní alias Preview branche může
 místo toho použít branch-specific `NEXT_PUBLIC_WORKOS_REDIRECT_URI`.
 
-Production prostředí ve WorkOS zapněte až ve chvíli, kdy znáte finální doménu.
-V production aplikaci potom samostatně nastavte Magic Auth, Google OAuth,
-délku session a následující adresy:
+Při přípravě produkce ve WorkOS samostatně nastavte Magic Auth, Google OAuth,
+délku session a následující adresy. Tento seznam popisuje požadovanou
+konfiguraci, ne potvrzení aktuálního nastavení v dashboardu.
 
 ```text
-App homepage:      https://<produkční-doména>
-Initiate login:    https://<produkční-doména>/login
-Redirect URI:      https://<produkční-doména>/callback
-Sign-out URI:      https://<produkční-doména>/login
+App homepage:       https://app.habitatzbraslav.cz
+Initiate Login URI: https://app.habitatzbraslav.cz/login
+Redirect URI:       https://app.habitatzbraslav.cz/callback
+Sign-out URI:       https://app.habitatzbraslav.cz/login
+User Invitation URL: výchozí hostovaná AuthKit URL pro přijetí pozvánky
 ```
 
 Vercel Production vyžaduje tyto WorkOS proměnné:
@@ -128,7 +142,7 @@ Vercel Production vyžaduje tyto WorkOS proměnné:
 WORKOS_CLIENT_ID="client_..."
 WORKOS_API_KEY="sk_live_..."
 WORKOS_COOKIE_PASSWORD="samostatný-náhodný-řetězec-minimálně-32-znaků"
-NEXT_PUBLIC_WORKOS_REDIRECT_URI="https://<produkční-doména>/callback"
+NEXT_PUBLIC_WORKOS_REDIRECT_URI="https://app.habitatzbraslav.cz/callback"
 ```
 
 `PUSH_INTERNAL_SECRET` musí být nastavené shodně v Next.js i v Convexu — bez něj
@@ -238,7 +252,21 @@ Aplikace používá [WorkOS AuthKit](https://workos.com/authkit) pro autentizaci
 - **Email OTP**: Uživatel zadá email a obdrží jednorázový kód
 - **Google OAuth**: Přihlášení přes Google účet
 
-Uživatelé jsou při prvním přihlášení automaticky synchronizováni do databáze. Role (PARENT, TEACHER, DIRECTOR) je potřeba nastavit manuálně v datech uživatele.
+Uživatelé jsou při prvním přihlášení automaticky synchronizováni do databáze s rolí PARENT. Role TEACHER a DIRECTOR se nastavují manuálně v datech uživatele.
+
+Ředitel může v **Správě dětí** z karty dítěte zvolit **Pozvat rodiče** a zadat jeho
+e-mail. Rodičovský účet a vazba k dítěti se uloží rovnou; WorkOS odešle českou
+pozvánku s platností sedm dní. Při prvním přihlášení se účet propojí podle
+ověřeného e-mailu, takže rodič uvidí přiřazené dítě. Musí se přihlásit stejným
+e-mailem, na který pozvánka přišla.
+
+Opakované odeslání použije existující rodičovský účet i vazbu. Pokud odeslání
+e-mailu selže, karta to oznámí a umožní pozvánku odeslat znovu. Pro pozvánky
+ponechte výchozí hostovanou AuthKit URL pro přijetí pozvánky v nastavení
+příslušné WorkOS aplikace. Initiate Login URI sdílené Staging aplikace musí
+zůstat na veřejném developu i při lokálním vývoji. Samostatná e-mailová
+služba není potřeba. Před nasazením ověřte cíl existující pozvánky podle
+[`docs/environments.md`](docs/environments.md#workos-aplikace-a-pozvánky).
 
 ## Pravidla pro omluvenky
 

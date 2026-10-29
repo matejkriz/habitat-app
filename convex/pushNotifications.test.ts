@@ -145,6 +145,59 @@ describe("unassigned parent login notifications", () => {
     expect(await t.mutation(api.pushNotifications.enqueueUnassignedParentLogin, login)).toBeNull();
   });
 
+  it.each(["PARENT@EXAMPLE.TEST", " parent@example.test ", "  Parent@Example.Test  "])(
+    "does not alert for an invited parent whose first callback email is %j", async email => {
+      const { t } = await setup({ prefilled: true, child: "active" });
+      await t.run(async ({ db }) => {
+        const parent = (await db.query("users").withIndex("by_app_id", q => q.eq("id", "parent-1")).unique())!;
+        await db.patch(parent._id, { workosId: undefined });
+      });
+
+      expect(await t.mutation(api.pushNotifications.enqueueUnassignedParentLogin, { ...login, email })).toBeNull();
+
+      await t.run(async ({ db }) => {
+        expect(await db.query("notificationEvents").collect()).toHaveLength(0);
+        expect(await db.query("notificationDeliveries").collect()).toHaveLength(0);
+        const parent = (await db.query("users").withIndex("by_app_id", q => q.eq("id", "parent-1")).unique())!;
+        expect(parent.email).toBe(login.email);
+        expect(parent.workosId).toBeUndefined();
+      });
+    },
+  );
+
+  it("matches a prefilled parent's legacy email casing without changing identity fields", async () => {
+    const { t } = await setup({ prefilled: true, child: "active" });
+    await t.run(async ({ db }) => {
+      const parent = (await db.query("users").withIndex("by_app_id", q => q.eq("id", "parent-1")).unique())!;
+      await db.patch(parent._id, { email: "Parent@Example.Test" });
+    });
+
+    expect(await t.mutation(api.pushNotifications.enqueueUnassignedParentLogin, login)).toBeNull();
+
+    await t.run(async ({ db }) => {
+      const parent = (await db.query("users").withIndex("by_app_id", q => q.eq("id", "parent-1")).unique())!;
+      expect(parent.email).toBe("Parent@Example.Test");
+      expect(parent.workosId).toBe("seed:parent");
+    });
+  });
+
+  it("rejects an ambiguous email match without creating a false alert", async () => {
+    const { t } = await setup({ prefilled: true, child: "active" });
+    await t.run(async ({ db }) => {
+      await db.insert("users", {
+        id: "duplicate-parent", email: "Parent@Example.Test", role: "PARENT",
+        createdAt: Date.now(), updatedAt: Date.now(),
+      });
+    });
+
+    await expect(t.mutation(api.pushNotifications.enqueueUnassignedParentLogin, login)).rejects.toThrow("více účtů");
+
+    await t.run(async ({ db }) => {
+      expect(await db.query("notificationEvents").collect()).toHaveLength(0);
+      expect(await db.query("notificationDeliveries").collect()).toHaveLength(0);
+    });
+  });
+
   it.each(["active", "inactive"] as const)("keeps an %s child as an assignment", async (child) => {
     const { t } = await setup({ child });
     expect(await t.mutation(api.pushNotifications.enqueueUnassignedParentLogin, login)).toBeNull();

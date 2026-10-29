@@ -78,12 +78,18 @@ const loadDbUser = async (): Promise<SessionUser | null> => {
   });
 
   if (!user) {
+    if (!workosUser.emailVerified) return null;
+    const email = workosUser.email.trim().toLowerCase();
     const existingUserByEmail = await db.users.get({
-      where: { email: workosUser.email },
+      where: { email },
     });
     const name = getWorkOSName(workosUser);
 
     if (existingUserByEmail) {
+      const linkedWorkosId = existingUserByEmail.workosId;
+      if (linkedWorkosId && !linkedWorkosId.startsWith("seed:") && linkedWorkosId !== workosUser.id) {
+        return null;
+      }
       user = await db.users.update({
         where: { id: existingUserByEmail.id },
         data: {
@@ -96,7 +102,7 @@ const loadDbUser = async (): Promise<SessionUser | null> => {
       user = await db.users.create({
         data: {
           workosId: workosUser.id,
-          email: workosUser.email,
+          email,
           name,
           image: workosUser.profilePictureUrl,
           role: "PARENT",

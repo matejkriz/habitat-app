@@ -17,6 +17,7 @@ import type * as mcp from "../mcp.js";
 import type * as mcpPolicy from "../mcpPolicy.js";
 import type * as notificationContent from "../notificationContent.js";
 import type * as parentExcuses from "../parentExcuses.js";
+import type * as parentInvitations from "../parentInvitations.js";
 import type * as pushDelivery from "../pushDelivery.js";
 import type * as pushDeliveryPolicy from "../pushDeliveryPolicy.js";
 import type * as pushNotifications from "../pushNotifications.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   mcpPolicy: typeof mcpPolicy;
   notificationContent: typeof notificationContent;
   parentExcuses: typeof parentExcuses;
+  parentInvitations: typeof parentInvitations;
   pushDelivery: typeof pushDelivery;
   pushDeliveryPolicy: typeof pushDeliveryPolicy;
   pushNotifications: typeof pushNotifications;

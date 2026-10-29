@@ -109,17 +109,21 @@ export const enqueueUnassignedParentLogin = mutation({
       .unique();
     if (existing) return existing._id;
 
-    const user =
-      (await ctx.db
-        .query("users")
-        .withIndex("by_workos_id", (query) =>
-          query.eq("workosId", args.workosUserId),
-        )
-        .unique()) ??
-      (await ctx.db
-        .query("users")
-        .withIndex("by_email", (query) => query.eq("email", args.email))
-        .unique());
+    let user = await ctx.db
+      .query("users")
+      .withIndex("by_workos_id", (query) =>
+        query.eq("workosId", args.workosUserId),
+      )
+      .unique();
+    const email = args.email.trim().toLowerCase();
+    if (!user && email) {
+      const matches = (await ctx.db.query("users").collect())
+        .filter(candidate => candidate.email?.trim().toLowerCase() === email);
+      if (matches.length > 1) {
+        throw new Error("K tomuto e-mailu existuje více účtů. Kontaktujte správce.");
+      }
+      user = matches[0] ?? null;
+    }
     if (user && user.role !== "PARENT") return null;
 
     if (user) {
