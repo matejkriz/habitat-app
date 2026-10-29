@@ -40,12 +40,32 @@ export default function ChildrenManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // New child form
+  const [isNewChildFormOpen, setIsNewChildFormOpen] = useState(false);
+  const [hasTriedAddingChild, setHasTriedAddingChild] = useState(false);
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newGender, setNewGender] = useState<ChildGender | "">("");
   const [newAttendanceStartDate, setNewAttendanceStartDate] = useState("");
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [addError, setAddError] = useState("");
+
+  let newAttendanceStartDateError = "";
+  if (!newAttendanceStartDate) {
+    newAttendanceStartDateError = "Vyplňte datum nástupu.";
+  } else {
+    try {
+      parseDayDate(newAttendanceStartDate);
+    } catch {
+      newAttendanceStartDateError = "Zadejte platné datum nástupu.";
+    }
+  }
+  const newChildErrors = {
+    firstName: newFirstName.trim() ? "" : "Vyplňte jméno dítěte.",
+    lastName: newLastName.trim() ? "" : "Vyplňte příjmení dítěte.",
+    gender: newGender ? "" : "Vyberte pohlaví dítěte.",
+    attendanceStartDate: newAttendanceStartDateError,
+  };
+  const addFieldErrors = hasTriedAddingChild ? newChildErrors : undefined;
 
   // Edit child
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
@@ -90,13 +110,18 @@ export default function ChildrenManagementPage() {
 
   const handleAddChild = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isNewChildFormOpen) {
+      setIsNewChildFormOpen(true);
+      return;
+    }
+    if (isAddingChild) return;
+
+    setHasTriedAddingChild(true);
     setAddError("");
+    if (!newGender || Object.values(newChildErrors).some(Boolean)) return;
     setIsAddingChild(true);
 
     try {
-      if (!newGender) {
-        throw new Error("Vyberte pohlaví dítěte");
-      }
       const newChild = await createChild(newFirstName, newLastName, newGender, newAttendanceStartDate);
       setChildren((prev) => [
         ...prev,
@@ -109,6 +134,8 @@ export default function ChildrenManagementPage() {
       setNewLastName("");
       setNewGender("");
       setNewAttendanceStartDate("");
+      setHasTriedAddingChild(false);
+      setIsNewChildFormOpen(false);
     } catch (err) {
       setAddError(
         err instanceof Error ? err.message : "Nepodařilo se přidat dítě"
@@ -316,52 +343,77 @@ export default function ChildrenManagementPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAddChild} className="space-y-4">
+          <form onSubmit={handleAddChild} noValidate className="space-y-4">
             {addError && (
-              <div className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm">
+              <div role="alert" className="p-3 bg-coral/10 border border-coral/20 rounded-lg text-coral text-sm">
                 {addError}
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Input
-                label="Jméno"
-                value={newFirstName}
-                onChange={(e) => setNewFirstName(e.target.value)}
-                placeholder="Např. Anička"
-                required
-              />
-              <Input
-                label="Příjmení"
-                value={newLastName}
-                onChange={(e) => setNewLastName(e.target.value)}
-                placeholder="Např. Nováková"
-                required
-              />
-              <Select
-                label="Pohlaví"
-                value={newGender}
-                onChange={(e) => setNewGender(e.target.value as ChildGender | "")}
-                options={[
-                  { value: "", label: "-- Vyberte --" },
-                  { value: "FEMALE", label: "Dívka" },
-                  { value: "MALE", label: "Chlapec" },
-                ]}
-                required
-              />
-              <Input
-                id="new-child-attendance-start"
-                label="Datum nástupu"
-                type="date"
-                value={newAttendanceStartDate}
-                onChange={(event) => setNewAttendanceStartDate(event.target.value)}
-                required
-              />
-            </div>
-            <p className="text-sm text-charcoal-light">Docházka a obědy se počítají až od data nástupu.</p>
+            {isNewChildFormOpen && (
+              <div id="new-child-fields" className="space-y-4" aria-live="polite">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Input
+                    id="new-child-first-name"
+                    label="Jméno"
+                    value={newFirstName}
+                    onChange={(e) => setNewFirstName(e.target.value)}
+                    placeholder="Např. Anička"
+                    error={addFieldErrors?.firstName}
+                    aria-invalid={Boolean(addFieldErrors?.firstName)}
+                    aria-describedby={addFieldErrors?.firstName ? "new-child-first-name-error" : undefined}
+                    required
+                  />
+                  <Input
+                    id="new-child-last-name"
+                    label="Příjmení"
+                    value={newLastName}
+                    onChange={(e) => setNewLastName(e.target.value)}
+                    placeholder="Např. Nováková"
+                    error={addFieldErrors?.lastName}
+                    aria-invalid={Boolean(addFieldErrors?.lastName)}
+                    aria-describedby={addFieldErrors?.lastName ? "new-child-last-name-error" : undefined}
+                    required
+                  />
+                  <Select
+                    id="new-child-gender"
+                    label="Pohlaví"
+                    value={newGender}
+                    onChange={(e) => setNewGender(e.target.value as ChildGender | "")}
+                    options={[
+                      { value: "", label: "-- Vyberte --" },
+                      { value: "FEMALE", label: "Dívka" },
+                      { value: "MALE", label: "Chlapec" },
+                    ]}
+                    error={addFieldErrors?.gender}
+                    aria-invalid={Boolean(addFieldErrors?.gender)}
+                    aria-describedby={addFieldErrors?.gender ? "new-child-gender-error" : undefined}
+                    required
+                  />
+                  <Input
+                    id="new-child-attendance-start"
+                    label="Datum nástupu"
+                    type="date"
+                    value={newAttendanceStartDate}
+                    onChange={(event) => setNewAttendanceStartDate(event.target.value)}
+                    error={addFieldErrors?.attendanceStartDate}
+                    aria-invalid={Boolean(addFieldErrors?.attendanceStartDate)}
+                    aria-describedby={addFieldErrors?.attendanceStartDate ? "new-child-attendance-start-error" : undefined}
+                    required
+                  />
+                </div>
+                <p className="text-sm text-charcoal-light">Docházka a obědy se počítají až od data nástupu.</p>
+              </div>
+            )}
 
-            <Button type="submit" isLoading={isAddingChild}>
+            <Button
+              type="submit"
+              isLoading={isAddingChild}
+              aria-expanded={isNewChildFormOpen}
+              aria-controls="new-child-fields"
+            >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -371,10 +423,10 @@ export default function ChildrenManagementPage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 4v16m8-8H4"
+                  d={isNewChildFormOpen ? "M5 13l4 4L19 7" : "M12 4v16m8-8H4"}
                 />
               </svg>
-              {newFirstName || newLastName || newGender ? "Ulož dítě" : "Přidat dítě"}
+              {isNewChildFormOpen ? "Ulož dítě" : "Přidat dítě"}
             </Button>
           </form>
         </CardContent>

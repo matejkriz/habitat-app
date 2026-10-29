@@ -48,7 +48,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {hint && !error && (
           <p className="mt-1.5 text-sm text-charcoal-light">{hint}</p>
         )}
-        {error && <p className="mt-1.5 text-sm text-coral">{error}</p>}
+        {error && <p id={selectId ? `${selectId}-error` : undefined} className="mt-1.5 text-sm text-coral">{error}</p>}
       </div>
     );
   }

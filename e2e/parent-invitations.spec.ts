@@ -26,11 +26,12 @@ test("director invites a new parent, resends the invitation and links their firs
 
   await persona(page, "director-bohumil");
   await page.goto("/reditel/deti");
+  await page.getByRole("button", { name: "Přidat dítě", exact: true }).click();
   await page.getByLabel("Jméno", { exact: true }).fill(firstName);
   await page.getByLabel("Příjmení", { exact: true }).fill(lastName);
   await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
   await page.getByLabel("Datum nástupu", { exact: true }).fill(process.env.E2E_DATE!);
-  await page.getByRole("button", { name: /^(?:Přidat dítě|Ulož dítě)$/ }).click();
+  await page.getByRole("button", { name: "Ulož dítě", exact: true }).click();
   const childCard = page.locator("div.rounded-lg").filter({
     has: page.getByRole("button", { name: `Upravit ${firstName} ${lastName}`, exact: true }),
   }).last();

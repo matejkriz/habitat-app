@@ -34,6 +34,7 @@ test("child starts on the selected date across director, teacher, parent, and lu
   await persona(page, "director-bohumil");
   try {
     await page.goto("/reditel/deti");
+    await page.getByRole("button", { name: "Přidat dítě", exact: true }).click();
     await page.getByLabel("Jméno", { exact: true }).fill(firstName);
     await page.getByLabel("Příjmení", { exact: true }).fill("Nástupová");
     await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
