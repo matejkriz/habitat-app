@@ -163,10 +163,14 @@ export const findUser = query({
         .first();
     }
     if (args.email) {
-      return await db
-        .query("users")
-        .withIndex("by_email", (query) => query.eq("email", args.email!))
-        .first();
+      const email = args.email.trim().toLowerCase();
+      if (!email) return null;
+      const matches = (await db.query("users").collect())
+        .filter(user => user.email?.trim().toLowerCase() === email);
+      if (matches.length > 1) {
+        throw new Error("K tomuto e-mailu existuje více účtů. Kontaktujte správce.");
+      }
+      return matches[0] ?? null;
     }
 
     return null;

@@ -6,7 +6,7 @@ Systém docházky a omluvenek pro Dětskou vzdělávací skupinu Habitat Zbrasla
 
 - **Rodič**: Přehled docházky dětí, odesílání omluvenek
 - **Učitel**: Zápis denní docházky
-- **Ředitel**: Správa omluvenek, volných dnů, export dat, audit log
+- **Ředitel**: Správa dětí a rodičů, e-mailové pozvánky rodičům, správa omluvenek, volných dnů, export dat, audit log
 
 ## Technologie
 
@@ -238,7 +238,18 @@ Aplikace používá [WorkOS AuthKit](https://workos.com/authkit) pro autentizaci
 - **Email OTP**: Uživatel zadá email a obdrží jednorázový kód
 - **Google OAuth**: Přihlášení přes Google účet
 
-Uživatelé jsou při prvním přihlášení automaticky synchronizováni do databáze. Role (PARENT, TEACHER, DIRECTOR) je potřeba nastavit manuálně v datech uživatele.
+Uživatelé jsou při prvním přihlášení automaticky synchronizováni do databáze s rolí PARENT. Role TEACHER a DIRECTOR se nastavují manuálně v datech uživatele.
+
+Ředitel může v **Správě dětí** z karty dítěte zvolit **Pozvat rodiče** a zadat jeho
+e-mail. Rodičovský účet a vazba k dítěti se uloží rovnou; WorkOS odešle českou
+pozvánku s platností sedm dní. Při prvním přihlášení se účet propojí podle
+ověřeného e-mailu, takže rodič uvidí přiřazené dítě. Musí se přihlásit stejným
+e-mailem, na který pozvánka přišla.
+
+Opakované odeslání použije existující rodičovský účet i vazbu. Pokud odeslání
+e-mailu selže, karta to oznámí a umožní pozvánku odeslat znovu. Pro pozvánky
+použijte výchozí hostovanou stránku WorkOS AuthKit a nastavenou přihlašovací
+adresu aplikace `/login`; samostatná e-mailová služba není potřeba.
 
 ## Pravidla pro omluvenky
 

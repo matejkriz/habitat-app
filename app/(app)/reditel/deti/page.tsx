@@ -23,6 +23,7 @@ import {
   Toggle,
 } from "@/components/ui";
 import { ChildFund } from "./child-fund";
+import { InviteParent } from "./invite-parent";
 import type { ChildGender } from "@/lib/types";
 
 type Parent = {
@@ -254,6 +255,15 @@ export default function ChildrenManagementPage() {
     }
   };
 
+  const handleParentInvited = (childId: string, parent: Parent) => {
+    setParents(current => current.some(existing => existing.id === parent.id)
+      ? current.map(existing => existing.id === parent.id ? parent : existing)
+      : [...current, parent]);
+    setChildren(current => current.map(child => child.id === childId
+      ? { ...child, parents: [...child.parents.filter(existing => existing.id !== parent.id), parent] }
+      : child));
+  };
+
   // Get available parents for a specific child (those not already assigned)
   const getAvailableParents = (childId: string) => {
     const child = children.find((c) => c.id === childId);
@@ -405,6 +415,7 @@ export default function ChildrenManagementPage() {
                   onToggleActive={() => handleToggleActive(child.id, child.active)}
                   onOpenAssignModal={() => handleOpenAssignModal(child.id)}
                   onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
+                  onParentInvited={(parent) => handleParentInvited(child.id, parent)}
                 />
               ))}
             </div>
@@ -446,6 +457,7 @@ export default function ChildrenManagementPage() {
                   onToggleActive={() => handleToggleActive(child.id, child.active)}
                   onOpenAssignModal={() => handleOpenAssignModal(child.id)}
                   onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
+                  onParentInvited={(parent) => handleParentInvited(child.id, parent)}
                   inactive
                 />
               ))}
@@ -544,6 +556,7 @@ interface ChildRowProps {
   onToggleActive: () => void;
   onOpenAssignModal: () => void;
   onRemoveParent: (parentId: string) => void;
+  onParentInvited: (parent: Parent) => void;
   inactive?: boolean;
 }
 
@@ -569,6 +582,7 @@ function ChildRow({
   onToggleActive,
   onOpenAssignModal,
   onRemoveParent,
+  onParentInvited,
   inactive,
 }: ChildRowProps) {
   return (
@@ -821,6 +835,7 @@ function ChildRow({
             ))}
           </div>
         )}
+        <InviteParent child={child} onInvited={onParentInvited} />
       </div>
     </div>
   );

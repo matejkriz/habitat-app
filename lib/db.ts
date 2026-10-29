@@ -685,6 +685,11 @@ export const db: any = {
     },
   },
 
+  parentInvitations: {
+    assign: (args: { directorId: string; childId: string; email: string }) =>
+      convexMutation(api.parentInvitations.assignParent, { secret: getServerSecret(), ...args }),
+  },
+
   parentLinks: {
     list: async (args: ListArgs = {}) => {
       if (args.where?.parentId) {
