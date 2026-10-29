@@ -8,6 +8,7 @@ import type { ExcuseDayPart, Presence } from "./types";
 import { isDefaultClosedDay, toLocalDateKey as toKey } from "./school-calendar";
 
 export type ParentCalendarStatus =
+  | "BEFORE_START"
   | "NOT_SCHEDULED"
   | "MAKEUP"
   | "EXPECTED"
@@ -36,6 +37,7 @@ interface CalendarAttendance {
 interface BuildParentCalendarMonthInput {
   readonly month: Date;
   readonly attendanceDays?: readonly number[];
+  readonly attendanceStartDate?: string;
   readonly attendance: ReadonlyArray<CalendarAttendance>;
   readonly excuses: ReadonlyArray<CoveringExcuse>;
   readonly closedDays: ReadonlyArray<Date>;
@@ -59,6 +61,7 @@ export function parseMonth(month: string | undefined, fallback = new Date()): Da
 export function buildParentCalendarMonth({
   month,
   attendanceDays,
+  attendanceStartDate,
   attendance,
   excuses,
   closedDays,
@@ -76,18 +79,20 @@ export function buildParentCalendarMonth({
     const dateKey = toLocalDateKey(date);
     const attendanceItem = attendanceByDate.get(dateKey);
     const coverage = getDayCoverage(excuses, date);
-    const plan = getChildDayPlan({ attendanceDays }, excuses, date);
+    const plan = getChildDayPlan({ attendanceDays, attendanceStartDate }, excuses, date);
     const morning = getDayPartCoverage(excuses, date, "MORNING");
     const afternoon = getDayPartCoverage(excuses, date, "AFTERNOON");
     const absencePart =
-      morning.covered !== afternoon.covered
+      !plan.beforeStart && morning.covered !== afternoon.covered
         ? morning.covered
           ? "MORNING"
           : "AFTERNOON"
         : undefined;
 
     let status: ParentCalendarStatus;
-    if (isDefaultClosedDay(date) || closedDateKeys.has(dateKey)) {
+    if (plan.beforeStart) {
+      status = "BEFORE_START";
+    } else if (isDefaultClosedDay(date) || closedDateKeys.has(dateKey)) {
       status = "CLOSED";
     } else if (plan.notScheduled && attendanceItem?.presence !== "PRESENT") {
       status = "NOT_SCHEDULED";

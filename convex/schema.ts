@@ -57,6 +57,7 @@ export default defineSchema({
     // Optional during rollout; existing children continue to receive lunches.
     doesNotTakeLunch: v.optional(v.boolean()),
     attendanceDays: v.optional(v.array(v.number())),
+    attendanceStartDate: v.optional(v.string()),
     fundSent: v.optional(v.union(v.number(), v.null())),
     active: v.boolean(),
     createdAt: v.number(),

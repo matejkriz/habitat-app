@@ -38,12 +38,15 @@ describe("getAttendanceForDate", () => {
     mocks.getDbUser.mockResolvedValue({ id: "teacher-1", role: "TEACHER" });
     mocks.isClosedDay.mockResolvedValue(false);
     mocks.attendanceList.mockResolvedValue([]);
-    mocks.childrenList.mockResolvedValue([]);
+    mocks.childrenList.mockResolvedValue([
+      { id: "child-1", attendanceStartDate: "2026-08-01" },
+      { id: "child-2", attendanceStartDate: "2026-08-01" },
+    ]);
     mocks.noLunchDayGet.mockResolvedValue(null);
   });
 
   it("classifies a recorded absence on a regular day off as excused", async () => {
-    mocks.childrenList.mockResolvedValue([{ id: "child-off", attendanceDays: [1, 2, 4] }]);
+    mocks.childrenList.mockResolvedValue([{ id: "child-off", attendanceDays: [1, 2, 4], attendanceStartDate: "2026-08-01" }]);
     mocks.excusesList.mockResolvedValue([]);
     mocks.attendanceList.mockResolvedValue([{ childId: "child-off", date: new Date(2026, 7, 19), presence: "ABSENT" }]);
     await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({ attendance: [
@@ -53,8 +56,8 @@ describe("getAttendanceForDate", () => {
 
   it("returns regular days off and makeup plans to teachers", async () => {
     mocks.childrenList.mockResolvedValue([
-      { id: "child-off", attendanceDays: [1, 2, 4] },
-      { id: "child-makeup", attendanceDays: [1, 2, 4] },
+      { id: "child-off", attendanceDays: [1, 2, 4], attendanceStartDate: "2026-08-01" },
+      { id: "child-makeup", attendanceDays: [1, 2, 4], attendanceStartDate: "2026-08-01" },
     ]);
     mocks.excusesList.mockResolvedValue([{ id: "makeup", childId: "child-makeup", kind: "MAKEUP", dayPart: "AFTERNOON", fromDate: new Date(2026, 7, 19), toDate: new Date(2026, 7, 19), submittedAt: new Date(2026, 7, 18, 20), lateApprovedAt: null }]);
     await expect(getAttendanceForDate("2026-08-19")).resolves.toMatchObject({ excuses: [

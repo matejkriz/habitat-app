@@ -1,5 +1,6 @@
 "use server";
 
+import { getAttendanceStartDate, hasStartedAttendance, parseAttendanceStartDate } from "@/lib/attendance-start";
 import { getAttendanceDays, getChildDayPlan, isRegularAttendanceDay, parseAttendanceDays } from "@/lib/attendance-schedule";
 import { parseDayDate, validateExtraFundPersonPatch, type ExtraFundPersonPatch, validateCrowns, type TripFund, type TripFundOverview } from "@/lib/day-details";
 
@@ -68,6 +69,7 @@ type AttendanceWithChild = Attendance & {
     readonly lastName: string;
     readonly gender: ChildGender | null;
     readonly attendanceDays?: ReadonlyArray<number>;
+    readonly attendanceStartDate?: string;
   };
 };
 
@@ -84,6 +86,7 @@ type ExcuseWithChildAndSubmitter = Excuse & {
     readonly lastName: string;
     readonly doesNotTakeLunch: boolean;
     readonly attendanceDays?: ReadonlyArray<number>;
+    readonly attendanceStartDate?: string;
   };
   readonly submittedBy: {
     readonly id: string;
@@ -164,12 +167,11 @@ async function getSchoolDaysCoveringExcuses(
 }
 
 function getRecordSchoolDays(
-  record: Excuse & { readonly child: { readonly attendanceDays?: ReadonlyArray<number> } },
+  record: Excuse & { readonly child: { readonly attendanceDays?: ReadonlyArray<number>; readonly attendanceStartDate?: string } },
   schoolDays: ReadonlyArray<Date>,
 ): ReadonlyArray<Date> {
-  return record.kind === "MAKEUP"
-    ? schoolDays.filter(day => !isRegularAttendanceDay(record.child, day))
-    : schoolDays;
+  return schoolDays.filter(day => hasStartedAttendance(record.child, day) &&
+    (record.kind !== "MAKEUP" || !isRegularAttendanceDay(record.child, day)));
 }
 
 function hasPendingLunchDecision(
@@ -271,7 +273,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   );
   const children = await db.children.list({}) as ReadonlyArray<Child>;
   const childrenById = new Map(children.map(child => [child.id, child]));
-  const monthAbsences = monthAttendance
+  const effectiveMonthAttendance = monthAttendance.filter(record =>
+    hasStartedAttendance(childrenById.get(record.childId) ?? {}, record.date));
+  const effectiveTodayAttendance = todayAttendance.filter(record =>
+    hasStartedAttendance(childrenById.get(record.childId) ?? {}, record.date));
+  const monthAbsences = effectiveMonthAttendance
     .filter((a) => a.presence === Presence.ABSENT)
     .map((a) => {
       const records = monthExcuses.get(a.childId) ?? [];
@@ -294,11 +300,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           firstName: true,
           lastName: true,
           attendanceDays: true,
+          attendanceStartDate: true,
         },
       },
     },
     orderBy: { submittedAt: "desc" },
-  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string; attendanceDays?: ReadonlyArray<number> } }>;
+  })) as ReadonlyArray<Excuse & { child: { firstName: string; lastName: string; attendanceDays?: ReadonlyArray<number>; attendanceStartDate?: string } }>;
   const recentSchoolDays = await getSchoolDaysCoveringExcuses(
     recentExcuseCandidates,
   );
@@ -307,20 +314,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .slice(0, 5);
 
   // Get children count
-  const childrenCount = await db.children.count({ where: { active: true } });
+  const childrenCount = children.filter(child => child.active && hasStartedAttendance(child, today)).length;
 
   return {
     today: {
-      present: todayAttendance.filter((a) => a.presence === Presence.PRESENT)
+      present: effectiveTodayAttendance.filter((a) => a.presence === Presence.PRESENT)
         .length,
-      absent: todayAttendance.filter((a) => a.presence === Presence.ABSENT)
+      absent: effectiveTodayAttendance.filter((a) => a.presence === Presence.ABSENT)
         .length,
       total: childrenCount,
-      recorded: todayAttendance.length > 0,
+      recorded: effectiveTodayAttendance.length > 0,
     },
     month: {
-      totalRecords: monthAttendance.length,
-      presentCount: monthAttendance.filter(
+      totalRecords: effectiveMonthAttendance.length,
+      presentCount: effectiveMonthAttendance.filter(
         (a) => a.presence === Presence.PRESENT
       ).length,
       absentCount: monthAbsences.length,
@@ -357,6 +364,7 @@ export async function getExcuses(options?: {
           lastName: true,
           doesNotTakeLunch: true,
           attendanceDays: true,
+          attendanceStartDate: true,
         },
       },
       submittedBy: {
@@ -388,6 +396,7 @@ export async function getExcuses(options?: {
 
 export type ExcuseChild = {
   readonly attendanceDays?: ReadonlyArray<number>;
+  readonly attendanceStartDate?: string;
   readonly id: string;
   readonly firstName: string;
   readonly lastName: string;
@@ -405,7 +414,7 @@ export async function getExcuseChildren(): Promise<ReadonlyArray<ExcuseChild>> {
 
   return db.children.list({
     where: { active: true },
-    select: { id: true, firstName: true, lastName: true, attendanceDays: true },
+    select: { id: true, firstName: true, lastName: true, attendanceDays: true, attendanceStartDate: true },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   }) as Promise<ReadonlyArray<ExcuseChild>>;
 }
@@ -445,7 +454,7 @@ export async function createDirectorExcuse(
 
   const child = await db.children.get({
     where: { id: childId },
-    select: { id: true, active: true, attendanceDays: true },
+    select: { id: true, active: true, attendanceDays: true, attendanceStartDate: true },
   });
   if (!child || !child.active) {
     return { success: false, error: "Dítě nebylo nalezeno." };
@@ -785,6 +794,7 @@ export async function exportAttendanceCSV(
             lastName: true,
             gender: true,
             attendanceDays: true,
+            attendanceStartDate: true,
           },
         },
       },
@@ -804,7 +814,7 @@ export async function exportAttendanceCSV(
     "Stav omluvy",
     "Důvod",
   ];
-  const rows = attendance.map((a) => {
+  const rows = attendance.filter(a => hasStartedAttendance(a.child, a.date)).map((a) => {
     const plan = getChildDayPlan(a.child, excusesByChild.get(a.childId) ?? [], a.date);
     const coverage =
       a.presence === Presence.ABSENT
@@ -842,6 +852,7 @@ export async function exportAttendanceCSV(
  */
 export type ChildWithParents = {
   attendanceDays?: number[];
+  attendanceStartDate?: string;
   fundSent?: number | null;
   fundSpent?: number;
   fundBalance?: number;
@@ -894,6 +905,7 @@ export async function getAllChildrenWithParents(): Promise<ChildWithParents[]> {
     gender: child.gender,
     doesNotTakeLunch: child.doesNotTakeLunch,
     attendanceDays: [...getAttendanceDays(child)],
+    attendanceStartDate: getAttendanceStartDate(child),
     active: child.active,
     createdAt: child.createdAt,
     parents: child.parents.map((pc) => ({
@@ -930,6 +942,7 @@ export async function createChild(
   firstName: string,
   lastName: string,
   gender: ChildGender,
+  attendanceStartDate: string,
 ) {
   const user = await requireDirector();
 
@@ -940,12 +953,14 @@ export async function createChild(
     throw new Error("Pohlaví je povinné");
   }
 
+  const startDate = parseAttendanceStartDate(attendanceStartDate);
   const child = await db.children.create({
     data: {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       gender,
       doesNotTakeLunch: false,
+      attendanceStartDate: startDate,
       active: true,
     },
   });
@@ -962,6 +977,7 @@ export async function createChild(
         lastName: child.lastName,
         gender: child.gender,
         doesNotTakeLunch: child.doesNotTakeLunch,
+        attendanceStartDate: getAttendanceStartDate(child),
       },
     },
   });
@@ -987,6 +1003,7 @@ export async function updateChild(
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
     attendanceDays?: number[];
+    attendanceStartDate?: string;
     fundSent?: number | null;
   },
 ) {
@@ -1006,6 +1023,7 @@ export async function updateChild(
     gender?: ChildGender;
     doesNotTakeLunch?: boolean;
     attendanceDays?: number[];
+    attendanceStartDate?: string;
     fundSent?: number | null;
   } = {};
   if (data.firstName !== undefined) {
@@ -1033,6 +1051,10 @@ export async function updateChild(
     updateData.doesNotTakeLunch = data.doesNotTakeLunch;
   }
 
+  if (data.attendanceStartDate !== undefined) {
+    updateData.attendanceStartDate = parseAttendanceStartDate(data.attendanceStartDate);
+  }
+
   if (data.attendanceDays !== undefined) {
     updateData.attendanceDays = parseAttendanceDays(data.attendanceDays);
   }
@@ -1055,6 +1077,7 @@ export async function updateChild(
         gender: child.gender,
         doesNotTakeLunch: child.doesNotTakeLunch,
         attendanceDays: [...getAttendanceDays(child)],
+        attendanceStartDate: getAttendanceStartDate(child),
       },
       newValue: updateData,
     },

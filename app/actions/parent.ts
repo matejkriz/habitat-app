@@ -1,6 +1,6 @@
 "use server";
 
-import { getAttendanceDays, getAttendanceDateDisabledReason, getChildDayPlan, hasPartialAttendance, isRegularAttendanceDay } from "@/lib/attendance-schedule";
+import { getAttendanceDays, getAttendanceDateDisabledReason, getAttendanceStartDate, getChildDayPlan, hasPartialAttendance, hasStartedAttendance, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import type { DaySummary } from "@/lib/day-details";
 import { randomUUID } from "node:crypto";
 import { getDbUser } from "@/lib/auth";
@@ -54,6 +54,7 @@ type ParentChildWithChild = {
 
 export type ParentVisibleChild = {
   readonly attendanceDays?: ReadonlyArray<number>;
+  readonly attendanceStartDate?: string;
   readonly id: string;
   readonly firstName: string;
   readonly gender: ChildGender | null;
@@ -61,6 +62,7 @@ export type ParentVisibleChild = {
 };
 
 type ChildTodayStatus = {
+  readonly beforeStart?: boolean;
   readonly notScheduled?: boolean;
   readonly makeup?: boolean;
   readonly date: Date;
@@ -81,7 +83,7 @@ type AttendanceHistoryItem = {
 };
 
 type ChildExcuseItem = {
-  readonly child: { readonly attendanceDays: ReadonlyArray<number> };
+  readonly child: { readonly attendanceDays: ReadonlyArray<number>; readonly attendanceStartDate: string };
   readonly kind?: "EXCUSE" | "MAKEUP";
   readonly id: string;
   readonly fromDate: Date;
@@ -116,6 +118,7 @@ export const getParentChildren = async (): Promise<
     gender: child.gender,
     doesNotTakeLunch: child.doesNotTakeLunch,
     attendanceDays: [...getAttendanceDays(child)],
+    attendanceStartDate: getAttendanceStartDate(child),
   }));
 };
 
@@ -165,13 +168,15 @@ export const getChildTodayStatus = async (
     db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
+  const plan = getChildDayPlan(child ?? {}, excuses, today);
   return {
     date: today,
     isSchoolDay: true,
     isClosed: false,
-    notScheduled: getChildDayPlan(child ?? {}, excuses, today).notScheduled,
-    makeup: getChildDayPlan(child ?? {}, excuses, today).makeup,
-    attendance: attendance
+    beforeStart: plan.beforeStart,
+    notScheduled: plan.notScheduled,
+    makeup: plan.makeup,
+    attendance: attendance && !plan.beforeStart
       ? {
           presence: attendance.presence,
           excuseStatus: getExcuseStatusForDay(
@@ -225,7 +230,7 @@ export const getChildAttendanceHistory = async (
     db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
-  return attendance.map((a) => {
+  return attendance.filter(a => hasStartedAttendance(child ?? {}, a.date)).map((a) => {
     const coverage = getDayCoverage(excuses, a.date);
 
     return {
@@ -267,12 +272,12 @@ export const getChildExcuses = async (
     orderBy: { submittedAt: "desc" },
     take: limit,
   }) as Promise<ReadonlyArray<Excuse>>, db.children.get({
-    where: { id: childId }, select: { attendanceDays: true },
+    where: { id: childId }, select: { attendanceDays: true, attendanceStartDate: true },
   })]);
 
   return excuses.map((e) => ({
     id: e.id,
-    child: { attendanceDays: [...getAttendanceDays(child ?? {})] },
+    child: { attendanceDays: [...getAttendanceDays(child ?? {})], attendanceStartDate: getAttendanceStartDate(child ?? {}) },
     kind: e.kind ?? "EXCUSE",
     fromDate: e.fromDate,
     toDate: e.toDate,
@@ -326,6 +331,7 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
   return buildParentCalendarMonth({
     month: monthStart,
     attendanceDays: child?.attendanceDays,
+    attendanceStartDate: child?.attendanceStartDate,
     attendance,
     excuses,
     closedDays: closedDays.map((day) => day.date),
@@ -405,6 +411,9 @@ async function createParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
   for (const childId of childIds) {
     const child = links.find(link => link.child.id === childId)?.child;
     if (!child?.active) throw new ExcuseValidationError("Dítě nebylo nalezeno nebo není aktivní.");
+    if (!hasStartedAttendance(child, fromDate)) {
+      throw new ExcuseValidationError("Před datem nástupu dítěte nelze zadat omluvenku ani náhradu.");
+    }
     if (kind === "MAKEUP") {
       if (!hasPartialAttendance(child)) {
         throw new ExcuseValidationError("Náhradu lze zadat pouze dítěti, které nechodí každý den.");
@@ -592,14 +601,15 @@ export const getChildStats = async (
     db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
-  const absences = attendance
+  const startedAttendance = attendance.filter(a => hasStartedAttendance(child ?? {}, a.date));
+  const absences = startedAttendance
     .filter((a) => a.presence === Presence.ABSENT)
     .map((a) => getChildDayPlan(child ?? {}, excuses, a.date).notScheduled || getDayCoverage(excuses, a.date).excused);
   const excused = absences.filter(Boolean).length;
 
   return {
-    totalRecords: attendance.length,
-    present: attendance.filter((a) => a.presence === Presence.PRESENT).length,
+    totalRecords: startedAttendance.length,
+    present: startedAttendance.filter((a) => a.presence === Presence.PRESENT).length,
     absent: absences.length,
     excused,
     unexcused: absences.length - excused,

@@ -59,7 +59,12 @@ async function TodayCard({
         </p>
       </CardHeader>
       <CardContent>
-        {status.isClosed ? (
+        {status.beforeStart ? (
+          <div className="rounded-lg border border-cream-dark bg-cream/50 p-4">
+            <p className="font-semibold text-charcoal">Před nástupem</p>
+            <p className="mt-1 text-sm text-charcoal-light">Dítě ještě nezačalo docházet do Habitatu.</p>
+          </div>
+        ) : status.isClosed ? (
           <div className="flex items-center gap-3 p-4 bg-sage/10 rounded-lg">
             <div className="w-10 h-10 rounded-full bg-sage/20 flex items-center justify-center">
               <svg className="w-5 h-5 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">

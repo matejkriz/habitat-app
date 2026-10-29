@@ -46,6 +46,25 @@ describe("TeacherAttendancePage", () => {
     cleanup();
   });
 
+  it("disables children before arrival and omits them from the saved day", async () => {
+    mocks.getAllChildren.mockResolvedValue([
+      { id: "current", firstName: "Anna", lastName: "Malá", gender: "FEMALE", attendanceStartDate: "2026-09-01" },
+      { id: "new", firstName: "Petr", lastName: "Nový", gender: "MALE", attendanceStartDate: "2099-11-02" },
+    ]);
+    mocks.getAttendanceForDate.mockResolvedValue({ isClosed: false, attendance: [{ childId: "new", presence: "PRESENT" }], excuses: [] });
+    mocks.saveAttendance.mockResolvedValue({ success: true, recordCount: 1 });
+    render(<TeacherAttendancePage />);
+    expect(await screen.findByText("Před nástupem")).toBeTruthy();
+    expect(screen.getByRole<HTMLInputElement>("checkbox", { name: "Docházka: Petr Nový" }).disabled).toBe(true);
+    const plan = screen.getByRole("region", { name: "Plánovaná účast" });
+    expect(within(plan).getAllByText("1")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Potvrdit docházku" }));
+    await waitFor(() => expect(mocks.saveAttendance).toHaveBeenCalledOnce());
+    const saved = mocks.saveAttendance.mock.calls[0][0] as FormData;
+    expect(saved.get("child-current")).toBe("present");
+    expect(saved.has("child-new")).toBe(false);
+  });
+
   it("defaults a regular day off to absent and an afternoon makeup to present", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "off", firstName: "Anna", lastName: "Malá", gender: "FEMALE" },

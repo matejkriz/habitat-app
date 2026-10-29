@@ -249,6 +249,7 @@ test("parent can submit a timely makeup without enrolling lunch", async ({ page 
     await expect(record.getByText("Náhrada", { exact: true })).toBeVisible();
     await expect(record.getByRole("button", { name: "Přihlásit oběd", exact: true })).toHaveCount(0);
     await page.goto(`/reditel/obedy?month=${month}`);
+    await expect(page.getByRole("table", { name: /^Obědy/ })).toBeVisible();
     await page.reload();
     await expect(lunchRow.getByRole("img", { name: `${dayNumber}.: Náhrada bez oběda`, exact: true })).toBeVisible();
     await expect(lunchRow.getByRole("cell").nth(-3)).toHaveText(payableLunches);

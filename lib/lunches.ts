@@ -2,6 +2,7 @@ import { toDayKey, type DayCoverage } from "./excuse-coverage";
 import { Presence, type Presence as PresenceValue } from "./types";
 
 export const LunchStatus = {
+  BEFORE_START: "before-start",
   NOT_SCHEDULED: "not-scheduled",
   MAKEUP: "makeup",
   MAKEUP_NO_LUNCH: "makeup-no-lunch",

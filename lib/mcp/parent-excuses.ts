@@ -4,6 +4,7 @@ import { getLateDays } from "@/lib/excuse-coverage";
 import { parseExcuseDate, validateExcuseDates } from "@/lib/excuse-rules";
 import { getSchoolDaysInRange } from "@/lib/school-days";
 import { sendExcuseNotification } from "@/lib/slack";
+import { hasStartedAttendance } from "@/lib/attendance-start";
 import { createExcuseConfirmation, verifyExcuseConfirmation } from "./confirmation";
 
 export const excusePreviewInputSchema = z.object({
@@ -81,6 +82,18 @@ const parseDates = (fromDateValue: string, toDateValue: string) => {
   }
 };
 
+const validateAttendanceStart = async (childIds: ReadonlyArray<string>, fromDate: Date) => {
+  const children = await Promise.all(childIds.map(id => db.children.get({
+    where: { id }, select: { attendanceStartDate: true },
+  })));
+  if (children.some(child => !child)) {
+    throw new McpParentError("CHILD_ACCESS_DENIED", "Dítě nebylo nalezeno.");
+  }
+  if (children.some(child => child && !hasStartedAttendance(child, fromDate))) {
+    throw new McpParentError("INVALID_DATES", "Dítě ještě nenastoupilo do Habitatu.");
+  }
+};
+
 const getTiming = async (input: {
   readonly excuses: ReadonlyArray<{
     readonly id: string;
@@ -138,6 +151,7 @@ export const previewMcpExcuse = async (
   const profile = await getMcpParentProfile(workosUserId);
   const childIds = authorizeChildren(profile, input.childIds);
   const { fromDate, toDate } = parseDates(input.fromDate, input.toDate);
+  await validateAttendanceStart(childIds, fromDate);
   const reason = input.reason?.trim() || null;
   const selectedChildren = childIds.map((childId) => {
     const child = profile.children.find((candidate) => candidate.id === childId);
@@ -182,6 +196,7 @@ export const createMcpExcuse = async (
   const profile = await getMcpParentProfile(workosUserId);
   const childIds = authorizeChildren(profile, confirmation.childIds);
   const { fromDate, toDate } = parseDates(confirmation.fromDate, confirmation.toDate);
+  await validateAttendanceStart(childIds, fromDate);
 
   try {
     const result = await db.mcp.createParentExcuses({

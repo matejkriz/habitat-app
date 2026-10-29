@@ -4,7 +4,7 @@ import { buildParentCalendarMonth } from "./parent-calendar";
 describe("buildParentCalendarMonth", () => {
   it("shows which part of the day is excused without hiding the whole day", () => {
     const days = buildParentCalendarMonth({
-      month: new Date(2026, 7, 1),
+      month: new Date(2026, 7, 1), attendanceStartDate: "2026-01-01",
       attendance: [],
       excuses: [
         {
@@ -28,7 +28,7 @@ describe("buildParentCalendarMonth", () => {
 
   it("shows an approved excuse across its whole date range", () => {
     const days = buildParentCalendarMonth({
-      month: new Date(2026, 7, 1),
+      month: new Date(2026, 7, 1), attendanceStartDate: "2026-01-01",
       attendance: [],
       excuses: [
         {
@@ -49,7 +49,7 @@ describe("buildParentCalendarMonth", () => {
 
   it("distinguishes an excuse waiting for review from an unexcused absence", () => {
     const days = buildParentCalendarMonth({
-      month: new Date(2026, 7, 1),
+      month: new Date(2026, 7, 1), attendanceStartDate: "2026-01-01",
       attendance: [
         {
           date: new Date(2026, 7, 4),
@@ -75,7 +75,7 @@ describe("buildParentCalendarMonth", () => {
 
   it("marks regular weekends and custom closures as closed", () => {
     const days = buildParentCalendarMonth({
-      month: new Date(2026, 7, 1),
+      month: new Date(2026, 7, 1), attendanceStartDate: "2026-01-01",
       attendance: [],
       excuses: [],
       closedDays: [new Date(2026, 7, 17)],
@@ -89,7 +89,7 @@ describe("buildParentCalendarMonth", () => {
 
   it("does not describe a past day without attendance as expected", () => {
     const days = buildParentCalendarMonth({
-      month: new Date(2026, 7, 1),
+      month: new Date(2026, 7, 1), attendanceStartDate: "2026-01-01",
       attendance: [],
       excuses: [],
       closedDays: [],
@@ -104,7 +104,21 @@ describe("buildParentCalendarMonth", () => {
 
 
 it("shows the regular day off and turns a makeup into expected attendance", () => {
-  const base = { month: new Date(2026, 7, 1), attendanceDays: [1, 3, 4], attendance: [], closedDays: [], today: new Date(2026, 7, 3) };
+  const base = { month: new Date(2026, 7, 1), attendanceStartDate: "2026-01-01", attendanceDays: [1, 3, 4], attendance: [], closedDays: [], today: new Date(2026, 7, 3) };
   expect(buildParentCalendarMonth({ ...base, excuses: [] }).find(day => day.date === "2026-08-04")?.status).toBe("NOT_SCHEDULED");
   expect(buildParentCalendarMonth({ ...base, excuses: [{ id: "makeup", childId: "child", kind: "MAKEUP", fromDate: new Date(2026, 7, 4), toDate: new Date(2026, 7, 4), submittedAt: new Date(2026, 7, 3, 20), lateApprovedAt: null }] }).find(day => day.date === "2026-08-04")?.status).toBe("MAKEUP");
+});
+
+it("marks days before the start as unavailable even when old attendance or excuses exist", () => {
+  const days = buildParentCalendarMonth({
+    month: new Date(2026, 8, 1), attendanceStartDate: "2026-09-16",
+    attendance: [{ date: new Date(2026, 8, 14), presence: "PRESENT" }],
+    excuses: [{ id: "old", childId: "child", fromDate: new Date(2026, 8, 15), toDate: new Date(2026, 8, 15), dayPart: "MORNING", submittedAt: new Date(2026, 8, 1), lateApprovedAt: null }],
+    closedDays: [], today: new Date(2026, 8, 16),
+  });
+  expect(days.find(day => day.date === "2026-09-14")).toMatchObject({ status: "BEFORE_START" });
+  const partialDay = days.find(day => day.date === "2026-09-15");
+  expect(partialDay).toMatchObject({ status: "BEFORE_START" });
+  expect(partialDay?.absencePart).toBeUndefined();
+  expect(days.find(day => day.date === "2026-09-16")?.status).toBe("EXPECTED");
 });

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   childrenList: vi.fn(),
   childrenGet: vi.fn(),
   childrenUpdate: vi.fn(),
+  childrenCreate: vi.fn(),
   attendanceList: vi.fn(),
   noLunchDaysList: vi.fn(),
   excusesList: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock("@/lib/db", () => ({
       list: mocks.childrenList,
       get: mocks.childrenGet,
       update: mocks.childrenUpdate,
+      create: mocks.childrenCreate,
       count: vi.fn(),
     },
     attendance: { list: mocks.attendanceList },
@@ -61,6 +63,7 @@ vi.mock("@/lib/slack", () => ({
 import {
   createExtraFundPerson, updateExtraFundPerson, setExtraFundExpense,
   createDirectorExcuse,
+  createChild,
   exportAttendanceCSV,
   getDashboardStats,
   getExcuseChildren,
@@ -78,6 +81,7 @@ const AUG = (day: number, hour = 0, minute = 0) => new Date(2026, 7, day, hour, 
 
 const tobias = {
   id: "tobias",
+  attendanceStartDate: "2026-01-01",
   firstName: "Tobiáš",
   lastName: "Tornádo",
   doesNotTakeLunch: false,
@@ -357,6 +361,29 @@ describe("updateExcuse", () => {
   });
 });
 
+describe("createChild attendance start", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDbUser.mockResolvedValue({ id: "director-1", role: "DIRECTOR" });
+    mocks.childrenCreate.mockImplementation(({ data }) => Promise.resolve({ id: "new-child", ...data }));
+    mocks.auditLogsCreate.mockResolvedValue(undefined);
+  });
+  it("stores the chosen first attendance date", async () => {
+    await createChild("Anna", "Malá", "FEMALE", "2026-10-13");
+    expect(mocks.childrenCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ attendanceStartDate: "2026-10-13" }) });
+    expect(mocks.auditLogsCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ newValue: expect.objectContaining({ attendanceStartDate: "2026-10-13" }) }) });
+  });
+  it.each(["", "2026-02-29", "invalid"])("rejects invalid start %s before writing", async date => {
+    await expect(createChild("Anna", "Malá", "FEMALE", date)).rejects.toThrow("Neplatné datum nástupu");
+    expect(mocks.childrenCreate).not.toHaveBeenCalled();
+  });
+  it.each(["PARENT", "TEACHER"])("prevents %s from creating children", async role => {
+    mocks.getDbUser.mockResolvedValue({ id: "other", role });
+    await expect(createChild("Anna", "Malá", "FEMALE", "2026-10-13")).rejects.toThrow("Unauthorized");
+    expect(mocks.childrenCreate).not.toHaveBeenCalled();
+  });
+});
+
 describe("updateChild", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -371,6 +398,16 @@ describe("updateChild", () => {
     );
     mocks.excusesUpdate.mockResolvedValue(undefined);
     mocks.auditLogsCreate.mockResolvedValue(undefined);
+  });
+
+  it("updates the first attendance date", async () => {
+    await updateChild("tobias", { attendanceStartDate: "2026-10-13" });
+    expect(mocks.childrenUpdate).toHaveBeenCalledWith({ where: { id: "tobias" }, data: { attendanceStartDate: "2026-10-13" } });
+  });
+  it("rejects an impossible start date before any write", async () => {
+    await expect(updateChild("tobias", { attendanceStartDate: "2026-02-30" })).rejects.toThrow("Neplatné datum nástupu");
+    expect(mocks.childrenUpdate).not.toHaveBeenCalled();
+    expect(mocks.auditLogsCreate).not.toHaveBeenCalled();
   });
 
   it("stores the selected regular attendance weekdays", async () => {
@@ -513,7 +550,7 @@ describe("getExcuseChildren", () => {
     ]);
     expect(mocks.childrenList).toHaveBeenCalledWith({
       where: { active: true },
-      select: { id: true, firstName: true, lastName: true, attendanceDays: true },
+      select: { id: true, firstName: true, lastName: true, attendanceDays: true, attendanceStartDate: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
   });
@@ -527,6 +564,7 @@ describe("createDirectorExcuse", () => {
       id: "tobias",
       firstName: "Tobiáš",
       lastName: "Tornádo",
+      attendanceStartDate: "2026-01-01",
       active: true,
     });
     mocks.getSchoolDaysInRange.mockResolvedValue([AUG(19)]);
@@ -771,6 +809,24 @@ describe("attendance schedule reporting", () => {
       { childId: "tobias", date: AUG(19), presence: "ABSENT", child: { ...tobias, gender: "MALE", attendanceDays: [1, 2, 3] } },
       { childId: "tobias", date: AUG(20), presence: "ABSENT", child: { ...tobias, gender: "MALE", attendanceDays: [1, 2, 3] } },
     ]);
+  });
+
+  it("ignores stored attendance before the child's start in dashboard counts", async () => {
+    mocks.childrenList.mockResolvedValue([{ ...tobias, active: true, attendanceStartDate: "2026-08-20" }]);
+    mocks.attendanceList.mockResolvedValue([
+      { childId: "tobias", date: AUG(19), presence: "PRESENT" },
+      { childId: "tobias", date: AUG(20), presence: "PRESENT" },
+    ]);
+    expect((await getDashboardStats()).month).toMatchObject({ totalRecords: 1, presentCount: 1, absentCount: 0 });
+  });
+  it("omits stored attendance before a child's start from CSV", async () => {
+    mocks.attendanceList.mockResolvedValue([
+      { childId: "tobias", date: AUG(19), presence: "PRESENT", child: { ...tobias, attendanceStartDate: "2026-08-20" } },
+      { childId: "tobias", date: AUG(20), presence: "PRESENT", child: { ...tobias, attendanceStartDate: "2026-08-20" } },
+    ]);
+    const csv = await exportAttendanceCSV("2026-08-01", "2026-08-31");
+    expect(csv).not.toContain("19. 8. 2026");
+    expect(csv).toContain("20. 8. 2026");
   });
 
   it("does not put a timely day-off makeup into the dashboard's pending queue", async () => {

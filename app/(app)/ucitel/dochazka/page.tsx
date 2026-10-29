@@ -24,6 +24,7 @@ import { DayDetailsForm } from "@/components/days/day-details-form";
 import type { DayDetails } from "@/lib/day-details";
 import { formatDateWithWeekday } from "@/lib/utils";
 import { getPresenceLabel } from "@/lib/presence-label";
+import { hasStartedAttendance } from "@/lib/attendance-schedule";
 import type { ChildGender, ExcuseDayPart } from "@/lib/types";
 
 interface Child {
@@ -31,6 +32,7 @@ interface Child {
   firstName: string;
   lastName: string;
   gender: ChildGender | null;
+  attendanceStartDate?: string;
 }
 
 interface AttendanceRecord {
@@ -41,7 +43,7 @@ interface AttendanceRecord {
 const nativeSwitchAttribute = { switch: "" } as const;
 
 interface DailyExcuse {
-  kind?: "EXCUSE" | "MAKEUP" | "NOT_SCHEDULED";
+  kind?: "EXCUSE" | "MAKEUP" | "NOT_SCHEDULED" | "BEFORE_START";
   childId: string;
   state: "ON_TIME" | "LATE" | "LATE_APPROVED";
   lunchCancelled?: boolean;
@@ -152,6 +154,7 @@ export default function TeacherAttendancePage() {
         if (!isCurrentDate) return;
 
         const nextChildren = [...childrenData];
+        const selectedDay = new Date(`${selectedDate}T00:00:00`);
         const nextExcuses = Object.fromEntries(
           attendanceData.excuses.map((excuse) => [excuse.childId, excuse]),
         );
@@ -167,6 +170,7 @@ export default function TeacherAttendancePage() {
             .map((excuse) => excuse.childId),
         );
         childrenData.forEach((child) => {
+          if (!hasStartedAttendance(child, selectedDay)) return;
           const record = attendanceData.attendance.find(
             (a: AttendanceRecord) => a.childId === child.id
           );
@@ -176,8 +180,7 @@ export default function TeacherAttendancePage() {
         });
 
         const nextSavedAttendance =
-          nextChildren.length > 0 &&
-          nextChildren.every((child) =>
+          nextChildren.filter(child => hasStartedAttendance(child, selectedDay)).every((child) =>
             attendanceData.attendance.some((record) => record.childId === child.id),
           )
             ? nextAttendance
@@ -325,20 +328,23 @@ export default function TeacherAttendancePage() {
     }
   };
 
-  const needsSave =
+  const selectedDay = new Date(`${selectedDate}T00:00:00`);
+  const startedChildren = children.filter(child => hasStartedAttendance(child, selectedDay));
+  const startedChildIds = new Set(startedChildren.map(child => child.id));
+  const needsSave = startedChildren.length > 0 && (
     savedAttendance === null ||
-    children.some((child) => attendance[child.id] !== savedAttendance[child.id]);
+    startedChildren.some((child) => attendance[child.id] !== savedAttendance[child.id]));
   const saveLabel = !needsSave
     ? "Uloženo"
     : savedAttendance === null
       ? "Potvrdit docházku"
       : "Uložit změny";
-  const expectedMorning = children.filter((child) => {
+  const expectedMorning = startedChildren.filter((child) => {
     const dayPart = excuses[child.id]?.dayPart ?? "FULL_DAY";
     if (excuses[child.id]?.kind === "MAKEUP") return dayPart !== "AFTERNOON";
     return !excuses[child.id] || dayPart === "AFTERNOON";
   }).length;
-  const expectedAfternoon = children.filter((child) => {
+  const expectedAfternoon = startedChildren.filter((child) => {
     const dayPart = excuses[child.id]?.dayPart ?? "FULL_DAY";
     if (excuses[child.id]?.kind === "MAKEUP") return dayPart !== "MORNING";
     return !excuses[child.id] || dayPart === "MORNING";
@@ -540,11 +546,11 @@ export default function TeacherAttendancePage() {
                   <label
                     key={child.id}
                     className={`selection-control grid min-h-12 select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg border p-3 transition-[background-color,border-color,transform] ${
-                      isInFuture
+                      isInFuture || !startedChildIds.has(child.id)
                         ? "cursor-default"
                         : "cursor-pointer active:scale-[0.99]"
                     } ${
-                      attendance[child.id]
+                      !startedChildIds.has(child.id) ? "border-cream-dark bg-cream/50" : attendance[child.id]
                         ? "border-sage/20 bg-sage/5"
                         : "border-coral/20 bg-coral/5"
                     }`}
@@ -575,9 +581,9 @@ export default function TeacherAttendancePage() {
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
                       <span className={`whitespace-nowrap text-sm font-medium ${
-                        attendance[child.id] ? "text-sage" : "text-coral"
+                        !startedChildIds.has(child.id) ? "text-charcoal-light" : attendance[child.id] ? "text-sage" : "text-coral"
                       }`}>
-                        {getPresenceLabel(attendance[child.id], child.gender)}
+                        {startedChildIds.has(child.id) ? getPresenceLabel(attendance[child.id], child.gender) : "Před nástupem"}
                       </span>
                       {!isInFuture && (
                         <span className="relative shrink-0">
@@ -587,6 +593,7 @@ export default function TeacherAttendancePage() {
                             className="peer sr-only"
                             aria-label={`Docházka: ${child.firstName} ${child.lastName}`}
                             checked={attendance[child.id] || false}
+                            disabled={!startedChildIds.has(child.id)}
                             onChange={() => handleToggle(child.id)}
                           />
                           <span

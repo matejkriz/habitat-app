@@ -23,7 +23,7 @@ import {
   groupExcusesByChild,
   type ExcuseDayState,
 } from "@/lib/excuse-coverage";
-import { getChildDayPlan } from "@/lib/attendance-schedule";
+import { getChildDayPlan, hasStartedAttendance } from "@/lib/attendance-schedule";
 import { parseExcuseDate } from "@/lib/excuse-rules";
 import { revalidatePath } from "next/cache";
 
@@ -34,7 +34,7 @@ type AttendanceRecord = {
 };
 
 type DailyExcuse = {
-  readonly kind?: "EXCUSE" | "MAKEUP" | "NOT_SCHEDULED";
+  readonly kind?: "EXCUSE" | "MAKEUP" | "NOT_SCHEDULED" | "BEFORE_START";
   readonly childId: string;
   readonly state: ExcuseDayState;
   readonly lunchCancelled: boolean;
@@ -119,7 +119,7 @@ export const getAttendanceForDate = async (
   return {
     details,
     isClosed: false,
-    attendance: attendance.map((a) => ({
+    attendance: attendance.filter(a => hasStartedAttendance(childrenById.get(a.childId) ?? {}, date)).map((a) => ({
       childId: a.childId,
       presence: a.presence,
       excuseStatus: a.presence === Presence.ABSENT &&
@@ -131,6 +131,7 @@ export const getAttendanceForDate = async (
       const childExcuses = excusesByChild.get(childId) ?? [];
       const child = childrenById.get(childId);
       const plan = getChildDayPlan(child ?? {}, childExcuses, date);
+      if (plan.beforeStart) return [{ childId, kind: "BEFORE_START", dayPart: "FULL_DAY", state: "ON_TIME", lunchCancelled: true }];
       if (plan.notScheduled) return [{ childId, kind: "NOT_SCHEDULED", dayPart: "FULL_DAY", state: "ON_TIME", lunchCancelled: true }];
       if (plan.makeup && (plan.expectedMorning || plan.expectedAfternoon)) return [{
         childId, kind: "MAKEUP",
