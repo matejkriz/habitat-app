@@ -109,11 +109,24 @@ test("director assigns a child and only the linked family sees it", async ({
   await persona(page, "director-bohumil");
   await page.goto("/reditel/deti");
   await expect(page.getByRole("heading", { name: "Přidat nové dítě" })).toBeVisible();
-  await page.getByLabel("Jméno", { exact: true }).fill(firstName);
-  await page.getByLabel("Příjmení", { exact: true }).fill(lastName);
-  await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
-  await page.getByLabel("Datum nástupu", { exact: true }).fill(date);
+  await expect(page.getByLabel("Jméno", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Přidat dítě", exact: true }).click();
   await page.getByRole("button", { name: "Ulož dítě", exact: true }).click();
+  await expect(page.getByText("Vyplňte jméno dítěte.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Vyplňte příjmení dítěte.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Vyberte pohlaví dítěte.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Vyplňte datum nástupu.", { exact: true })).toBeVisible();
+  await page.getByLabel("Jméno", { exact: true }).fill(firstName);
+  await expect(page.getByText("Vyplňte jméno dítěte.", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Příjmení", { exact: true }).fill(lastName);
+  await expect(page.getByText("Vyplňte příjmení dítěte.", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
+  await expect(page.getByText("Vyberte pohlaví dítěte.", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Datum nástupu", { exact: true }).fill(date);
+  await expect(page.getByText("Vyplňte datum nástupu.", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Ulož dítě", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Přidat dítě", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Jméno", { exact: true })).toHaveCount(0);
   const child = page
     .locator("div.rounded-lg")
     .filter({

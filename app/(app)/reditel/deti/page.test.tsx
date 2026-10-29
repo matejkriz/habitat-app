@@ -37,15 +37,107 @@ describe("ChildrenManagementPage", () => {
       },
     ]);
     mocks.getAllParents.mockResolvedValue([]);
+    mocks.createChild.mockReset();
     mocks.updateChild.mockResolvedValue(undefined);
     mocks.inviteParentToChild.mockReset();
     mocks.inviteParentToChild.mockResolvedValue({ parent: invitedParent, emailSent: true });
+  });
+
+  it("opens the new-child fields without submitting and keeps the save action on the same button", async () => {
+    render(<ChildrenManagementPage />);
+    await screen.findByRole("button", { name: "Upravit Anna Malá" });
+    expect(screen.queryByLabelText("Jméno")).toBeNull();
+    expect(screen.queryByLabelText("Příjmení")).toBeNull();
+    expect(screen.queryByLabelText("Pohlaví")).toBeNull();
+    expect(screen.queryByLabelText("Datum nástupu")).toBeNull();
+
+    const addButton = screen.getByRole("button", { name: "Přidat dítě" });
+    fireEvent.click(addButton);
+
+    expect(screen.getByRole("button", { name: "Ulož dítě" })).toBe(addButton);
+    expect((screen.getByLabelText("Jméno") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Příjmení") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Pohlaví") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText("Datum nástupu") as HTMLInputElement).value).toBe("");
+    expect(screen.queryByText("Vyplňte jméno dítěte.")).toBeNull();
+    expect(mocks.createChild).not.toHaveBeenCalled();
+  });
+
+  it("shows all missing-field errors and clears each as its field is completed", async () => {
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Přidat dítě" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ulož dítě" }));
+
+    const fields = [
+      { label: "Jméno", value: "Eva", error: "Vyplňte jméno dítěte." },
+      { label: "Příjmení", value: "Nová", error: "Vyplňte příjmení dítěte." },
+      { label: "Pohlaví", value: "FEMALE", error: "Vyberte pohlaví dítěte." },
+      { label: "Datum nástupu", value: "2026-11-02", error: "Vyplňte datum nástupu." },
+    ];
+    for (const field of fields) {
+      expect(screen.getByText(field.error)).toBeTruthy();
+      const input = screen.getByLabelText(field.label);
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      const descriptionId = input.getAttribute("aria-describedby");
+      expect(descriptionId).toBeTruthy();
+      expect(document.getElementById(descriptionId!)?.textContent).toBe(field.error);
+    }
+    expect(mocks.createChild).not.toHaveBeenCalled();
+
+    for (const [index, field] of fields.entries()) {
+      fireEvent.change(screen.getByLabelText(field.label), { target: { value: field.value } });
+      expect(screen.queryByText(field.error)).toBeNull();
+      expect(screen.getByLabelText(field.label).getAttribute("aria-invalid")).not.toBe("true");
+      for (const remaining of fields.slice(index + 1)) {
+        expect(screen.getByText(remaining.error)).toBeTruthy();
+      }
+    }
+    expect(mocks.createChild).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: "Jméno", error: "Vyplňte jméno dítěte." },
+    { label: "Příjmení", error: "Vyplňte příjmení dítěte." },
+  ])("rejects a whitespace-only $label without calling the server", async ({ label, error }) => {
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Přidat dítě" }));
+    fireEvent.change(screen.getByLabelText("Jméno"), { target: { value: "Eva" } });
+    fireEvent.change(screen.getByLabelText("Příjmení"), { target: { value: "Nová" } });
+    fireEvent.change(screen.getByLabelText("Pohlaví"), { target: { value: "FEMALE" } });
+    fireEvent.change(screen.getByLabelText("Datum nástupu"), { target: { value: "2026-11-02" } });
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Ulož dítě" }));
+
+    expect(screen.getByText(error)).toBeTruthy();
+    expect(mocks.createChild).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "  " } });
+    expect(screen.getByText(error)).toBeTruthy();
+  });
+
+  it("preserves entered values and keeps the form open after a server error", async () => {
+    mocks.createChild.mockRejectedValueOnce(new Error("Dítě se nepodařilo uložit."));
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Přidat dítě" }));
+    fireEvent.change(screen.getByLabelText("Jméno"), { target: { value: "Eva" } });
+    fireEvent.change(screen.getByLabelText("Příjmení"), { target: { value: "Nová" } });
+    fireEvent.change(screen.getByLabelText("Pohlaví"), { target: { value: "FEMALE" } });
+    fireEvent.change(screen.getByLabelText("Datum nástupu"), { target: { value: "2026-11-02" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ulož dítě" }));
+
+    expect(await screen.findByText("Dítě se nepodařilo uložit.")).toBeTruthy();
+    expect((screen.getByLabelText("Jméno") as HTMLInputElement).value).toBe("Eva");
+    expect((screen.getByLabelText("Příjmení") as HTMLInputElement).value).toBe("Nová");
+    expect((screen.getByLabelText("Pohlaví") as HTMLSelectElement).value).toBe("FEMALE");
+    expect((screen.getByLabelText("Datum nástupu") as HTMLInputElement).value).toBe("2026-11-02");
+    expect((screen.getByRole("button", { name: "Ulož dítě" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(mocks.createChild).toHaveBeenCalledTimes(1);
   });
 
   it("submits the selected start date when adding a child", async () => {
     mocks.createChild.mockResolvedValue({ id: "eva", firstName: "Eva", lastName: "Nová", gender: "FEMALE", attendanceStartDate: "2026-11-02", active: true });
     render(<ChildrenManagementPage />);
     await screen.findByRole("button", { name: "Upravit Anna Malá" });
+    fireEvent.click(screen.getByRole("button", { name: "Přidat dítě" }));
     fireEvent.change(screen.getByLabelText("Jméno"), { target: { value: "Eva" } });
     fireEvent.change(screen.getByLabelText("Příjmení"), { target: { value: "Nová" } });
     fireEvent.change(screen.getByLabelText("Pohlaví"), { target: { value: "FEMALE" } });
@@ -53,11 +145,18 @@ describe("ChildrenManagementPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ulož dítě" }));
     await waitFor(() => expect(mocks.createChild).toHaveBeenCalledWith("Eva", "Nová", "FEMALE", "2026-11-02"));
     expect(await screen.findByText("Nástup: 2. 11. 2026")).toBeTruthy();
+    expect(screen.queryByLabelText("Jméno")).toBeNull();
+    expect(screen.queryByLabelText("Datum nástupu")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Přidat dítě" }));
+    expect((screen.getByLabelText("Jméno") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Příjmení") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Pohlaví") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText("Datum nástupu") as HTMLInputElement).value).toBe("");
   });
   it("allows the director to correct a child's start date", async () => {
     render(<ChildrenManagementPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Upravit Anna Malá" }));
-    fireEvent.change(screen.getAllByLabelText("Datum nástupu")[1], { target: { value: "2026-10-13" } });
+    fireEvent.change(screen.getByLabelText("Datum nástupu"), { target: { value: "2026-10-13" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit" }));
     await waitFor(() => expect(mocks.updateChild).toHaveBeenCalledWith("anna", expect.objectContaining({ attendanceStartDate: "2026-10-13" })));
     expect(await screen.findByText("Nástup: 13. 10. 2026")).toBeTruthy();
@@ -180,11 +279,12 @@ describe("ChildrenManagementPage", () => {
     });
     render(<ChildrenManagementPage />);
     await screen.findByText("Anna Malá");
+    fireEvent.click(screen.getByRole("button", { name: "Přidat dítě" }));
     fireEvent.change(screen.getByLabelText("Jméno"), { target: { value: "Eva" } });
     fireEvent.change(screen.getByLabelText("Příjmení"), { target: { value: "Nová" } });
     fireEvent.change(screen.getByLabelText("Pohlaví"), { target: { value: "FEMALE" } });
     fireEvent.change(screen.getByLabelText("Datum nástupu"), { target: { value: "2026-09-01" } });
-    fireEvent.click(screen.getByRole("button", { name: /^(?:Přidat dítě|Ulož dítě)$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Ulož dítě" }));
     fireEvent.click(await screen.findByRole("button", { name: "Pozvat rodiče Eva Nová" }));
     fireEvent.change(screen.getByLabelText("E-mail rodiče"), { target: { value: invitedParent.email } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat pozvánku" }));

@@ -18,6 +18,7 @@ test("trip fund persists individual charges and recalculates after attendance co
   const name = `${firstName} Testovací`;
   await persona(page, "director-bohumil");
   await page.goto("/reditel/deti");
+  await page.getByRole("button", { name: "Přidat dítě", exact: true }).click();
   await page.getByLabel("Jméno", { exact: true }).fill(firstName);
   await page.getByLabel("Příjmení", { exact: true }).fill("Testovací");
   await page.getByLabel("Pohlaví", { exact: true }).selectOption("FEMALE");
