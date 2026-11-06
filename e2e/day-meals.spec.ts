@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { persona } from "./helpers";
 
-const date = process.env.E2E_DATE!;
+const date = process.env.E2E_DATE ?? "2026-09-17";
 const month = date.slice(0, 7);
 const childId = "seed-child-zofie";
 const formattedDate = new Intl.DateTimeFormat("cs-CZ", {
