@@ -25,9 +25,9 @@ describe("create trip expense", () => {
 
   it("atomically adds a default and individual amounts while preserving day notes", async () => {
     const t = await setup();
-    await t.mutation(api.db.saveDayDetails, { secret, date, name: "Zoo", meal: "Kuře s rýží", report: "Poznámky", recordedById: "director" });
+    await t.mutation(api.db.saveDayDetails, { secret, date, name: "Zoo", meal: "Kuře s rýží", mealCount: 17, report: "Poznámky", recordedById: "director" });
     await t.mutation(api.db.createTripExpense, args);
-    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: "Zoo", meal: "Kuře s rýží", report: "Poznámky", expense: 120 });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: "Zoo", meal: "Kuře s rýží", mealCount: 17, report: "Poznámky", expense: 120 });
     const ledger = await t.query(api.db.getTripFundOverview, { secret });
     expect(ledger.days).toHaveLength(1);
     expect(ledger.children.map(child => child.amounts)).toEqual([[80], [120], [null]]);

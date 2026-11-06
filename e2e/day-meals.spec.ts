@@ -47,20 +47,30 @@ test("director meal edits reach both calendars and disappear when cleared", asyn
 
   await persona(page, "director-bohumil");
   await (await openMealEditor(page)).fill(meal);
+  await page.getByRole("spinbutton", { name: "Počet objednaných jídel", exact: true }).fill("17");
   await page.getByRole("button", { name: "Uložit podrobnosti", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Podrobnosti uloženy." })).toBeVisible();
   await page.reload();
   const directorMeal = page.getByRole("group", { name: "Jídlo", exact: true });
   await expect(directorMeal).toContainText(soup);
   await expect(directorMeal).toContainText(main);
+  await expect(directorMeal.getByLabel("Počet objednaných jídel: 17", { exact: true })).toBeVisible();
   await page.locator("summary").filter({ hasText: /^Podrobnosti$/ }).click();
   await expect(page.getByRole("textbox", { name: "Jídlo", exact: true })).toHaveValue(meal);
+  await expect(page.getByRole("spinbutton", { name: "Počet objednaných jídel", exact: true })).toHaveValue("17");
+  const directorDay = await openStaffCalendar(page);
+  await expect(directorDay.getByLabel("Počet objednaných jídel: 17", { exact: true })).toBeVisible();
+  await directorDay.click();
+  await expect(page.getByRole("dialog").getByRole("spinbutton", { name: "Počet objednaných jídel", exact: true })).toHaveValue("17");
+  await page.keyboard.press("Escape");
 
   await persona(page, "teacher-kveta");
   await page.goto(`/ucitel/dochazka?date=${date}`);
   const teacherMeal = page.getByRole("group", { name: "Jídlo", exact: true });
   await expect(teacherMeal).toContainText(soup);
   await expect(teacherMeal).toContainText(main);
+  await expect(page.getByRole("spinbutton", { name: "Počet objednaných jídel", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Počet objednaných jídel: 17", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Jídlo", exact: true })).toHaveCount(0);
   const day = await openStaffCalendar(page);
   await expect(day).toContainText(soup);
@@ -68,18 +78,23 @@ test("director meal edits reach both calendars and disappear when cleared", asyn
   const staffDialog = page.getByRole("dialog");
   await expect(staffDialog.getByRole("group", { name: "Jídlo", exact: true })).toContainText(main);
   await expect(staffDialog.getByRole("textbox", { name: "Jídlo", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Počet objednaných jídel: 17", { exact: true })).toHaveCount(0);
+  await expect(staffDialog.getByRole("spinbutton", { name: "Počet objednaných jídel", exact: true })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   await persona(page, "parent-roza");
   await page.goto(`/rodic?child=${childId}&month=${month}`);
   const mealButton = page.getByRole("button", { name: `Jídlo · ${formattedDate}`, exact: true });
   await expect(mealButton).toContainText(soup);
+  await expect(page.getByRole("spinbutton", { name: "Počet objednaných jídel", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Počet objednaných jídel: 17", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Jídlo", exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await mealButton.click();
   const parentDialog = page.getByRole("dialog");
   await expect(parentDialog.getByRole("group", { name: "Jídlo", exact: true })).toContainText(soup);
   await expect(parentDialog.getByRole("group", { name: "Jídlo", exact: true })).toContainText(main);
+  await expect(parentDialog.getByLabel("Počet objednaných jídel: 17", { exact: true })).toHaveCount(0);
   await parentDialog.getByRole("button", { name: "Zavřít", exact: true }).click();
   await expect(parentDialog).not.toBeVisible();
   await page.getByRole("button", {
@@ -89,6 +104,7 @@ test("director meal edits reach both calendars and disappear when cleared", asyn
 
   await persona(page, "director-bohumil");
   await (await openMealEditor(page)).fill("");
+  await page.getByRole("spinbutton", { name: "Počet objednaných jídel", exact: true }).fill("");
   await page.getByRole("button", { name: "Uložit podrobnosti", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Podrobnosti uloženy." })).toBeVisible();
   await page.reload();

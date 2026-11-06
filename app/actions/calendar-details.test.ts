@@ -10,7 +10,7 @@ vi.mock("@/lib/db", () => ({ db: {
 import { getAttendanceCalendarMonth } from "./calendar";
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.details.mockResolvedValue([{ date: new Date(2026, 8, 10).getTime(), name: "Jarmark", meal: "Kuře s rýží", expense: 100, report: "Soukromé poznámky" }]);
+  mocks.details.mockResolvedValue([{ date: new Date(2026, 8, 10).getTime(), name: "Jarmark", meal: "Kuře s rýží", mealCount: 17, expense: 100, report: "Soukromé poznámky" }]);
 });
 it.each(["TEACHER", "DIRECTOR"])("restricts calendar details for %s", async role => {
   mocks.user.mockResolvedValue({ role });
@@ -21,6 +21,13 @@ it.each(["TEACHER", "DIRECTOR"])("restricts calendar details for %s", async role
   expect(calendar.days.find(day => day.dateKey === "2026-09-11")?.meal).toBeNull();
   expect(day).not.toHaveProperty("report");
   expect(calendar.canManageDetails).toBe(role === "DIRECTOR");
-  if (role === "DIRECTOR") expect(day.expense).toBe(100);
-  else expect(day).not.toHaveProperty("expense");
+  if (role === "DIRECTOR") {
+    expect(day.expense).toBe(100);
+    expect(day.mealCount).toBe(17);
+    expect(calendar.days.find(day => day.dateKey === "2026-09-11")?.mealCount).toBeNull();
+  } else {
+    expect(day).not.toHaveProperty("expense");
+    expect(day).not.toHaveProperty("mealCount");
+    expect(calendar.days.every(day => !("mealCount" in day))).toBe(true);
+  }
 });

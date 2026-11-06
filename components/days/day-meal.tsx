@@ -1,11 +1,12 @@
 import { cn } from "@/lib/utils";
 
-export function DayMeal({ meal, compact = false, className }: {
+export function DayMeal({ meal, mealCount, compact = false, className }: {
   meal?: string | null;
+  mealCount?: number | null;
   compact?: boolean;
   className?: string;
 }) {
-  if (!meal?.trim()) return null;
+  if (!meal?.trim() && mealCount == null) return null;
 
   return (
     <span
@@ -31,7 +32,17 @@ export function DayMeal({ meal, compact = false, className }: {
       >
         <path d="M4 3v5a3 3 0 006 0V3M7 3v18M20 3c-3 0-5 3-5 7v3h5M20 3v18" />
       </svg>
-      <span className={cn("min-w-0 break-words", compact ? "line-clamp-2" : "whitespace-pre-wrap")}>{meal}</span>
+      <span className="min-w-0 flex-1">
+        {meal?.trim() && <span className={cn("block break-words", compact ? "line-clamp-2" : "whitespace-pre-wrap")}>{meal}</span>}
+        {mealCount != null && (
+          <span
+            aria-label={`Počet objednaných jídel: ${mealCount}`}
+            className={cn("inline-flex rounded-full bg-sage/15 px-2 py-0.5 text-[11px] font-semibold leading-4 text-sage-dark", meal?.trim() && "mt-1")}
+          >
+            {mealCount} {mealCount === 1 || (mealCount >= 2 && mealCount <= 4) ? "porce" : "porcí"}
+          </span>
+        )}
+      </span>
     </span>
   );
 }

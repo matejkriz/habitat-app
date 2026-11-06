@@ -6,6 +6,7 @@ export const DAY_REPORT_MAX_BYTES = 900 * 1024;
 export type DayDetails = {
   readonly name: string | null;
   readonly meal?: string | null;
+  readonly mealCount?: number | null;
   readonly expense?: number | null;
   readonly report?: string | null;
 };
@@ -13,6 +14,7 @@ export type DayDetails = {
 export type DayDetailsPatch = {
   name?: string | null;
   meal?: string | null;
+  mealCount?: number | null;
   expense?: number | null;
   report?: string | null;
 };
@@ -30,6 +32,9 @@ export function validateDayDetails(details: DayDetailsPatch): void {
   if (details.meal != null && (typeof details.meal !== "string" || details.meal.length > DAY_MEAL_MAX_LENGTH)) {
     throw new Error("Jídlo může mít nejvýše 2000 znaků");
   }
+  if (details.mealCount != null && (!Number.isSafeInteger(details.mealCount) || details.mealCount < 0)) {
+    throw new Error("Počet objednaných jídel musí být nezáporné celé číslo");
+  }
   if (details.expense != null) validateCrowns(details.expense);
   if (details.report != null && (typeof details.report !== "string" || new TextEncoder().encode(details.report).length > DAY_REPORT_MAX_BYTES)) {
     throw new Error("Report může mít nejvýše 900 KiB textu v UTF-8");
@@ -45,7 +50,7 @@ export function parseDayDate(dateKey: string): Date {
   return date;
 }
 
-export type DaySummary = { date: number; name: string | null; meal?: string | null; expense: number | null };
+export type DaySummary = { date: number; name: string | null; meal?: string | null; mealCount?: number | null; expense: number | null };
 export type TripFund = { childId: string; fundSent: number | null; fundSpent: number; fundBalance: number };
 export type ChildTripExpense = { childId: string; name: string; amount: number; override: number | null };
 

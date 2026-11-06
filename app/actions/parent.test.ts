@@ -479,7 +479,7 @@ describe("today's regular attendance plan", () => {
     mocks.childrenGet.mockResolvedValue({ id: "child-1", attendanceDays: [1, 3, 4] });
     mocks.attendanceGet.mockResolvedValue(null);
     mocks.getExcusesOverlapping.mockResolvedValue([]);
-    mocks.dayDetailsGet.mockResolvedValue({ name: "Les", meal: "Kuře s rýží", expense: 100, report: "Soukromé poznámky" });
+    mocks.dayDetailsGet.mockResolvedValue({ name: "Les", meal: "Kuře s rýží", mealCount: 17, expense: 100, report: "Soukromé poznámky" });
   });
   it("identifies a regular off day", async () => {
     await expect(getChildTodayStatus("child-1")).resolves.toMatchObject({ notScheduled: true, makeup: false });
@@ -495,6 +495,7 @@ describe("today's regular attendance plan", () => {
     expect(status.meal).toBe("Kuře s rýží");
     expect(status).not.toHaveProperty("expense");
     expect(status).not.toHaveProperty("report");
+    expect(status).not.toHaveProperty("mealCount");
     vi.useRealTimers();
   });
   it("does not read meals for an unrelated child", async () => {

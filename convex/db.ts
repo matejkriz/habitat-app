@@ -461,13 +461,14 @@ export const saveDayDetails = mutation({
     secret: v.string(), date: v.number(), recordedById: v.string(),
     name: v.optional(v.union(v.string(), v.null())),
     meal: v.optional(v.union(v.string(), v.null())),
+    mealCount: v.optional(v.union(v.number(), v.null())),
     expense: v.optional(v.union(v.number(), v.null())),
     report: v.optional(v.union(v.string(), v.null())),
   },
   returns: v.null(),
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
-    if (args.meal !== undefined) {
+    if (args.meal !== undefined || args.mealCount !== undefined) {
       const user = await db.query("users")
         .withIndex("by_app_id", query => query.eq("id", args.recordedById)).unique();
       if (user?.role !== "DIRECTOR") throw new Error("Unauthorized");
@@ -478,6 +479,7 @@ export const saveDayDetails = mutation({
     const patch = {
       ...(args.name === undefined ? {} : { name: args.name?.trim() || null }),
       ...(args.meal === undefined ? {} : { meal: args.meal?.trim() || null }),
+      ...(args.mealCount === undefined ? {} : { mealCount: args.mealCount }),
       ...(args.expense === undefined ? {} : { expense: args.expense }),
       recordedById: args.recordedById, updatedAt: Date.now(),
     };
@@ -496,7 +498,7 @@ export const saveDayDetails = mutation({
     await db.insert("auditLogs", {
       id: `day_${args.date}_${Date.now()}`, userId: args.recordedById, action: "UPDATE",
       entityType: "DayDetails", entityId: String(args.date),
-      previousValue: { name: current?.name ?? null, meal: current?.meal ?? null, expense: current?.expense ?? null },
+      previousValue: { name: current?.name ?? null, meal: current?.meal ?? null, mealCount: current?.mealCount ?? null, expense: current?.expense ?? null },
       newValue: { ...patch, reportChanged: args.report !== undefined }, createdAt: Date.now(),
     });
     return null;
@@ -511,7 +513,7 @@ export const getDayDetails = query({
     const report = args.includeReport
       ? await db.query("dayReports").withIndex("by_date", q => q.eq("date", args.date)).unique()
       : null;
-    return { name: day?.name ?? null, meal: day?.meal ?? null, expense: day?.expense ?? null,
+    return { name: day?.name ?? null, meal: day?.meal ?? null, mealCount: day?.mealCount ?? null, expense: day?.expense ?? null,
       ...(args.includeReport ? { report: report?.report ?? null } : {}) };
   },
 });
@@ -536,7 +538,7 @@ export const listDayDetails = query({
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
     const days = await db.query("dayDetails").withIndex("by_date", q => q.gte("date", args.from).lte("date", args.to)).collect();
-    return days.map(day => ({ date: day.date, name: day.name ?? null, meal: day.meal ?? null, expense: day.expense ?? null }));
+    return days.map(day => ({ date: day.date, name: day.name ?? null, meal: day.meal ?? null, mealCount: day.mealCount ?? null, expense: day.expense ?? null }));
   },
 });
 

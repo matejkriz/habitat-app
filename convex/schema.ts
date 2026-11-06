@@ -138,6 +138,7 @@ export default defineSchema({
     date: v.number(),
     name: v.optional(v.union(v.string(), v.null())),
     meal: v.optional(v.union(v.string(), v.null())),
+    mealCount: v.optional(v.union(v.number(), v.null())),
     expense: v.optional(v.union(v.number(), v.null())),
     recordedById: v.string(),
     updatedAt: v.number(),

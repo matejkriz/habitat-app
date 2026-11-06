@@ -6,6 +6,22 @@ import { DayDetailsForm } from "./day-details-form";
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 describe("day details editor", () => {
+  it("updates the number of ordered meals independently, accepts zero and clears it", async () => {
+    const onSaved = vi.fn();
+    render(<DayDetailsForm dateKey="2026-09-10" initialDetails={{ name: "Výlet", meal: "Rizoto", mealCount: 17 }} onSaved={onSaved} />);
+    const count = screen.getByLabelText("Počet objednaných jídel");
+    expect(count).toHaveProperty("value", "17");
+    fireEvent.change(count, { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit podrobnosti" }));
+    await waitFor(() => expect(save).toHaveBeenLastCalledWith("2026-09-10", { mealCount: 0 }));
+    expect(onSaved).toHaveBeenLastCalledWith({ name: "Výlet", meal: "Rizoto", mealCount: 0 });
+    expect(count).toHaveProperty("value", "0");
+    fireEvent.change(count, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit podrobnosti" }));
+    await waitFor(() => expect(save).toHaveBeenLastCalledWith("2026-09-10", { mealCount: null }));
+    expect(onSaved).toHaveBeenLastCalledWith({ name: "Výlet", meal: "Rizoto", mealCount: null });
+  });
+
   it("saves a multiline meal independently and clears it without changing other details", async () => {
     const onSaved = vi.fn();
     render(<DayDetailsForm dateKey="2026-09-10" initialDetails={{ name: "Výlet", expense: 120, report: "Report" }} showReport onSaved={onSaved} />);

@@ -428,7 +428,7 @@ export default function TeacherAttendancePage() {
             {formatDateWithWeekday(new Date(selectedDate))}
           </p>
           {!isLoading && details.name && <p className="whitespace-pre-wrap break-words text-lg font-semibold text-charcoal">{details.name}</p>}
-          {!isLoading && <DayMeal meal={details.meal} className="mt-3" />}
+          {!isLoading && <DayMeal meal={details.meal} mealCount={canManageLunch ? details.mealCount : undefined} className="mt-3" />}
         </CardHeader>
       </Card>
 

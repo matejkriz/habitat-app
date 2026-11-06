@@ -9,7 +9,7 @@ describe("day detail access", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.user.mockResolvedValue({ id: "director", role: "DIRECTOR" });
-    mocks.get.mockResolvedValue({ name: "Jarmark", meal: "Kuře s rýží", expense: 100, report: "Soukromé poznámky" });
+    mocks.get.mockResolvedValue({ name: "Jarmark", meal: "Kuře s rýží", mealCount: 17, expense: 100, report: "Soukromé poznámky" });
   });
   it("only sends the name and meal to teachers", async () => {
     mocks.user.mockResolvedValue({ role: "TEACHER" });
@@ -17,12 +17,13 @@ describe("day detail access", () => {
     expect(mocks.get).toHaveBeenCalledWith(new Date(2026, 8, 10), false);
   });
   it("sends all details to the director", async () => {
-    expect(await getDayDetailsForDate("2026-09-10")).toEqual({ name: "Jarmark", meal: "Kuře s rýží", expense: 100, report: "Soukromé poznámky" });
+    expect(await getDayDetailsForDate("2026-09-10")).toEqual({ name: "Jarmark", meal: "Kuře s rýží", mealCount: 17, expense: 100, report: "Soukromé poznámky" });
   });
   it.each(["TEACHER", "PARENT", null])("rejects writes by %s", async role => {
     mocks.user.mockResolvedValue(role ? { role } : null);
     await expect(saveDayDetails("2026-09-10", { name: "Změna" })).rejects.toThrow("Unauthorized");
     await expect(saveDayDetails("2026-09-10", { meal: "Rizoto" })).rejects.toThrow("Unauthorized");
+    await expect(saveDayDetails("2026-09-10", { mealCount: 0 })).rejects.toThrow("Unauthorized");
     await expect(createTripExpense("2026-09-10", 100, [])).rejects.toThrow("Unauthorized");
     expect(mocks.createExpense).not.toHaveBeenCalled();
     expect(mocks.save).not.toHaveBeenCalled();
@@ -47,6 +48,16 @@ describe("day detail access", () => {
     expect(mocks.save).toHaveBeenLastCalledWith(new Date(2026, 8, 10), { meal: "Polévka\nRizoto" }, "director");
     await saveDayDetails("2026-09-10", { meal: " \n " });
     expect(mocks.save).toHaveBeenLastCalledWith(new Date(2026, 8, 10), { meal: null }, "director");
+  });
+  it("accepts zero and null counts while rejecting invalid counts before saving", async () => {
+    for (const mealCount of [-1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, "17"]) {
+      await expect(saveDayDetails("2026-09-10", { mealCount } as never)).rejects.toThrow();
+    }
+    expect(mocks.save).not.toHaveBeenCalled();
+    await saveDayDetails("2026-09-10", { mealCount: 0 });
+    expect(mocks.save).toHaveBeenLastCalledWith(new Date(2026, 8, 10), { mealCount: 0 }, "director");
+    await saveDayDetails("2026-09-10", { mealCount: null });
+    expect(mocks.save).toHaveBeenLastCalledWith(new Date(2026, 8, 10), { mealCount: null }, "director");
   });
   it.each(["TEACHER", "PARENT", null])("hides individual expenses from %s", async role => {
     mocks.user.mockResolvedValue(role ? { role } : null);

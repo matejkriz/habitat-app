@@ -21,6 +21,7 @@ export async function saveDayDetails(dateKey: string, details: DayDetailsPatch):
   await db.dayDetails.save(date, {
     ...(details.name === undefined ? {} : { name: details.name }),
     ...(details.meal === undefined ? {} : { meal: details.meal?.trim() || null }),
+    ...(details.mealCount === undefined ? {} : { mealCount: details.mealCount }),
     ...(details.expense === undefined ? {} : { expense: details.expense }),
     ...(details.report === undefined ? {} : { report: details.report }),
   }, user.id);

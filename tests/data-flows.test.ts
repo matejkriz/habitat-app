@@ -49,7 +49,8 @@ import {
 } from "../app/actions/director";
 import { getParentLunchOverview } from "../app/actions/parent-overviews";
 import { db } from "../lib/db";
-import { getDayReports, saveDayReport } from "../app/actions/day-details";
+import { getDayReports, saveDayReport, getDayDetailsForDate, saveDayDetails } from "../app/actions/day-details";
+import { getAttendanceCalendarMonth } from "../app/actions/calendar";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const createTest = () => convexTest(schema, modules);
@@ -140,6 +141,35 @@ it("lets a teacher publish a report but rejects a parent's write without changin
   ]);
   await expect(saveDayReport(day, "Přepsáno rodičem")).rejects.toThrow("Unauthorized");
   expect(await getDayReports()).toEqual(published);
+});
+
+it("keeps ordered meal counts private through actions, adapter and Convex", async () => {
+  transport.user = { id: "director", role: "DIRECTOR" };
+  await saveDayDetails(day, { meal: "Rizoto", mealCount: 17 });
+  expect((await getDayDetailsForDate(day)).mealCount).toBe(17);
+  expect((await getAttendanceCalendarMonth("2026-09")).days.find(item => item.dateKey === day)?.mealCount).toBe(17);
+
+  transport.user = { id: "teacher", role: "TEACHER" };
+  const teacher = await getAttendanceForDate(day);
+  expect(teacher.details.meal).toBe("Rizoto");
+  expect(teacher.details).not.toHaveProperty("mealCount");
+  expect((await getAttendanceCalendarMonth("2026-09")).days.every(item => !("mealCount" in item))).toBe(true);
+  await saveDayReport(day, "Učitelský report");
+  await expect(saveDayDetails(day, { mealCount: 0 })).rejects.toThrow("Unauthorized");
+
+  transport.user = { id: "parent", role: "PARENT" };
+  const parentDays = await getChildCalendarMonth("a", "2026-09");
+  expect(parentDays.find(item => item.date === day)?.meal).toBe("Rizoto");
+  expect(parentDays.every(item => !("mealCount" in item))).toBe(true);
+  expect(await getChildTodayStatus("a")).not.toHaveProperty("mealCount");
+  await expect(saveDayDetails(day, { mealCount: null })).rejects.toThrow("Unauthorized");
+
+  transport.user = { id: "director", role: "DIRECTOR" };
+  expect((await getDayDetailsForDate(day)).mealCount).toBe(17);
+  await saveDayDetails(day, { mealCount: 0 });
+  expect((await getDayDetailsForDate(day)).mealCount).toBe(0);
+  await saveDayDetails(day, { mealCount: null });
+  expect((await getDayDetailsForDate(day)).mealCount).toBeNull();
 });
 
 describe("attendance through actions, adapter and Convex", () => {

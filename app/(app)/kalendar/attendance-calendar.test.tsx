@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -210,6 +211,28 @@ describe("AttendanceCalendar planning count", () => {
 });
 
 describe("AttendanceCalendar day preview", () => {
+  it.each([true, false])("only displays the ordered meal count for the director (canManageDetails=%s)", async canManageDetails => {
+    const days = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3), children, attendance: [], excuses: [], closedDays: [], noLunchDays: [] });
+    render(<AttendanceCalendar startMonthKey={null} initialMonth={{ monthKey: "2026-08", totalChildren: 2, canManageDetails, days: days.map(day => ({ ...day, meal: day.dateKey === "2026-08-04" ? "Rizoto" : null, mealCount: day.dateKey === "2026-08-04" ? 17 : null })) }} />);
+    const day = getTomorrowButton();
+    expect(within(day).queryByLabelText("Počet objednaných jídel: 17") !== null).toBe(canManageDetails);
+    expect(day.getAttribute("aria-label")!.includes("objednaných jídel: 17")).toBe(canManageDetails);
+    await act(async () => { fireEvent.click(day); });
+    const detail = screen.getByRole("dialog");
+    if (canManageDetails) {
+      expect(within(detail).getByLabelText("Počet objednaných jídel")).toHaveProperty("value", "17");
+    } else {
+      expect(within(detail).queryByLabelText(/Počet objednaných jídel/)).toBeNull();
+    }
+  });
+
+  it("shows a director's zero count without meal text and hides the absent count", () => {
+    const days = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3), children, attendance: [], excuses: [], closedDays: [], noLunchDays: [] });
+    render(<AttendanceCalendar startMonthKey={null} initialMonth={{ monthKey: "2026-08", totalChildren: 2, canManageDetails: true, days: days.map(day => ({ ...day, mealCount: day.dateKey === "2026-08-04" ? 0 : null })) }} />);
+    expect(within(getTomorrowButton()).getByLabelText("Počet objednaných jídel: 0").textContent).toBe("0 porcí");
+    expect(within(getTodayButton()).queryByRole("group", { name: "Jídlo" })).toBeNull();
+  });
+
   it("shows meals in the grid and the full teacher detail without an editor", () => {
     const meal = "Zeleninová polévka\nPečené kuře s bramborovou kaší";
     const days = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3), children, attendance: [], excuses: [], closedDays: [], noLunchDays: [] });
