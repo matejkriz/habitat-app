@@ -13,6 +13,7 @@ import {
 } from "@/lib/types";
 import type { DaySummary } from "@/lib/day-details";
 import { toLocalDateKey } from "@/lib/school-calendar";
+import { toDayDateKey } from "@/lib/day-date";
 
 export type AttendanceCalendarMonth = {
   readonly monthKey: string;
@@ -90,7 +91,7 @@ export async function getAttendanceCalendarMonth(
     }) as Promise<ReadonlyArray<NoLunchDay>>,
   ]);
 
-  const detailsByDate = new Map(dayDetails.map(day => [day.date, day]));
+  const detailsByDate = new Map(dayDetails.map(day => [toDayDateKey(day.date), day]));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -107,7 +108,7 @@ export async function getAttendanceCalendarMonth(
       closedDays,
       noLunchDays,
     }).map(day => {
-      const details = detailsByDate.get(new Date(`${day.dateKey}T00:00:00`).getTime());
+      const details = detailsByDate.get(day.dateKey);
       return { ...day, name: details?.name ?? null, meal: details?.meal ?? null,
         ...(user.role === UserRole.DIRECTOR ? { expense: details?.expense ?? null, mealCount: details?.mealCount ?? null } : {}) };
     }),

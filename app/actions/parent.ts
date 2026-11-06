@@ -2,6 +2,7 @@
 
 import { getAttendanceDays, getAttendanceDateDisabledReason, getAttendanceStartDate, getChildDayPlan, hasPartialAttendance, hasStartedAttendance, isRegularAttendanceDay } from "@/lib/attendance-schedule";
 import type { DaySummary } from "@/lib/day-details";
+import { toDayDateKey } from "@/lib/day-date";
 import { randomUUID } from "node:crypto";
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -333,7 +334,7 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
-  const detailsByDate = new Map(dayDetails.map(day => [day.date, day]));
+  const detailsByDate = new Map(dayDetails.map(day => [toDayDateKey(day.date), day]));
   return buildParentCalendarMonth({
     month: monthStart,
     attendanceDays: child?.attendanceDays,
@@ -342,7 +343,7 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     excuses,
     closedDays: closedDays.map((day) => day.date),
   }).map(day => {
-    const details = detailsByDate.get(new Date(monthStart.getFullYear(), monthStart.getMonth(), day.dayNumber).getTime());
+    const details = detailsByDate.get(day.date);
     return { ...day, name: details?.name ?? null, meal: details?.meal ?? null };
   });
 };
