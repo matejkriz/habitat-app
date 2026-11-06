@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -40,6 +40,8 @@ describe("AttendanceCalendar", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.resetAllMocks();
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
   });
 
   afterEach(() => {
@@ -50,6 +52,55 @@ describe("AttendanceCalendar", () => {
     render(<AttendanceCalendar childId="child-1" childName="Žofie" childGender="FEMALE" month="2026-08" days={[{ date: "2026-08-25", dayNumber: 25, status: "NOT_SCHEDULED", isToday: false }]} />);
     fireEvent.click(screen.getByRole("button", { name: /Nechodí, zadat náhradu/ }));
     expect(mocks.push).toHaveBeenCalledWith("/rodic/omluvenka?child=child-1&date=2026-08-25&kind=MAKEUP");
+  });
+
+  it("does not add meal controls or placeholders to days without a meal", () => {
+    render(<AttendanceCalendar childId="child-1" childName="Žofie" childGender="FEMALE" month="2026-08" days={[
+      { ...days[0], meal: null },
+      { ...days[1], meal: "  \n " },
+    ]} />);
+
+    expect(screen.queryByRole("button", { name: /^Jídlo/ })).toBeNull();
+    expect(screen.queryByLabelText("Jídlo")).toBeNull();
+    expect(document.body.textContent).not.toContain("Neobjednáno");
+  });
+
+  it("opens the full meal separately and preserves the day excuse shortcut", () => {
+    const meal = `Zeleninová polévka\n${"Dušená zelenina s bramborami a bylinkami. ".repeat(12)}`;
+    render(<AttendanceCalendar childId="child-1" childName="Žofie" childGender="FEMALE" month="2026-08" days={[
+      { ...days[0], meal },
+    ]} />);
+
+    const mealButton = screen.getByRole("button", { name: /^Jídlo · pondělí 24. srpna$/i });
+    expect(mealButton.parentElement?.closest("button")).toBeNull();
+    mealButton.focus();
+    fireEvent.click(mealButton);
+
+    const dialog = screen.getByRole("dialog", { name: /pondělí 24. srpna/i });
+    expect(within(dialog).getByText("Výlet do lesa")).toBeTruthy();
+    expect(within(dialog).getByLabelText("Jídlo").textContent).toContain(meal.trim());
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Zavřít" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(mealButton);
+    fireEvent.click(screen.getByRole("button", { name: /pondělí 24. srpna.*zadat omluvenku/i }));
+    expect(mocks.push).toHaveBeenCalledWith("/rodic/omluvenka?child=child-1&date=2026-08-24");
+  });
+
+  it("keeps meal details available on closed days without enabling an excuse", () => {
+    render(<AttendanceCalendar childId="child-1" childName="Žofie" childGender="FEMALE" month="2026-08" days={[
+      { date: "2026-08-30", dayNumber: 30, status: "CLOSED", isToday: false, meal: "Zeleninové rizoto" },
+    ]} />);
+
+    const day = screen.getByRole("button", { name: /neděle 30. srpna, volno/i });
+    expect((day as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /^Jídlo ·/ }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Zeleninové rizoto")).toBeTruthy();
+    fireEvent(dialog, new Event("cancel", { cancelable: true }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it("adds a period to the day number", () => {

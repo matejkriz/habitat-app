@@ -6,6 +6,21 @@ import { DayDetailsForm } from "./day-details-form";
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 describe("day details editor", () => {
+  it("saves a multiline meal independently and clears it without changing other details", async () => {
+    const onSaved = vi.fn();
+    render(<DayDetailsForm dateKey="2026-09-10" initialDetails={{ name: "Výlet", expense: 120, report: "Report" }} showReport onSaved={onSaved} />);
+    const meal = screen.getByLabelText("Jídlo");
+    fireEvent.change(meal, { target: { value: "  Zeleninová polévka\nRizoto se sýrem  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit podrobnosti" }));
+    await waitFor(() => expect(save).toHaveBeenLastCalledWith("2026-09-10", { meal: "Zeleninová polévka\nRizoto se sýrem" }));
+    expect(onSaved).toHaveBeenLastCalledWith({ name: "Výlet", expense: 120, report: "Report", meal: "Zeleninová polévka\nRizoto se sýrem" });
+    expect(meal).toHaveProperty("value", "Zeleninová polévka\nRizoto se sýrem");
+    fireEvent.change(meal, { target: { value: " \n " } });
+    fireEvent.click(screen.getByRole("button", { name: "Uložit podrobnosti" }));
+    await waitFor(() => expect(save).toHaveBeenLastCalledWith("2026-09-10", { meal: null }));
+    expect(onSaved).toHaveBeenLastCalledWith({ name: "Výlet", expense: 120, report: "Report", meal: null });
+  });
+
   it("saves a name, whole crown amount and multiline report", async () => {
     const onSaved = vi.fn();
     render(<DayDetailsForm dateKey="2026-09-10" initialDetails={{ name: null, expense: null, report: null }} showReport onSaved={onSaved} />);

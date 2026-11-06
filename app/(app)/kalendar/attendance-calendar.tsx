@@ -10,6 +10,7 @@ import type { AttendanceCalendarDay, CalendarChildDetail } from "@/lib/attendanc
 import { TripExpenses } from "@/components/days/trip-expenses";
 import { ReportDialog } from "@/components/days/report-dialog";
 import { DayDetailsForm } from "@/components/days/day-details-form";
+import { DayMeal } from "@/components/days/day-meal";
 import type { DayDetails } from "@/lib/day-details";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui";
@@ -121,7 +122,7 @@ function CalendarDayButton({
   return (
     <button
       type="button"
-      aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}${accessibleLunchStatus}${day.name ? `, ${day.name}` : ""}`}
+      aria-label={`${formatLongDate(day.dateKey)}, ${accessibleStatus}${accessibleLunchStatus}${day.name ? `, ${day.name}` : ""}${day.meal ? `, jídlo: ${day.meal}` : ""}`}
       disabled={disabled}
       onClick={onOpen}
       onPointerEnter={(event) => event.pointerType === "mouse" && onHoverStart(event)}
@@ -213,6 +214,7 @@ function CalendarDayButton({
       <span className="mt-auto block w-full truncate pt-2 text-[11px] font-semibold leading-4 text-charcoal sm:text-xs" title={day.name ?? undefined}>
         {day.name || "\u00a0"}
       </span>
+      <DayMeal meal={day.meal} compact className="mt-1" />
     </button>
   );
 }
@@ -290,6 +292,7 @@ function DayHoverPreview({
         </p>
       </div>
 
+      <DayMeal meal={day.meal} compact className="mx-4 mt-3" />
       {day.isClosed ? (
         <div className="px-4 py-4">
           <p className="text-sm font-bold text-charcoal">Habitat má zavřeno</p>
@@ -427,9 +430,10 @@ function DayDetailModal({ day, onClose, canManageDetails, onSaved, onAddReport }
 
         <div className="overflow-y-auto px-5 py-5 sm:px-6">
           {day.name && <p className="mb-5 whitespace-pre-wrap break-words text-lg font-bold text-charcoal">{day.name}</p>}
+          {!canManageDetails && <DayMeal meal={day.meal} className="mb-5" />}
           {canManageDetails && (
             <div className="mb-5 rounded-xl border border-cream-dark bg-cream/30 p-4">
-              <DayDetailsForm dateKey={day.dateKey} initialDetails={{ name: day.name ?? null, expense: day.expense ?? null }} onSaved={onSaved} />
+              <DayDetailsForm dateKey={day.dateKey} initialDetails={{ name: day.name ?? null, meal: day.meal ?? null, expense: day.expense ?? null }} onSaved={onSaved} />
               <TripExpenses dateKey={day.dateKey} defaultExpense={day.expense ?? null} />
             </div>
           )}
@@ -585,6 +589,7 @@ export function AttendanceCalendar({
           <div className="col-span-4 mb-1 sm:col-span-1 sm:mb-0">
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-gold-dark">Dnes</p>
             <p className="mt-0.5 font-bold capitalize text-charcoal">{formatLongDate(today.dateKey)}</p>
+            <DayMeal meal={today.meal} compact className="mt-2" />
           </div>
           {today.isClosed ? (
             <div className="col-span-4">

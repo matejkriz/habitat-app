@@ -10,6 +10,7 @@ const args = { secret, date, expense: 120, overrides: [{ childId: "anna", amount
 async function setup() {
   const t = convexTest(schema, modules);
   await t.run(async ({ db }) => {
+    await db.insert("users", { id: "director", role: "DIRECTOR", createdAt: date, updatedAt: date });
     for (const id of ["anna", "eva", "absent"]) {
       await db.insert("children", { id, firstName: id, lastName: "Test", active: true, fundSent: 500, createdAt: date, updatedAt: date });
       await db.insert("attendance", { id, childId: id, date, presence: id === "absent" ? "ABSENT" : "PRESENT", createdAt: date, updatedAt: date });
@@ -24,9 +25,9 @@ describe("create trip expense", () => {
 
   it("atomically adds a default and individual amounts while preserving day notes", async () => {
     const t = await setup();
-    await t.mutation(api.db.saveDayDetails, { secret, date, name: "Zoo", report: "Poznámky", recordedById: "director" });
+    await t.mutation(api.db.saveDayDetails, { secret, date, name: "Zoo", meal: "Kuře s rýží", report: "Poznámky", recordedById: "director" });
     await t.mutation(api.db.createTripExpense, args);
-    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: "Zoo", report: "Poznámky", expense: 120 });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: "Zoo", meal: "Kuře s rýží", report: "Poznámky", expense: 120 });
     const ledger = await t.query(api.db.getTripFundOverview, { secret });
     expect(ledger.days).toHaveLength(1);
     expect(ledger.children.map(child => child.amounts)).toEqual([[80], [120], [null]]);

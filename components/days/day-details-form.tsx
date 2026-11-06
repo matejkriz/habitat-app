@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Button, Input, Textarea } from "@/components/ui";
 import { saveDayDetails } from "@/app/actions/day-details";
-import { DAY_NAME_MAX_LENGTH, validateDayDetails, type DayDetails, type DayDetailsPatch } from "@/lib/day-details";
+import { DAY_MEAL_MAX_LENGTH, DAY_NAME_MAX_LENGTH, validateDayDetails, type DayDetails, type DayDetailsPatch } from "@/lib/day-details";
 
 export function DayDetailsForm({ dateKey, initialDetails, showReport = false, onSaved, children }: {
   dateKey: string;
@@ -14,12 +14,13 @@ export function DayDetailsForm({ dateKey, initialDetails, showReport = false, on
 }) {
   const [saved, setSaved] = useState(initialDetails);
   const [name, setName] = useState(initialDetails.name ?? "");
+  const [meal, setMeal] = useState(initialDetails.meal ?? "");
   const [expense, setExpense] = useState(initialDetails.expense?.toString() ?? "");
   const [report, setReport] = useState(initialDetails.report ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const dirty = name !== (saved.name ?? "") || expense !== (saved.expense?.toString() ?? "") || (showReport && report !== (saved.report ?? ""));
+  const dirty = name !== (saved.name ?? "") || meal !== (saved.meal ?? "") || expense !== (saved.expense?.toString() ?? "") || (showReport && report !== (saved.report ?? ""));
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -28,6 +29,7 @@ export function DayDetailsForm({ dateKey, initialDetails, showReport = false, on
     setSuccess(false);
     const patch: DayDetailsPatch = {
       ...(name === (saved.name ?? "") ? {} : { name: name.trim() || null }),
+      ...(meal === (saved.meal ?? "") ? {} : { meal: meal.trim() || null }),
       ...(expense === (saved.expense?.toString() ?? "") ? {} : { expense: expense === "" ? null : Number(expense) }),
       ...(!showReport || report === (saved.report ?? "") ? {} : { report: report || null }),
     };
@@ -38,6 +40,7 @@ export function DayDetailsForm({ dateKey, initialDetails, showReport = false, on
       const next = { ...saved, ...patch };
       setSaved(next);
       setName(next.name ?? "");
+      setMeal(next.meal ?? "");
       setExpense(next.expense?.toString() ?? "");
       setSuccess(true);
       onSaved(next);
@@ -52,6 +55,7 @@ export function DayDetailsForm({ dateKey, initialDetails, showReport = false, on
     <form onSubmit={handleSubmit} className="space-y-4">
       <fieldset disabled={isSaving} className="min-w-0 space-y-4">
         <Textarea label="Jméno dne" value={name} onChange={event => setName(event.target.value)} maxLength={DAY_NAME_MAX_LENGTH} rows={2} className="min-h-20" placeholder="Např. Jarmark nebo výlet na Karlštejn" />
+        <Textarea label="Jídlo" value={meal} onChange={event => setMeal(event.target.value)} maxLength={DAY_MEAL_MAX_LENGTH} rows={3} />
         <Input label="Útrata na dítě (Kč)" type="number" inputMode="numeric" min={0} step={1} value={expense} onChange={event => setExpense(event.target.value)} placeholder="Nezadáno" hint="Odečte se z fondu každého dítěte s uloženou přítomností v tento den." />
         {showReport && <Textarea label="Report" value={report} onChange={event => setReport(event.target.value)} rows={8} placeholder="Poznámky k průběhu dne…" />}
       </fieldset>

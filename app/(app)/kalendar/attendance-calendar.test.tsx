@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { getAttendanceCalendarMonth } from "@/app/actions/calendar";
+import { saveDayDetails } from "@/app/actions/day-details";
 import { AttendanceCalendar } from "./attendance-calendar";
 
 const children = [
@@ -209,6 +210,32 @@ describe("AttendanceCalendar planning count", () => {
 });
 
 describe("AttendanceCalendar day preview", () => {
+  it("shows meals in the grid and the full teacher detail without an editor", () => {
+    const meal = "Zeleninová polévka\nPečené kuře s bramborovou kaší";
+    const days = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3), children, attendance: [], excuses: [], closedDays: [], noLunchDays: [] });
+    render(<AttendanceCalendar startMonthKey={null} initialMonth={{ monthKey: "2026-08", totalChildren: 2, days: days.map(day => ({ ...day, meal: day.dateKey === "2026-08-04" ? meal : null })) }} />);
+    const day = screen.getAllByRole("button", { name: /úterý 4\. srpna 2026.*jídlo:/ })[0];
+    expect(within(day).getByRole("group", { name: "Jídlo" }).textContent).toContain(meal);
+    expect(within(getTodayButton()).queryByRole("group", { name: "Jídlo" })).toBeNull();
+    fireEvent.click(day);
+    const detail = screen.getByRole("dialog");
+    expect(within(detail).getByRole("group", { name: "Jídlo" }).textContent).toContain(meal);
+    expect(within(detail).queryByLabelText("Jídlo")).not.toBeInstanceOf(HTMLTextAreaElement);
+  });
+
+  it("lets the director edit a meal from the selected day", async () => {
+    const days = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3), children, attendance: [], excuses: [], closedDays: [], noLunchDays: [] });
+    render(<AttendanceCalendar startMonthKey={null} initialMonth={{ monthKey: "2026-08", totalChildren: 2, canManageDetails: true, days }} />);
+    fireEvent.click(getTomorrowButton());
+    const detail = screen.getByRole("dialog");
+    fireEvent.change(within(detail).getByLabelText("Jídlo"), { target: { value: "Dýňová polévka\nRizoto" } });
+    fireEvent.click(within(detail).getByRole("button", { name: "Uložit podrobnosti" }));
+    await screen.findByRole("status");
+    expect(saveDayDetails).toHaveBeenLastCalledWith("2026-08-04", { meal: "Dýňová polévka\nRizoto" });
+    fireEvent.click(within(detail).getByRole("button", { name: "Zavřít přehled dne" }));
+    expect(within(getTomorrowButton()).getByRole("group", { name: "Jídlo" }).textContent).toContain("Rizoto");
+  });
+
   it("shows separate morning and afternoon planning counts", () => {
     renderPartialDayCalendar();
 

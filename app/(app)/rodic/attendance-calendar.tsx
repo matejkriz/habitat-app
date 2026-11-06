@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
+import { DayMeal } from "@/components/days/day-meal";
+import { FundDialog } from "@/components/overview/fund-dialog";
 import type { ParentCalendarDay, ParentCalendarStatus } from "@/lib/parent-calendar";
 import type { ChildGender } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -115,6 +117,7 @@ function fullDateLabel(dateKey: string): string {
 export function AttendanceCalendar({ childId, childName, childGender, month, days }: AttendanceCalendarProps) {
   const router = useRouter();
   const [isNavigating, startNavigation] = useTransition();
+  const [mealDay, setMealDay] = useState<ParentCalendarDay | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggered = useRef(false);
   const statusDetails = getStatusDetails(childGender);
@@ -222,47 +225,66 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
             const disabled = day.status === "CLOSED" || day.status === "BEFORE_START";
             const weekdayIndex = (leadingEmptyDays + day.dayNumber - 1) % 7;
             return (
-              <button
+              <div
                 key={day.date}
-                type="button"
-                disabled={disabled || isNavigating}
-                onClick={() => {
-                  if (longPressTriggered.current) {
-                    longPressTriggered.current = false;
-                    return;
-                  }
-                  openExcuse(day.date);
-                }}
-                onPointerDown={() => {
-                  if (!disabled && !isNavigating) startLongPress(day.date);
-                }}
-                onPointerUp={cancelLongPress}
-                onPointerLeave={cancelLongPress}
-                onPointerCancel={cancelLongPress}
-                onContextMenu={(event) => event.preventDefault()}
-                aria-label={`${fullDateLabel(day.date)}${day.name ? `, ${day.name}` : ""}, ${details.label}${disabled ? "" : day.status === "NOT_SCHEDULED" ? ", zadat náhradu" : ", zadat omluvenku"}`}
-                className={cn(
-                  "relative flex h-24 min-w-0 overflow-hidden touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:h-28 sm:items-stretch sm:p-2.5",
-                  details.className,
-                  weekdayIndex >= 4 && "hidden sm:flex",
-                  disabled && "cursor-default active:scale-100",
-                  day.isToday && "ring-2 ring-gold ring-offset-2",
-                )}
+                className={cn("min-w-0", weekdayIndex >= 4 && "hidden sm:block")}
               >
-                <span className="shrink-0 text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
-                <span
-                  title={day.name ?? undefined}
-                  className="my-1 line-clamp-2 h-8 w-full shrink-0 break-words text-center text-[11px] font-semibold leading-4 sm:text-left sm:text-xs sm:leading-4"
+                <button
+                  type="button"
+                  disabled={disabled || isNavigating}
+                  onClick={() => {
+                    if (longPressTriggered.current) {
+                      longPressTriggered.current = false;
+                      return;
+                    }
+                    openExcuse(day.date);
+                  }}
+                  onPointerDown={() => {
+                    if (!disabled && !isNavigating) startLongPress(day.date);
+                  }}
+                  onPointerUp={cancelLongPress}
+                  onPointerLeave={cancelLongPress}
+                  onPointerCancel={cancelLongPress}
+                  onContextMenu={(event) => event.preventDefault()}
+                  aria-label={`${fullDateLabel(day.date)}${day.name ? `, ${day.name}` : ""}, ${details.label}${disabled ? "" : day.status === "NOT_SCHEDULED" ? ", zadat náhradu" : ", zadat omluvenku"}`}
+                  className={cn(
+                    "relative flex h-24 w-full min-w-0 overflow-hidden touch-manipulation select-none flex-col items-center justify-between rounded-lg p-1.5 text-left transition active:scale-[0.97] sm:h-28 sm:items-stretch sm:p-2.5",
+                    details.className,
+                    day.meal?.trim() && "rounded-b-none",
+                    disabled && "cursor-default active:scale-100",
+                    day.isToday && "ring-2 ring-gold ring-offset-2",
+                  )}
                 >
-                  {day.name}
-                </span>
-                <span className="flex shrink-0 flex-col items-center gap-1 sm:items-start">
-                  <span className={cn("size-2 rounded-full sm:hidden", details.dotClassName)} />
-                  <span className="hidden text-[11px] font-bold leading-tight sm:block">
-                    {details.shortLabel}
+                  <span className="shrink-0 text-sm font-extrabold sm:text-base">{day.dayNumber}.</span>
+                  <span
+                    title={day.name ?? undefined}
+                    className="my-1 line-clamp-2 h-8 w-full shrink-0 break-words text-center text-[11px] font-semibold leading-4 sm:text-left sm:text-xs sm:leading-4"
+                  >
+                    {day.name}
                   </span>
-                </span>
-              </button>
+                  <span className="flex shrink-0 flex-col items-center gap-1 sm:items-start">
+                    <span className={cn("size-2 rounded-full sm:hidden", details.dotClassName)} />
+                    <span className="hidden text-[11px] font-bold leading-tight sm:block">
+                      {details.shortLabel}
+                    </span>
+                  </span>
+                </button>
+                {day.meal?.trim() && (
+                  <button
+                    type="button"
+                    disabled={isNavigating}
+                    aria-label={`Jídlo · ${fullDateLabel(day.date)}`}
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      cancelLongPress();
+                      setMealDay(day);
+                    }}
+                    className="flex min-h-11 w-full items-center rounded-b-lg border-t border-sage/15 bg-sage/10 px-1.5 py-2 text-left text-sage-dark transition hover:bg-sage/20 focus-visible:outline-2 focus-visible:outline-gold sm:px-2.5"
+                  >
+                    <DayMeal meal={day.meal} compact className="w-full" />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -280,6 +302,12 @@ export function AttendanceCalendar({ childId, childName, childGender, month, day
           ))}
         </div>
       </div>
+      {mealDay && (
+        <FundDialog title={fullDateLabel(mealDay.date)} onClose={() => setMealDay(null)}>
+          {mealDay.name && <p className="mb-4 whitespace-pre-wrap break-words text-lg font-bold">{mealDay.name}</p>}
+          <DayMeal meal={mealDay.meal} />
+        </FundDialog>
+      )}
     </Card>
   );
 }

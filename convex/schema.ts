@@ -137,6 +137,7 @@ export default defineSchema({
   dayDetails: defineTable({
     date: v.number(),
     name: v.optional(v.union(v.string(), v.null())),
+    meal: v.optional(v.union(v.string(), v.null())),
     expense: v.optional(v.union(v.number(), v.null())),
     recordedById: v.string(),
     updatedAt: v.number(),
