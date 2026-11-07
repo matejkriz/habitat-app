@@ -14,15 +14,19 @@ export const recordResult = internalMutation({
   returns: v.null(),
   handler: async ({ db }, args) => {
     const current = await db.query("mealSyncState").withIndex("by_key", q => q.eq("key", "ejidelnicek")).unique();
-    if (current && current.lastAttemptAt > args.startedAt) return null;
+    const success = args.success ? {
+      lastSuccessAt: Math.max(Date.now(), current?.lastSuccessAt ?? 0), daysRead: args.daysRead ?? 0,
+      updated: args.updated ?? 0, unchanged: args.unchanged ?? 0, skipped: args.skipped ?? 0,
+    } : {};
+    if (current && current.lastAttemptAt > args.startedAt) {
+      if (args.success) await db.patch(current._id, { ...success, consecutiveFailures: 0 });
+      return null;
+    }
     const result = {
       lastAttemptAt: args.startedAt,
       lastErrorCode: args.success ? undefined : args.errorCode ?? "INTERNAL",
       consecutiveFailures: args.success ? 0 : (current?.consecutiveFailures ?? 0) + 1,
-      ...(args.success ? {
-        lastSuccessAt: Date.now(), daysRead: args.daysRead ?? 0,
-        updated: args.updated ?? 0, unchanged: args.unchanged ?? 0, skipped: args.skipped ?? 0,
-      } : {}),
+      ...success,
     };
     if (current) await db.patch(current._id, result);
     else await db.insert("mealSyncState", { key: "ejidelnicek", ...result });

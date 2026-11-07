@@ -9,6 +9,15 @@ const date = new Date(2026, 8, 10).getTime();
 const change = { secret, date, recordedById: "director", name: "Jarmark", expense: 120, report: "Poznámky učitelek\nDruhý odstavec" };
 
 describe("day details and trip funds", () => {
+  it("reads the complete calendar day even when both range bounds fall in its evening", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(({ db }) => db.insert("dayDetails", { date: Date.parse("2026-09-10T00:00:00Z"), meal: "Rizoto", recordedById: "system:meal-sync", updatedAt: date }));
+    const evening = Date.parse("2026-09-10T20:00:00Z");
+    expect(await t.query(api.db.listDayDetails, { secret, from: evening, to: evening })).toEqual([
+      expect.objectContaining({ meal: "Rizoto" }),
+    ]);
+  });
+
   beforeEach(() => vi.stubEnv("PUSH_INTERNAL_SECRET", secret));
   afterEach(() => vi.unstubAllEnvs());
 

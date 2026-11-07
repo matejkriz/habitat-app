@@ -14,6 +14,15 @@ describe("canteen snapshot storage", () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
   afterEach(() => vi.useRealTimers());
 
+  it("preserves a manual edit committed in the same millisecond as fetch start", async () => {
+    const t = convexTest(schema, modules);
+    const id = await t.run(({ db }) => db.insert("dayDetails", {
+      date: timestamp, meal: "Ruční úprava", mealCount: 3, recordedById: "director", updatedAt: snapshot.startedAt,
+    }));
+    expect(await t.mutation(internal.mealSync.applySnapshot, snapshot)).toEqual({ updated: 0, unchanged: 0, skipped: 1 });
+    expect(await t.run(({ db }) => db.get(id))).toMatchObject({ meal: "Ruční úprava", mealCount: 3 });
+  });
+
   it("creates a UTC calendar day as an internal system operation", async () => {
     const t = convexTest(schema, modules);
     expect(await t.mutation(internal.mealSync.applySnapshot, snapshot)).toEqual({ updated: 1, unchanged: 0, skipped: 0 });

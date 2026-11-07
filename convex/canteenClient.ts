@@ -190,7 +190,9 @@ class CanteenSession {
         let text = "";
         try {
           while (true) {
-            const chunk = await reader.read();
+            let chunk: ReadableStreamReadResult<Uint8Array>;
+            try { chunk = await reader.read(); }
+            catch { throw new CanteenError("NETWORK"); }
             if (chunk.done) break;
             size += chunk.value.byteLength;
             if (size > MAX_RESPONSE_BYTES) { await reader.cancel(); throw new CanteenError("PROTOCOL"); }

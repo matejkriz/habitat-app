@@ -42,6 +42,14 @@ function expectNoSecrets(value: unknown) {
 }
 
 describe("meal sync job", () => {
+  it("records a successful completion even after a newer attempt failed", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.mealSyncStatus.recordResult, { startedAt: now, success: false, errorCode: "NETWORK" });
+    await t.mutation(internal.mealSyncStatus.recordResult, { startedAt: now - 1000, success: true, daysRead: 1, updated: 1 });
+    const [state] = await t.run(({ db }) => db.query("mealSyncState").collect());
+    expect(state).toMatchObject({ lastAttemptAt: now, lastErrorCode: "NETWORK", lastSuccessAt: now, consecutiveFailures: 0, daysRead: 1, updated: 1 });
+  });
+
   it("does not contact the canteen or write state unless explicitly enabled", async () => {
     vi.stubEnv("EJIDELNICEK_SYNC_ENABLED", "false");
     const t = convexTest(schema, modules);

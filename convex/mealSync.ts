@@ -56,7 +56,7 @@ export const applySnapshot = internalMutation({
       if (exact.length > 1 || (matching.length > 1 && exact.length === 0)) {
         throw new Error("Ambiguous meal calendar date");
       }
-      if (current && ((current.mealSyncedAt ?? -1) >= startedAt || current.updatedAt > startedAt)) {
+      if (current && ((current.mealSyncedAt ?? -1) >= startedAt || current.updatedAt >= startedAt)) {
         result.skipped++;
         continue;
       }

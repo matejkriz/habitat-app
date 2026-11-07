@@ -44,9 +44,11 @@ async function findDayRecord(
 
 function listDayRecords(db: QueryCtx["db"], table: "attendance", date: number): Promise<Doc<"attendance">[]>;
 function listDayRecords(db: QueryCtx["db"], table: "childTripExpenses", date: number): Promise<Doc<"childTripExpenses">[]>;
+function listDayRecords(db: QueryCtx["db"], table: "dayDetails", date: number): Promise<Doc<"dayDetails">[]>;
+function listDayRecords(db: QueryCtx["db"], table: "dayReports", date: number): Promise<Doc<"dayReports">[]>;
 async function listDayRecords(
-  db: QueryCtx["db"], table: "attendance" | "childTripExpenses", date: number,
-): Promise<Array<Doc<"attendance"> | Doc<"childTripExpenses">>> {
+  db: QueryCtx["db"], table: "attendance" | "childTripExpenses" | "dayDetails" | "dayReports", date: number,
+): Promise<Array<Doc<"attendance"> | Doc<"childTripExpenses"> | Doc<"dayDetails"> | Doc<"dayReports">>> {
   const dateKey = toDayDateKey(date);
   const nearby = await db.query(table).withIndex("by_date", q =>
     q.gte("date", date - 86400000).lte("date", date + 86400000)).collect();
@@ -510,10 +512,15 @@ export const saveDayDetails = mutation({
     };
     if (current) await db.patch(current._id, patch);
     else await db.insert("dayDetails", { date: effectiveDate, ...patch });
+    if (args.expense === null) {
+      for (const duplicate of await listDayRecords(db, "dayDetails", effectiveDate)) {
+        if (duplicate._id !== current?._id) await db.patch(duplicate._id, { expense: null });
+      }
+    }
     if (args.report !== undefined) {
       const report = await findDayRecord(db, "dayReports", effectiveDate);
       if (!args.report) {
-        if (report) await db.delete(report._id);
+        for (const duplicate of await listDayRecords(db, "dayReports", effectiveDate)) await db.delete(duplicate._id);
       } else {
         const value = { date: report?.date ?? effectiveDate, report: args.report, recordedById: args.recordedById, updatedAt: Date.now() };
         if (report) await db.patch(report._id, value);
@@ -565,7 +572,8 @@ export const listDayDetails = query({
     const fromKey = toDayDateKey(args.from);
     const toKey = toDayDateKey(args.to);
     const days = await db.query("dayDetails").withIndex("by_date", q =>
-      q.gte("date", args.from - 43200000).lte("date", args.to + 43200000)).collect();
+      q.gte("date", Date.parse(`${fromKey}T00:00:00Z`) - 43200000)
+        .lte("date", Date.parse(`${toKey}T00:00:00Z`) + 129600000)).collect();
     const canonicalDays = new Map<string, Doc<"dayDetails">>();
     for (const day of days) {
       const key = toDayDateKey(day.date);

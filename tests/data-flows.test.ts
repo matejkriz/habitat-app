@@ -174,9 +174,10 @@ it("uses the synchronized canonical row for daily reads, calendars and edits whe
   const utcDate = Date.parse(`${day}T00:00:00Z`);
   const pragueDate = new Date(`${day}T00:00:00`).getTime();
   const utcId = await t.run(async ({ db }) => {
-    const common = { name: "Les", recordedById: "director", updatedAt: Date.now() - 2000 };
+    const common = { name: "Les", expense: 80, recordedById: "director", updatedAt: Date.now() - 2000 };
     const id = await db.insert("dayDetails", { ...common, date: utcDate, meal: "Staré UTC jídlo", mealCount: 1 });
     await db.insert("dayDetails", { ...common, date: pragueDate, meal: "Staré místní jídlo", mealCount: 2 });
+    for (const date of [utcDate, pragueDate]) await db.insert("dayReports", { date, report: "Report", recordedById: "teacher", updatedAt: Date.now() - 2000 });
     return id;
   });
   await t.mutation(internal.mealSync.applySnapshot, {
@@ -193,6 +194,10 @@ it("uses the synchronized canonical row for daily reads, calendars and edits whe
   expect(await getDayDetailsForDate(day)).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
   expect((await getAttendanceCalendarMonth(day.slice(0, 7))).days.find(row => row.dateKey === day)).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
   expect(await t.run(({ db }) => db.get(utcId))).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
+  await saveDayDetails(day, { expense: null, report: null });
+  expect(await t.run(({ db }) => db.query("dayReports").collect())).toEqual([]);
+  expect((await getTripFundOverview()).days).toEqual([]);
+  expect((await getDayDetailsForDate(day)).report).toBeNull();
 });
 
 it.each(["details", "create"])("charges Prague attendance against an imported UTC trip day through %s", async entryPoint => {

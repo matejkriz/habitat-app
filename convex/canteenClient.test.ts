@@ -195,6 +195,13 @@ describe("read-only canteen client", () => {
     expect(await result).toMatchObject({ code: "NETWORK", message: "Canteen request failed" });
   });
 
+  it("classifies an interrupted response stream as a retryable network error", async () => {
+    const interrupted = vi.fn(async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new Error("private upstream failure")); },
+    }))) as typeof fetch;
+    await expect(fetchCanteenDays(input, interrupted)).rejects.toMatchObject({ code: "NETWORK", message: "Canteen request failed" });
+  });
+
   it("rejects an over-budget snapshot without returning already read days", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-09T08:00:00Z"));
