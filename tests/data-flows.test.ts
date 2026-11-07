@@ -170,6 +170,31 @@ it.each(["2026-09-01", "2026-11-01"])("shows imported UTC-midnight meals for eve
   expect(await getDayDetailsForDate(dateKey)).toMatchObject({ name: "Výlet", meal: "Polévka\nTěstoviny", mealCount: 12 });
 });
 
+it("uses the synchronized canonical row for daily reads, calendars and edits when a legacy duplicate exists", async () => {
+  const utcDate = Date.parse(`${day}T00:00:00Z`);
+  const pragueDate = new Date(`${day}T00:00:00`).getTime();
+  const utcId = await t.run(async ({ db }) => {
+    const common = { name: "Les", recordedById: "director", updatedAt: Date.now() - 2000 };
+    const id = await db.insert("dayDetails", { ...common, date: utcDate, meal: "Staré UTC jídlo", mealCount: 1 });
+    await db.insert("dayDetails", { ...common, date: pragueDate, meal: "Staré místní jídlo", mealCount: 2 });
+    return id;
+  });
+  await t.mutation(internal.mealSync.applySnapshot, {
+    days: [{ date: day, meal: "Rizoto", mealCount: 17 }], startedAt: Date.now() - 1000,
+  });
+  expect((await getAttendanceForDate(day)).details.meal).toBe("Rizoto");
+  expect((await getAttendanceCalendarMonth(day.slice(0, 7))).days.find(row => row.dateKey === day)?.meal).toBe("Rizoto");
+  const listed = await db.dayDetails.list(new Date(`${day}T00:00:00`), new Date(`${day}T23:59:59`));
+  expect(listed).toHaveLength(1);
+  transport.user = { id: "parent", role: "PARENT" };
+  expect((await getChildCalendarMonth("a", day.slice(0, 7))).find(row => row.date === day)?.meal).toBe("Rizoto");
+  transport.user = { id: "director", role: "DIRECTOR" };
+  await saveDayDetails(day, { meal: "Těstoviny", mealCount: 12 });
+  expect(await getDayDetailsForDate(day)).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
+  expect((await getAttendanceCalendarMonth(day.slice(0, 7))).days.find(row => row.dateKey === day)).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
+  expect(await t.run(({ db }) => db.get(utcId))).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
+});
+
 it.each(["details", "create"])("charges Prague attendance against an imported UTC trip day through %s", async entryPoint => {
   await t.run(async ({ db }) => {
     for (const child of await db.query("children").collect()) await db.patch(child._id, { fundSent: 500 });

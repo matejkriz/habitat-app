@@ -7,7 +7,7 @@ import { requireServerSecret } from "./serverSecret";
 import { validateLunchPriceCents, validateLunchPriceMonth } from "../lib/lunch-price";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
-import { toDayDateKey } from "../lib/day-date";
+import { canonicalDayRecord, toDayDateKey } from "../lib/day-date";
 
 function validateAttendanceDays(value: unknown): void {
   if (value === undefined) return;
@@ -35,15 +35,11 @@ function findDayRecord(db: QueryCtx["db"], table: "dayReports", date: number): P
 async function findDayRecord(
   db: QueryCtx["db"], table: "dayDetails" | "dayReports", date: number,
 ): Promise<Doc<"dayDetails"> | Doc<"dayReports"> | null> {
-  const exact = await db.query(table).withIndex("by_date", q => q.eq("date", date)).unique();
-  if (exact) return exact;
   const dateKey = toDayDateKey(date);
   const nearby = await db.query(table).withIndex("by_date", q =>
     q.gte("date", date - 86400000).lte("date", date + 86400000)).collect();
   const matches = nearby.filter(row => toDayDateKey(row.date) === dateKey);
-  const utcMidnight = Date.parse(`${dateKey}T00:00:00Z`);
-  return matches.find(row => row.date === utcMidnight) ??
-    matches.sort((left, right) => right.updatedAt - left.updatedAt || left._id.localeCompare(right._id))[0] ?? null;
+  return canonicalDayRecord(matches, dateKey);
 }
 
 function listDayRecords(db: QueryCtx["db"], table: "attendance", date: number): Promise<Doc<"attendance">[]>;
@@ -570,10 +566,14 @@ export const listDayDetails = query({
     const toKey = toDayDateKey(args.to);
     const days = await db.query("dayDetails").withIndex("by_date", q =>
       q.gte("date", args.from - 43200000).lte("date", args.to + 43200000)).collect();
-    return days.filter(day => {
+    const canonicalDays = new Map<string, Doc<"dayDetails">>();
+    for (const day of days) {
       const key = toDayDateKey(day.date);
-      return key >= fromKey && key <= toKey;
-    }).map(day => ({ date: day.date, name: day.name ?? null, meal: day.meal ?? null, mealCount: day.mealCount ?? null, expense: day.expense ?? null }));
+      if (key < fromKey || key > toKey) continue;
+      const previous = canonicalDays.get(key);
+      canonicalDays.set(key, canonicalDayRecord(previous ? [previous, day] : [day], key)!);
+    }
+    return [...canonicalDays.values()].map(day => ({ date: day.date, name: day.name ?? null, meal: day.meal ?? null, mealCount: day.mealCount ?? null, expense: day.expense ?? null }));
   },
 });
 
