@@ -9,7 +9,7 @@ export async function getDayDetailsForDate(dateKey: string): Promise<DayDetails>
   const user = await getDbUser();
   if (!user || (user.role !== "DIRECTOR" && user.role !== "TEACHER")) throw new Error("Unauthorized");
   const details = await db.dayDetails.get(parseDayDate(dateKey), user.role === "DIRECTOR");
-  return user.role === "DIRECTOR" ? details : { name: details.name };
+  return user.role === "DIRECTOR" ? details : { name: details.name, meal: details.meal ?? null };
 }
 
 export async function saveDayDetails(dateKey: string, details: DayDetailsPatch): Promise<void> {
@@ -20,6 +20,8 @@ export async function saveDayDetails(dateKey: string, details: DayDetailsPatch):
   // Whitelist fields at the action boundary; omitted fields remain untouched.
   await db.dayDetails.save(date, {
     ...(details.name === undefined ? {} : { name: details.name }),
+    ...(details.meal === undefined ? {} : { meal: details.meal?.trim() || null }),
+    ...(details.mealCount === undefined ? {} : { mealCount: details.mealCount }),
     ...(details.expense === undefined ? {} : { expense: details.expense }),
     ...(details.report === undefined ? {} : { report: details.report }),
   }, user.id);

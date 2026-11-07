@@ -62,6 +62,7 @@ export type ParentVisibleChild = {
 };
 
 type ChildTodayStatus = {
+  readonly meal?: string | null;
   readonly beforeStart?: boolean;
   readonly notScheduled?: boolean;
   readonly makeup?: boolean;
@@ -144,11 +145,15 @@ export const getChildTodayStatus = async (
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const closed = await isClosedDay(today);
+  const [closed, details] = await Promise.all([
+    isClosedDay(today),
+    db.dayDetails.get(today),
+  ]);
 
   if (closed) {
     return {
       date: today,
+      meal: details.meal ?? null,
       isSchoolDay: false,
       isClosed: true,
       attendance: null,
@@ -171,6 +176,7 @@ export const getChildTodayStatus = async (
   const plan = getChildDayPlan(child ?? {}, excuses, today);
   return {
     date: today,
+    meal: details.meal ?? null,
     isSchoolDay: true,
     isClosed: false,
     beforeStart: plan.beforeStart,
@@ -327,7 +333,7 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     db.children.get({ where: { id: childId } }) as Promise<Child | null>,
   ]);
 
-  const namesByDate = new Map(dayDetails.map(day => [day.date, day.name]));
+  const detailsByDate = new Map(dayDetails.map(day => [day.date, day]));
   return buildParentCalendarMonth({
     month: monthStart,
     attendanceDays: child?.attendanceDays,
@@ -335,10 +341,10 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     attendance,
     excuses,
     closedDays: closedDays.map((day) => day.date),
-  }).map(day => ({
-    ...day,
-    name: namesByDate.get(new Date(monthStart.getFullYear(), monthStart.getMonth(), day.dayNumber).getTime()) ?? null,
-  }));
+  }).map(day => {
+    const details = detailsByDate.get(new Date(monthStart.getFullYear(), monthStart.getMonth(), day.dayNumber).getTime());
+    return { ...day, name: details?.name ?? null, meal: details?.meal ?? null };
+  });
 };
 
 /**

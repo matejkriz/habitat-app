@@ -108,8 +108,8 @@ export async function getAttendanceCalendarMonth(
       noLunchDays,
     }).map(day => {
       const details = detailsByDate.get(new Date(`${day.dateKey}T00:00:00`).getTime());
-      return { ...day, name: details?.name ?? null,
-        ...(user.role === UserRole.DIRECTOR ? { expense: details?.expense ?? null } : {}) };
+      return { ...day, name: details?.name ?? null, meal: details?.meal ?? null,
+        ...(user.role === UserRole.DIRECTOR ? { expense: details?.expense ?? null, mealCount: details?.mealCount ?? null } : {}) };
     }),
   };
 }

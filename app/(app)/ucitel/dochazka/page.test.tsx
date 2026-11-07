@@ -46,6 +46,28 @@ describe("TeacherAttendancePage", () => {
     cleanup();
   });
 
+  it("shows the selected day's meal to a teacher without editing controls and hides it on empty days", async () => {
+    mocks.getAllChildren.mockResolvedValue([]);
+    mocks.getAttendanceForDate.mockResolvedValueOnce({ isClosed: false, attendance: [], excuses: [], canManageLunch: false, details: { name: null, meal: "Zeleninová polévka\nRizoto", mealCount: 17 } })
+      .mockResolvedValue({ isClosed: false, attendance: [], excuses: [], canManageLunch: false, details: { name: null, meal: null } });
+    render(<TeacherAttendancePage />);
+    expect((await screen.findByRole("group", { name: "Jídlo" })).textContent).toContain("Zeleninová polévka\nRizoto");
+    expect(screen.queryByLabelText("Jídlo", { selector: "textarea" })).toBeNull();
+    expect(screen.queryByLabelText(/Počet objednaných jídel/)).toBeNull();
+    expect(screen.queryByText("Podrobnosti", { selector: "summary" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Předchozí den" }));
+    await waitFor(() => expect(mocks.getAttendanceForDate).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("group", { name: "Jídlo" })).toBeNull();
+  });
+
+  it("shows the ordered meal count to the director outside the collapsed editor", async () => {
+    mocks.getAllChildren.mockResolvedValue([]);
+    mocks.getAttendanceForDate.mockResolvedValue({ isClosed: false, attendance: [], excuses: [], canManageLunch: true, details: { name: null, meal: "Rizoto", mealCount: 17 } });
+    render(<TeacherAttendancePage />);
+    expect((await screen.findByLabelText("Počet objednaných jídel: 17")).textContent).toBe("17 porcí");
+    expect(screen.getByText("Podrobnosti", { selector: "summary" }).closest("details")!.open).toBe(false);
+  });
+
   it("disables children before arrival and omits them from the saved day", async () => {
     mocks.getAllChildren.mockResolvedValue([
       { id: "current", firstName: "Anna", lastName: "Malá", gender: "FEMALE", attendanceStartDate: "2026-09-01" },

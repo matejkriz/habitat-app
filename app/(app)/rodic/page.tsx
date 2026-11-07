@@ -1,4 +1,5 @@
 import { DayReportsSection } from "@/components/overview/day-reports";
+import { DayMeal } from "@/components/days/day-meal";
 import { ParentLunchSection, ParentTripFundSection } from "@/components/overview/parent-overviews";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
@@ -129,6 +130,7 @@ async function TodayCard({
             </div>
           </div>
         )}
+        <DayMeal meal={status.meal} className="mt-4" />
       </CardContent>
     </Card>
   );

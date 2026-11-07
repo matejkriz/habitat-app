@@ -21,6 +21,7 @@ import {
 } from "@/app/actions/teacher";
 import { TripExpenses } from "@/components/days/trip-expenses";
 import { DayDetailsForm } from "@/components/days/day-details-form";
+import { DayMeal } from "@/components/days/day-meal";
 import type { DayDetails } from "@/lib/day-details";
 import { formatDateWithWeekday } from "@/lib/utils";
 import { getPresenceLabel } from "@/lib/presence-label";
@@ -427,6 +428,7 @@ export default function TeacherAttendancePage() {
             {formatDateWithWeekday(new Date(selectedDate))}
           </p>
           {!isLoading && details.name && <p className="whitespace-pre-wrap break-words text-lg font-semibold text-charcoal">{details.name}</p>}
+          {!isLoading && <DayMeal meal={details.meal} mealCount={canManageLunch ? details.mealCount : undefined} className="mt-3" />}
         </CardHeader>
       </Card>
 

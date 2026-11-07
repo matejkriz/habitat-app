@@ -30,10 +30,91 @@ describe("day details and trip funds", () => {
     const t = convexTest(schema, modules);
     await t.mutation(api.db.saveDayDetails, change);
     await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", name: null, expense: 0 });
-    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: null, expense: 0, report: change.report });
-    expect(await t.query(api.db.listDayDetails, { secret, from: date, to: date })).toEqual([{ date, name: null, expense: 0 }]);
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: null, meal: null, mealCount: null, expense: 0, report: change.report });
+    expect(await t.query(api.db.listDayDetails, { secret, from: date, to: date })).toEqual([{ date, name: null, meal: null, mealCount: null, expense: 0 }]);
     await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", expense: null, report: null });
-    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: null, expense: null, report: null });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: null, meal: null, mealCount: null, expense: null, report: null });
+  });
+
+  it("stores meals independently from names and reports, and clears empty meals", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(({ db }) => db.insert("users", { id: "director", role: "DIRECTOR", createdAt: date, updatedAt: date }));
+    await t.mutation(api.db.saveDayDetails, { ...change, meal: "  Rajská polévka\nKuře s rýží  " });
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", name: "Les" });
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "teacher", report: "Dnešní report" });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({
+      name: "Les", meal: "Rajská polévka\nKuře s rýží", mealCount: null, expense: 120, report: "Dnešní report",
+    });
+    expect(await t.query(api.db.listDayDetails, { secret, from: date, to: date })).toEqual([
+      { date, name: "Les", meal: "Rajská polévka\nKuře s rýží", mealCount: null, expense: 120 },
+    ]);
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", meal: "Těstoviny" });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: false })).toMatchObject({ meal: "Těstoviny", name: "Les", expense: 120 });
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", meal: " \n " });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: "Les", meal: null, mealCount: null, expense: 120, report: "Dnešní report" });
+  });
+
+  it("checks the current director role for meal edits and removals", async () => {
+    const t = convexTest(schema, modules);
+    const directorId = await t.run(async ({ db }) => {
+      await db.insert("users", { id: "parent", role: "PARENT", createdAt: date, updatedAt: date });
+      await db.insert("users", { id: "teacher", role: "TEACHER", createdAt: date, updatedAt: date });
+      return db.insert("users", { id: "director", role: "DIRECTOR", createdAt: date, updatedAt: date });
+    });
+    await t.mutation(api.db.saveDayDetails, { ...change, meal: "Rizoto" });
+    for (const recordedById of ["parent", "teacher", "missing"]) {
+      for (const meal of ["Jiné jídlo", null]) {
+        await expect(t.mutation(api.db.saveDayDetails, { secret, date, recordedById, meal })).rejects.toThrow("Unauthorized");
+      }
+    }
+    await t.run(({ db }) => db.patch(directorId, { role: "TEACHER" }));
+    await expect(t.mutation(api.db.saveDayDetails, { ...change, meal: null })).rejects.toThrow("Unauthorized");
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: false })).toMatchObject({ meal: "Rizoto" });
+  });
+
+  it("validates meal length and supports days with only a meal", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(({ db }) => db.insert("users", { id: "director", role: "DIRECTOR", createdAt: date, updatedAt: date }));
+    await expect(t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", meal: "a".repeat(2001) })).rejects.toThrow("Jídlo");
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", meal: "a".repeat(2000) });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: false })).toEqual({ name: null, meal: "a".repeat(2000), mealCount: null, expense: null });
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", meal: null });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: false })).toEqual({ name: null, meal: null, mealCount: null, expense: null });
+  });
+
+  it("stores, preserves and clears the ordered meal count independently", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(({ db }) => db.insert("users", { id: "director", role: "DIRECTOR", createdAt: date, updatedAt: date }));
+    await t.mutation(api.db.saveDayDetails, { ...change, meal: "Rizoto", mealCount: 17 });
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "teacher", report: "Nový report" });
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", name: "Les", expense: 50, meal: "Těstoviny" });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: "Les", meal: "Těstoviny", mealCount: 17, expense: 50, report: "Nový report" });
+    expect(await t.query(api.db.listDayDetails, { secret, from: date, to: date })).toEqual([{ date, name: "Les", meal: "Těstoviny", mealCount: 17, expense: 50 }]);
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", mealCount: 0 });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: false })).toMatchObject({ meal: "Těstoviny", mealCount: 0 });
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", mealCount: null });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: "Les", meal: "Těstoviny", mealCount: null, expense: 50, report: "Nový report" });
+  });
+
+  it("rejects invalid counts and checks the current director role for count-only writes", async () => {
+    const t = convexTest(schema, modules);
+    const directorId = await t.run(async ({ db }) => {
+      await db.insert("users", { id: "teacher", role: "TEACHER", createdAt: date, updatedAt: date });
+      await db.insert("users", { id: "parent", role: "PARENT", createdAt: date, updatedAt: date });
+      return db.insert("users", { id: "director", role: "DIRECTOR", createdAt: date, updatedAt: date });
+    });
+    for (const mealCount of [-1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", mealCount })).rejects.toThrow();
+    }
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", mealCount: 17 });
+    for (const recordedById of ["teacher", "parent", "missing"]) {
+      for (const mealCount of [0, null]) {
+        await expect(t.mutation(api.db.saveDayDetails, { secret, date, recordedById, mealCount })).rejects.toThrow("Unauthorized");
+      }
+    }
+    await t.run(({ db }) => db.patch(directorId, { role: "TEACHER" }));
+    await expect(t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", mealCount: null })).rejects.toThrow("Unauthorized");
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: false })).toMatchObject({ mealCount: 17 });
   });
 
   it("rejects invalid names, dates, amounts and oversized UTF-8 reports", async () => {

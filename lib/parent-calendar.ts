@@ -24,6 +24,7 @@ export interface ParentCalendarDay {
   readonly date: string;
   readonly dayNumber: number;
   readonly name?: string | null;
+  readonly meal?: string | null;
   readonly status: ParentCalendarStatus;
   readonly isToday: boolean;
   readonly absencePart?: Exclude<ExcuseDayPart, "FULL_DAY">;

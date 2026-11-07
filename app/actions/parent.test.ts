@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   childrenGet: vi.fn(), attendanceGet: vi.fn(), isClosedDay: vi.fn(), getExcusesOverlapping: vi.fn(),
   excusesList: vi.fn(), canSubmitExcuse: vi.fn(),
+  dayDetailsGet: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ getDbUser: mocks.getDbUser }));
@@ -18,6 +19,7 @@ vi.mock("@/lib/db", () => ({
     parentLinks: { list: mocks.listParentLinks },
     children: { get: mocks.childrenGet }, attendance: { get: mocks.attendanceGet },
     excuses: { list: mocks.excusesList },
+    dayDetails: { get: mocks.dayDetailsGet },
   },
 }));
 vi.mock("@/lib/school-days", () => ({
@@ -477,6 +479,7 @@ describe("today's regular attendance plan", () => {
     mocks.childrenGet.mockResolvedValue({ id: "child-1", attendanceDays: [1, 3, 4] });
     mocks.attendanceGet.mockResolvedValue(null);
     mocks.getExcusesOverlapping.mockResolvedValue([]);
+    mocks.dayDetailsGet.mockResolvedValue({ name: "Les", meal: "Kuře s rýží", mealCount: 17, expense: 100, report: "Soukromé poznámky" });
   });
   it("identifies a regular off day", async () => {
     await expect(getChildTodayStatus("child-1")).resolves.toMatchObject({ notScheduled: true, makeup: false });
@@ -485,6 +488,22 @@ describe("today's regular attendance plan", () => {
   it("identifies an extra planned arrival even after the lunch deadline", async () => {
     mocks.getExcusesOverlapping.mockResolvedValue([{ ...makeExcuse("child-1"), kind: "MAKEUP", fromDate: new Date(2026, 8, 29), toDate: new Date(2026, 8, 29), submittedAt: new Date(2026, 8, 29, 9) }]);
     await expect(getChildTodayStatus("child-1")).resolves.toMatchObject({ notScheduled: false, makeup: true });
+    vi.useRealTimers();
+  });
+  it("includes the meal without exposing expenses or reports", async () => {
+    const status = await getChildTodayStatus("child-1");
+    expect(status.meal).toBe("Kuře s rýží");
+    expect(status).not.toHaveProperty("expense");
+    expect(status).not.toHaveProperty("report");
+    expect(status).not.toHaveProperty("mealCount");
+    vi.useRealTimers();
+  });
+  it("does not read meals for an unrelated child", async () => {
+    mocks.getDbUser.mockResolvedValue({ id: "parent", role: "PARENT" });
+    mocks.canSubmitExcuse.mockResolvedValue(false);
+    mocks.dayDetailsGet.mockClear();
+    await expect(getChildTodayStatus("other-child")).rejects.toThrow("Access denied");
+    expect(mocks.dayDetailsGet).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 });

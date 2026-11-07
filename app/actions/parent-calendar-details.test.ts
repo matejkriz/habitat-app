@@ -12,14 +12,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.user.mockResolvedValue({ id: "parent", role: "PARENT" });
   mocks.access.mockResolvedValue(true);
-  mocks.details.mockResolvedValue([{ date: new Date(2026, 8, 10).getTime(), name: "Jarmark", expense: 100 }]);
+  mocks.details.mockResolvedValue([{ date: new Date(2026, 8, 10).getTime(), name: "Jarmark", meal: "Kuře s rýží", mealCount: 17, expense: 100, report: "Soukromé poznámky" }]);
 });
-it("includes day names in the parent calendar without exposing expenses", async () => {
+it("includes day names and meals in the parent calendar without exposing expenses or reports", async () => {
   const days = await getChildCalendarMonth("child", "2026-09");
   const day = days.find(day => day.date === "2026-09-10");
   expect(day?.name).toBe("Jarmark");
+  expect(day?.meal).toBe("Kuře s rýží");
   expect(day).not.toHaveProperty("expense");
+  expect(day).not.toHaveProperty("report");
+  expect(day).not.toHaveProperty("mealCount");
+  expect(days.every(day => !("mealCount" in day))).toBe(true);
   expect(days.find(day => day.date === "2026-09-11")?.name).toBeNull();
+  expect(days.find(day => day.date === "2026-09-11")?.meal).toBeNull();
 });
 it("does not read calendar details for an unrelated child", async () => {
   mocks.access.mockResolvedValue(false);
