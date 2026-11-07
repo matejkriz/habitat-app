@@ -17,6 +17,18 @@ const excuseStatus = v.union(
 const auditAction = v.union(v.literal("CREATE"), v.literal("UPDATE"), v.literal("DELETE"));
 
 export default defineSchema({
+  mealSyncState: defineTable({
+    key: v.string(),
+    lastAttemptAt: v.number(),
+    lastSuccessAt: v.optional(v.number()),
+    lastErrorCode: v.optional(v.union(v.literal("AUTH"), v.literal("NETWORK"), v.literal("PROTOCOL"), v.literal("CONFIG"), v.literal("INTERNAL"))),
+    consecutiveFailures: v.number(),
+    daysRead: v.optional(v.number()),
+    updated: v.optional(v.number()),
+    unchanged: v.optional(v.number()),
+    skipped: v.optional(v.number()),
+  }).index("by_key", { fields: ["key"] }),
+
   lunchPayments: defineTable({
     childId: v.string(),
     month: v.string(),
@@ -139,6 +151,7 @@ export default defineSchema({
     name: v.optional(v.union(v.string(), v.null())),
     meal: v.optional(v.union(v.string(), v.null())),
     mealCount: v.optional(v.union(v.number(), v.null())),
+    mealSyncedAt: v.optional(v.number()),
     expense: v.optional(v.union(v.number(), v.null())),
     recordedById: v.string(),
     updatedAt: v.number(),

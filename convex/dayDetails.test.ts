@@ -9,6 +9,15 @@ const date = new Date(2026, 8, 10).getTime();
 const change = { secret, date, recordedById: "director", name: "Jarmark", expense: 120, report: "Poznámky učitelek\nDruhý odstavec" };
 
 describe("day details and trip funds", () => {
+  it("reads the complete calendar day even when both range bounds fall in its evening", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(({ db }) => db.insert("dayDetails", { date: Date.parse("2026-09-10T00:00:00Z"), meal: "Rizoto", recordedById: "system:meal-sync", updatedAt: date }));
+    const evening = Date.parse("2026-09-10T20:00:00Z");
+    expect(await t.query(api.db.listDayDetails, { secret, from: evening, to: evening })).toEqual([
+      expect.objectContaining({ meal: "Rizoto" }),
+    ]);
+  });
+
   beforeEach(() => vi.stubEnv("PUSH_INTERNAL_SECRET", secret));
   afterEach(() => vi.unstubAllEnvs());
 
@@ -34,6 +43,28 @@ describe("day details and trip funds", () => {
     expect(await t.query(api.db.listDayDetails, { secret, from: date, to: date })).toEqual([{ date, name: null, meal: null, mealCount: null, expense: 0 }]);
     await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", expense: null, report: null });
     expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toEqual({ name: null, meal: null, mealCount: null, expense: null, report: null });
+  });
+
+  it("reads and edits UTC imports alongside Prague-midnight reports without duplicate days", async () => {
+    const t = convexTest(schema, modules);
+    const importedDate = Date.parse("2026-09-10T00:00:00Z");
+    await t.run(async ({ db }) => {
+      await db.insert("users", { id: "director", role: "DIRECTOR", createdAt: date, updatedAt: date });
+      await db.insert("dayDetails", { date: importedDate, meal: "Rizoto", mealCount: 17, recordedById: "system:meal-sync", updatedAt: date });
+      await db.insert("dayReports", { date, report: "Učitelský report", recordedById: "teacher", updatedAt: date });
+    });
+    expect(await t.query(api.db.getDayDetails, { secret, date, includeReport: true })).toMatchObject({ meal: "Rizoto", mealCount: 17, report: "Učitelský report" });
+    expect(await t.query(api.db.listDayDetails, { secret, from: date, to: date })).toEqual([
+      { date: importedDate, name: null, meal: "Rizoto", mealCount: 17, expense: null },
+    ]);
+    await t.mutation(api.db.saveDayDetails, { secret, date, recordedById: "director", name: "Výlet", report: "Upravený report" });
+    expect(await t.run(({ db }) => db.query("dayDetails").collect())).toEqual([
+      expect.objectContaining({ date: importedDate, name: "Výlet", meal: "Rizoto", mealCount: 17 }),
+    ]);
+    expect(await t.run(({ db }) => db.query("dayReports").collect())).toEqual([
+      expect.objectContaining({ date, report: "Upravený report" }),
+    ]);
+    expect((await t.query(api.db.listDayReports, { secret })).reports[0]).toMatchObject({ name: "Výlet", report: "Upravený report" });
   });
 
   it("stores meals independently from names and reports, and clears empty meals", async () => {

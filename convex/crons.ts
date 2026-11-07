@@ -4,6 +4,13 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 crons.interval(
+  "synchronize ordered canteen lunches",
+  { minutes: 30 },
+  internal.mealSyncJobs.run,
+  {},
+);
+
+crons.interval(
   "reconcile recently submitted excuses",
   { minutes: 1 },
   internal.pushNotifications.reconcileExcuseNotifications,

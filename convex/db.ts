@@ -7,6 +7,7 @@ import { requireServerSecret } from "./serverSecret";
 import { validateLunchPriceCents, validateLunchPriceMonth } from "../lib/lunch-price";
 import type { Doc } from "./_generated/dataModel";
 import { enqueueExcuseEvent } from "./pushNotifications";
+import { canonicalDayRecord, toDayDateKey } from "../lib/day-date";
 
 function validateAttendanceDays(value: unknown): void {
   if (value === undefined) return;
@@ -28,6 +29,31 @@ const tableName = v.union(
 );
 
 const documentValue = v.any();
+
+function findDayRecord(db: QueryCtx["db"], table: "dayDetails", date: number): Promise<Doc<"dayDetails"> | null>;
+function findDayRecord(db: QueryCtx["db"], table: "dayReports", date: number): Promise<Doc<"dayReports"> | null>;
+async function findDayRecord(
+  db: QueryCtx["db"], table: "dayDetails" | "dayReports", date: number,
+): Promise<Doc<"dayDetails"> | Doc<"dayReports"> | null> {
+  const dateKey = toDayDateKey(date);
+  const nearby = await db.query(table).withIndex("by_date", q =>
+    q.gte("date", date - 86400000).lte("date", date + 86400000)).collect();
+  const matches = nearby.filter(row => toDayDateKey(row.date) === dateKey);
+  return canonicalDayRecord(matches, dateKey);
+}
+
+function listDayRecords(db: QueryCtx["db"], table: "attendance", date: number): Promise<Doc<"attendance">[]>;
+function listDayRecords(db: QueryCtx["db"], table: "childTripExpenses", date: number): Promise<Doc<"childTripExpenses">[]>;
+function listDayRecords(db: QueryCtx["db"], table: "dayDetails", date: number): Promise<Doc<"dayDetails">[]>;
+function listDayRecords(db: QueryCtx["db"], table: "dayReports", date: number): Promise<Doc<"dayReports">[]>;
+async function listDayRecords(
+  db: QueryCtx["db"], table: "attendance" | "childTripExpenses" | "dayDetails" | "dayReports", date: number,
+): Promise<Array<Doc<"attendance"> | Doc<"childTripExpenses"> | Doc<"dayDetails"> | Doc<"dayReports">>> {
+  const dateKey = toDayDateKey(date);
+  const nearby = await db.query(table).withIndex("by_date", q =>
+    q.gte("date", date - 86400000).lte("date", date + 86400000)).collect();
+  return nearby.filter(row => toDayDateKey(row.date) === dateKey);
+}
 
 export const listLunchPayments = query({
   args: { secret: v.string(), month: v.string() },
@@ -475,7 +501,8 @@ export const saveDayDetails = mutation({
     }
     if (!Number.isFinite(args.date) || !Number.isFinite(new Date(args.date).getTime())) throw new Error("Neplatné datum");
     validateDayDetails(args);
-    const current = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique();
+    const current = await findDayRecord(db, "dayDetails", args.date);
+    const effectiveDate = current?.date ?? args.date;
     const patch = {
       ...(args.name === undefined ? {} : { name: args.name?.trim() || null }),
       ...(args.meal === undefined ? {} : { meal: args.meal?.trim() || null }),
@@ -484,20 +511,25 @@ export const saveDayDetails = mutation({
       recordedById: args.recordedById, updatedAt: Date.now(),
     };
     if (current) await db.patch(current._id, patch);
-    else await db.insert("dayDetails", { date: args.date, ...patch });
+    else await db.insert("dayDetails", { date: effectiveDate, ...patch });
+    if (args.expense === null) {
+      for (const duplicate of await listDayRecords(db, "dayDetails", effectiveDate)) {
+        if (duplicate._id !== current?._id) await db.patch(duplicate._id, { expense: null });
+      }
+    }
     if (args.report !== undefined) {
-      const report = await db.query("dayReports").withIndex("by_date", q => q.eq("date", args.date)).unique();
+      const report = await findDayRecord(db, "dayReports", effectiveDate);
       if (!args.report) {
-        if (report) await db.delete(report._id);
+        for (const duplicate of await listDayRecords(db, "dayReports", effectiveDate)) await db.delete(duplicate._id);
       } else {
-        const value = { date: args.date, report: args.report, recordedById: args.recordedById, updatedAt: Date.now() };
+        const value = { date: report?.date ?? effectiveDate, report: args.report, recordedById: args.recordedById, updatedAt: Date.now() };
         if (report) await db.patch(report._id, value);
         else await db.insert("dayReports", value);
       }
     }
     await db.insert("auditLogs", {
-      id: `day_${args.date}_${Date.now()}`, userId: args.recordedById, action: "UPDATE",
-      entityType: "DayDetails", entityId: String(args.date),
+      id: `day_${effectiveDate}_${Date.now()}`, userId: args.recordedById, action: "UPDATE",
+      entityType: "DayDetails", entityId: String(effectiveDate),
       previousValue: { name: current?.name ?? null, meal: current?.meal ?? null, mealCount: current?.mealCount ?? null, expense: current?.expense ?? null },
       newValue: { ...patch, reportChanged: args.report !== undefined }, createdAt: Date.now(),
     });
@@ -509,9 +541,9 @@ export const getDayDetails = query({
   args: { secret: v.string(), date: v.number(), includeReport: v.boolean() },
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
-    const day = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique();
+    const day = await findDayRecord(db, "dayDetails", args.date);
     const report = args.includeReport
-      ? await db.query("dayReports").withIndex("by_date", q => q.eq("date", args.date)).unique()
+      ? await findDayRecord(db, "dayReports", day?.date ?? args.date)
       : null;
     return { name: day?.name ?? null, meal: day?.meal ?? null, mealCount: day?.mealCount ?? null, expense: day?.expense ?? null,
       ...(args.includeReport ? { report: report?.report ?? null } : {}) };
@@ -526,7 +558,7 @@ export const listDayReports = query({
       .withIndex("by_date", q => args.before === undefined ? q : q.lt("date", args.before))
       .order("desc").take(5);
     const reports = await Promise.all(rows.map(async row => {
-      const day = await db.query("dayDetails").withIndex("by_date", q => q.eq("date", row.date)).unique();
+      const day = await findDayRecord(db, "dayDetails", row.date);
       return { date: row.date, name: day?.name ?? null, report: row.report };
     }));
     return { reports, nextBefore: rows.length === 5 ? rows[rows.length - 1].date : null };
@@ -537,8 +569,19 @@ export const listDayDetails = query({
   args: { secret: v.string(), from: v.number(), to: v.number() },
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
-    const days = await db.query("dayDetails").withIndex("by_date", q => q.gte("date", args.from).lte("date", args.to)).collect();
-    return days.map(day => ({ date: day.date, name: day.name ?? null, meal: day.meal ?? null, mealCount: day.mealCount ?? null, expense: day.expense ?? null }));
+    const fromKey = toDayDateKey(args.from);
+    const toKey = toDayDateKey(args.to);
+    const days = await db.query("dayDetails").withIndex("by_date", q =>
+      q.gte("date", Date.parse(`${fromKey}T00:00:00Z`) - 43200000)
+        .lte("date", Date.parse(`${toKey}T00:00:00Z`) + 129600000)).collect();
+    const canonicalDays = new Map<string, Doc<"dayDetails">>();
+    for (const day of days) {
+      const key = toDayDateKey(day.date);
+      if (key < fromKey || key > toKey) continue;
+      const previous = canonicalDays.get(key);
+      canonicalDays.set(key, canonicalDayRecord(previous ? [previous, day] : [day], key)!);
+    }
+    return [...canonicalDays.values()].map(day => ({ date: day.date, name: day.name ?? null, meal: day.meal ?? null, mealCount: day.mealCount ?? null, expense: day.expense ?? null }));
   },
 });
 
@@ -551,30 +594,38 @@ async function readTripFundOverview(db: QueryCtx["db"], includeExtraPeople = fal
     includeExtraPeople ? db.query("extraFundPeople").collect() : [],
     includeExtraPeople ? db.query("extraFundExpenses").collect() : [],
   ]);
-  const details = new Map(days.map(day => [day.date, day]));
+  const details = new Map<string, Doc<"dayDetails">>();
+  for (const day of [...days].sort((left, right) => left.updatedAt - right.updatedAt)) {
+    const key = toDayDateKey(day.date);
+    if (day.expense != null || details.get(key)?.expense == null) details.set(key, day);
+  }
   // Individual amounts remain chargeable even if the day's default was cleared.
-  const dates = new Set([
-    ...days.filter(day => day.expense != null).map(day => day.date),
-    ...overrides.map(row => row.date),
-    ...extraExpenses.map(row => row.date),
-  ]);
-  const tripDays = [...dates].sort((a, b) => a - b).map(date => ({
-    date, name: details.get(date)?.name ?? null, expense: details.get(date)?.expense ?? null,
+  const dates = new Map<string, number>();
+  for (const row of [...days.filter(day => day.expense != null), ...overrides, ...extraExpenses]) {
+    const key = toDayDateKey(row.date);
+    dates.set(key, details.get(key)?.date ?? row.date);
+  }
+  const tripDays = [...dates].sort(([left], [right]) => left.localeCompare(right)).map(([key, date]) => ({
+    date, name: details.get(key)?.name ?? null, expense: details.get(key)?.expense ?? null,
   }));
-  const individual = new Map(overrides.map(row => [`${row.childId}:${row.date}`, row.amount]));
-  const present = new Set(attendance.filter(row => row.presence === "PRESENT").map(row => `${row.childId}:${row.date}`));
+  const individual = new Map([...overrides].sort((left, right) => left.updatedAt - right.updatedAt)
+    .map(row => [`${row.childId}:${toDayDateKey(row.date)}`, row.amount]));
+  const latestAttendance = new Map([...attendance].sort((left, right) => left.updatedAt - right.updatedAt)
+    .map(row => [`${row.childId}:${toDayDateKey(row.date)}`, row]));
+  const present = new Set([...latestAttendance].filter(([, row]) => row.presence === "PRESENT").map(([key]) => key));
 
-  const extraAmounts = new Map(extraExpenses.map(row => [`${row.personId}:${row.date}`, row.amount]));
+  const extraAmounts = new Map([...extraExpenses].sort((left, right) => left.updatedAt - right.updatedAt)
+    .map(row => [`${row.personId}:${toDayDateKey(row.date)}`, row.amount]));
   return {
     ...(includeExtraPeople ? { extraPeople: extraPeople.map(person => {
-      const amounts = tripDays.map(day => extraAmounts.get(`${person.id}:${day.date}`) ?? 0);
+      const amounts = tripDays.map(day => extraAmounts.get(`${person.id}:${toDayDateKey(day.date)}`) ?? 0);
       const fundSpent = amounts.reduce((sum, amount) => sum + amount, 0);
       return { personId: person.id, name: person.name, fundSent: person.fundSent, amounts, fundSpent, fundBalance: person.fundSent - fundSpent };
     }) } : {}),
     days: tripDays,
     children: children.map(child => {
       const amounts = tripDays.map(day => {
-        const key = `${child.id}:${day.date}`;
+        const key = `${child.id}:${toDayDateKey(day.date)}`;
         return hasChildStartedAttendance(child, day.date) && present.has(key) ? individual.get(key) ?? day.expense ?? 0 : null;
       });
       const fundSpent = amounts.reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
@@ -664,12 +715,13 @@ export const getDayTripExpenses = query({
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
     const [day, attendance, overrides] = await Promise.all([
-      db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique(),
-      db.query("attendance").withIndex("by_date", q => q.eq("date", args.date)).collect(),
-      db.query("childTripExpenses").withIndex("by_date", q => q.eq("date", args.date)).collect(),
+      findDayRecord(db, "dayDetails", args.date),
+      listDayRecords(db, "attendance", args.date),
+      listDayRecords(db, "childTripExpenses", args.date),
     ]);
-    const individual = new Map(overrides.map(row => [row.childId, row.amount]));
-    const rows = await Promise.all(attendance.filter(record => record.presence === "PRESENT").map(async record => {
+    const individual = new Map(overrides.sort((left, right) => left.updatedAt - right.updatedAt).map(row => [row.childId, row.amount]));
+    const latestAttendance = new Map(attendance.sort((left, right) => left.updatedAt - right.updatedAt).map(row => [row.childId, row]));
+    const rows = await Promise.all([...latestAttendance.values()].filter(record => record.presence === "PRESENT").map(async record => {
       const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", record.childId)).unique();
       if (!child || !hasChildStartedAttendance(child, args.date)) return null;
       return { childId: child.id, name: `${child.firstName} ${child.lastName}`,
@@ -689,18 +741,25 @@ export const setChildTripExpense = mutation({
     const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", args.childId)).unique();
     if (!child) throw new Error("Dítě nebylo nalezeno");
     requireChildAttendanceStarted(child, args.date);
-    const attendance = await db.query("attendance").withIndex("by_child_date", q => q.eq("childId", args.childId).eq("date", args.date)).unique();
+    const [day, attendanceRows, overrides] = await Promise.all([
+      findDayRecord(db, "dayDetails", args.date),
+      listDayRecords(db, "attendance", args.date),
+      listDayRecords(db, "childTripExpenses", args.date),
+    ]);
+    const attendance = attendanceRows.filter(row => row.childId === args.childId).sort((left, right) => right.updatedAt - left.updatedAt)[0];
     if (attendance?.presence !== "PRESENT") throw new Error("Nejprve dítě označte jako přítomné a uložte docházku");
-    const current = await db.query("childTripExpenses").withIndex("by_child_date", q => q.eq("childId", args.childId).eq("date", args.date)).unique();
+    const childOverrides = overrides.filter(row => row.childId === args.childId).sort((left, right) => right.updatedAt - left.updatedAt);
+    const current = childOverrides[0];
+    const effectiveDate = current?.date ?? day?.date ?? args.date;
     if (args.amount === null) {
-      if (current) await db.delete(current._id);
+      for (const row of childOverrides) await db.delete(row._id);
     } else {
-      const value = { date: args.date, childId: args.childId, amount: args.amount, recordedById: args.recordedById, updatedAt: Date.now() };
+      const value = { date: effectiveDate, childId: args.childId, amount: args.amount, recordedById: args.recordedById, updatedAt: Date.now() };
       if (current) await db.patch(current._id, value);
       else await db.insert("childTripExpenses", value);
     }
-    await db.insert("auditLogs", { id: `trip_${args.childId}_${args.date}_${Date.now()}`,
-      userId: args.recordedById, action: "UPDATE", entityType: "ChildTripExpense", entityId: `${args.childId}:${args.date}`,
+    await db.insert("auditLogs", { id: `trip_${args.childId}_${effectiveDate}_${Date.now()}`,
+      userId: args.recordedById, action: "UPDATE", entityType: "ChildTripExpense", entityId: `${args.childId}:${effectiveDate}`,
       previousValue: { amount: current?.amount ?? null }, newValue: { amount: args.amount }, createdAt: Date.now() });
     return null;
   },
@@ -723,12 +782,13 @@ export const createTripExpense = mutation({
       ids.add(row.childId);
     }
     const [day, existing, attendance] = await Promise.all([
-      db.query("dayDetails").withIndex("by_date", q => q.eq("date", args.date)).unique(),
-      db.query("childTripExpenses").withIndex("by_date", q => q.eq("date", args.date)).first(),
-      db.query("attendance").withIndex("by_date", q => q.eq("date", args.date)).collect(),
+      findDayRecord(db, "dayDetails", args.date),
+      listDayRecords(db, "childTripExpenses", args.date),
+      listDayRecords(db, "attendance", args.date),
     ]);
-    if (day?.expense != null || existing) throw new Error("Pro tento den už je útrata zadaná. Upravte ji v tabulce nebo v detailu dne.");
-    const present = new Set(attendance.filter(row => row.presence === "PRESENT").map(row => row.childId));
+    if (day?.expense != null || existing.length > 0) throw new Error("Pro tento den už je útrata zadaná. Upravte ji v tabulce nebo v detailu dne.");
+    const latestAttendance = new Map(attendance.sort((left, right) => left.updatedAt - right.updatedAt).map(row => [row.childId, row]));
+    const present = new Set([...latestAttendance.values()].filter(row => row.presence === "PRESENT").map(row => row.childId));
     for (const row of args.overrides) {
       const child = await db.query("children").withIndex("by_app_id", q => q.eq("id", row.childId)).unique();
       if (!child) throw new Error("Dítě nebylo nalezeno");
@@ -736,15 +796,16 @@ export const createTripExpense = mutation({
       if (!present.has(row.childId)) throw new Error("Individuální útratu lze uložit jen přítomnému dítěti. Zkontrolujte docházku.");
     }
     const updatedAt = Date.now();
+    const effectiveDate = day?.date ?? args.date;
     const patch = { expense: args.expense, recordedById: args.recordedById, updatedAt };
     if (day) await db.patch(day._id, patch);
-    else await db.insert("dayDetails", { date: args.date, ...patch });
+    else await db.insert("dayDetails", { date: effectiveDate, ...patch });
     for (const row of args.overrides) {
-      await db.insert("childTripExpenses", { ...row, date: args.date, recordedById: args.recordedById, updatedAt });
+      await db.insert("childTripExpenses", { ...row, date: effectiveDate, recordedById: args.recordedById, updatedAt });
     }
     await db.insert("auditLogs", {
-      id: `trip_create_${args.date}_${updatedAt}`, userId: args.recordedById,
-      action: "CREATE", entityType: "TripExpense", entityId: String(args.date),
+      id: `trip_create_${effectiveDate}_${updatedAt}`, userId: args.recordedById,
+      action: "CREATE", entityType: "TripExpense", entityId: String(effectiveDate),
       previousValue: null, newValue: { expense: args.expense, overrides: args.overrides }, createdAt: updatedAt,
     });
     return null;

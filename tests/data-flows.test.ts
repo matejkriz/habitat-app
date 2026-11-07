@@ -47,10 +47,11 @@ import {
   getLunchOverview,
   updateLunchPrice,
 } from "../app/actions/director";
-import { getParentLunchOverview } from "../app/actions/parent-overviews";
+import { getParentLunchOverview, getParentTripFundOverview } from "../app/actions/parent-overviews";
 import { db } from "../lib/db";
-import { getDayReports, saveDayReport, getDayDetailsForDate, saveDayDetails } from "../app/actions/day-details";
+import { getDayReports, saveDayReport, getDayDetailsForDate, saveDayDetails, getDayTripExpenses, setChildTripExpense, createTripExpense } from "../app/actions/day-details";
 import { getAttendanceCalendarMonth } from "../app/actions/calendar";
+import { internal } from "../convex/_generated/api";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const createTest = () => convexTest(schema, modules);
@@ -141,6 +142,103 @@ it("lets a teacher publish a report but rejects a parent's write without changin
   ]);
   await expect(saveDayReport(day, "Přepsáno rodičem")).rejects.toThrow("Unauthorized");
   expect(await getDayReports()).toEqual(published);
+});
+
+it.each(["2026-09-01", "2026-11-01"])("shows imported UTC-midnight meals for every role in Prague and edits one record: %s", async dateKey => {
+  const importedTimestamp = Date.parse(`${dateKey}T00:00:00Z`);
+  await t.mutation(internal.mealSync.applySnapshot, {
+    days: [{ date: dateKey, meal: "Polévka\nRizoto", mealCount: 17 }], startedAt: Date.now() - 1000,
+  });
+  const month = dateKey.slice(0, 7);
+  const teacher = await getAttendanceForDate(dateKey);
+  expect(teacher.details.meal).toBe("Polévka\nRizoto");
+  expect(teacher.details).not.toHaveProperty("mealCount");
+  expect((await getAttendanceCalendarMonth(month)).days.find(item => item.dateKey === dateKey)?.meal).toBe("Polévka\nRizoto");
+
+  transport.user = { id: "parent", role: "PARENT" };
+  const parentDay = (await getChildCalendarMonth("a", month)).find(item => item.date === dateKey);
+  expect(parentDay?.meal).toBe("Polévka\nRizoto");
+  expect(parentDay).not.toHaveProperty("mealCount");
+
+  transport.user = { id: "director", role: "DIRECTOR" };
+  const directorDay = (await getAttendanceCalendarMonth(month)).days.find(item => item.dateKey === dateKey);
+  expect(directorDay?.mealCount).toBe(17);
+  await saveDayDetails(dateKey, { name: "Výlet", meal: "Polévka\nTěstoviny", mealCount: 12 });
+  const details = await t.run(({ db }) => db.query("dayDetails").collect());
+  expect(details).toHaveLength(1);
+  expect(details[0]).toMatchObject({ date: importedTimestamp, name: "Výlet", meal: "Polévka\nTěstoviny", mealCount: 12 });
+  expect(await getDayDetailsForDate(dateKey)).toMatchObject({ name: "Výlet", meal: "Polévka\nTěstoviny", mealCount: 12 });
+});
+
+it("uses the synchronized canonical row for daily reads, calendars and edits when a legacy duplicate exists", async () => {
+  const utcDate = Date.parse(`${day}T00:00:00Z`);
+  const pragueDate = new Date(`${day}T00:00:00`).getTime();
+  const utcId = await t.run(async ({ db }) => {
+    const common = { name: "Les", expense: 80, recordedById: "director", updatedAt: Date.now() - 2000 };
+    const id = await db.insert("dayDetails", { ...common, date: utcDate, meal: "Staré UTC jídlo", mealCount: 1 });
+    await db.insert("dayDetails", { ...common, date: pragueDate, meal: "Staré místní jídlo", mealCount: 2 });
+    for (const date of [utcDate, pragueDate]) await db.insert("dayReports", { date, report: "Report", recordedById: "teacher", updatedAt: Date.now() - 2000 });
+    return id;
+  });
+  await t.mutation(internal.mealSync.applySnapshot, {
+    days: [{ date: day, meal: "Rizoto", mealCount: 17 }], startedAt: Date.now() - 1000,
+  });
+  expect((await getAttendanceForDate(day)).details.meal).toBe("Rizoto");
+  expect((await getAttendanceCalendarMonth(day.slice(0, 7))).days.find(row => row.dateKey === day)?.meal).toBe("Rizoto");
+  const listed = await db.dayDetails.list(new Date(`${day}T00:00:00`), new Date(`${day}T23:59:59`));
+  expect(listed).toHaveLength(1);
+  transport.user = { id: "parent", role: "PARENT" };
+  expect((await getChildCalendarMonth("a", day.slice(0, 7))).find(row => row.date === day)?.meal).toBe("Rizoto");
+  transport.user = { id: "director", role: "DIRECTOR" };
+  await saveDayDetails(day, { meal: "Těstoviny", mealCount: 12 });
+  expect(await getDayDetailsForDate(day)).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
+  expect((await getAttendanceCalendarMonth(day.slice(0, 7))).days.find(row => row.dateKey === day)).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
+  expect(await t.run(({ db }) => db.get(utcId))).toMatchObject({ meal: "Těstoviny", mealCount: 12 });
+  await saveDayDetails(day, { expense: null, report: null });
+  expect(await t.run(({ db }) => db.query("dayReports").collect())).toEqual([]);
+  expect((await getTripFundOverview()).days).toEqual([]);
+  expect((await getDayDetailsForDate(day)).report).toBeNull();
+});
+
+it.each(["details", "create"])("charges Prague attendance against an imported UTC trip day through %s", async entryPoint => {
+  await t.run(async ({ db }) => {
+    for (const child of await db.query("children").collect()) await db.patch(child._id, { fundSent: 500 });
+  });
+  const form = attendance("a", "b");
+  form.set("child-a", "present");
+  await saveAttendance(form);
+  await t.mutation(internal.mealSync.applySnapshot, {
+    days: [{ date: day, meal: "Rizoto", mealCount: 17 }], startedAt: Date.now() - 1000,
+  });
+  transport.user = { id: "director", role: "DIRECTOR" };
+  if (entryPoint === "create") await createTripExpense(day, 120, [{ childId: "a", amount: 80 }]);
+  else await saveDayDetails(day, { expense: 120 });
+  const initialAmount = entryPoint === "create" ? 80 : 120;
+  let overview = await getTripFundOverview();
+  expect(overview.days).toHaveLength(1);
+  expect(overview.children.find(child => child.childId === "a")).toMatchObject({ amounts: [initialAmount], fundBalance: 500 - initialAmount });
+  expect(overview.children.find(child => child.childId === "b")).toMatchObject({ amounts: [null], fundBalance: 500 });
+  expect(await getDayTripExpenses(day)).toEqual([
+    expect.objectContaining({ childId: "a", amount: initialAmount }),
+  ]);
+  await setChildTripExpense(day, "a", 60);
+  expect((await getTripFundOverview()).children.find(child => child.childId === "a")?.fundBalance).toBe(440);
+  expect(await t.run(({ db }) => db.query("childTripExpenses").collect())).toHaveLength(1);
+  await setChildTripExpense(day, "a", null);
+  expect((await getDayTripExpenses(day))[0]).toMatchObject({ amount: 120, override: null });
+  overview = await getTripFundOverview();
+  expect(overview.children.find(child => child.childId === "a")?.fundBalance).toBe(380);
+  expect(await t.run(({ db }) => db.query("dayDetails").collect())).toEqual([
+    expect.objectContaining({ date: Date.parse(`${day}T00:00:00Z`), expense: 120, meal: "Rizoto", mealCount: 17 }),
+  ]);
+  transport.user = { id: "parent", role: "PARENT" };
+  const parent = await getParentTripFundOverview();
+  expect(parent.children.find(child => child.childId === "a")?.fundBalance).toBe(380);
+  expect(parent.days[0]).not.toHaveProperty("mealCount");
+  transport.user = { id: "teacher", role: "TEACHER" };
+  await saveAttendance(attendance("a", "b"));
+  transport.user = { id: "director", role: "DIRECTOR" };
+  expect((await getTripFundOverview()).children.find(child => child.childId === "a")?.fundBalance).toBe(500);
 });
 
 it("keeps ordered meal counts private through actions, adapter and Convex", async () => {
