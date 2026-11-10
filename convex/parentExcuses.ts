@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { validateExcuseReason } from "../lib/excuse-reason";
 import { requireChildAttendanceStarted } from "./attendanceStart";
 import { mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -34,6 +35,7 @@ export const createParentExcuses = mutation({
   },
   handler: async (ctx, args) => {
     requireServerSecret(args.secret);
+    validateExcuseReason(args.reason);
     if (
       args.requestId.length < 16 ||
       args.requestId.length > 100 ||

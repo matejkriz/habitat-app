@@ -60,9 +60,7 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
   const startOfMonth = new Date(year, monthIndex, 1);
   const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
-  const [schoolDays, children, attendance, excuses, noLunchDays, priceCents, payments] = await Promise.all([
-    getSchoolDaysInRange(startOfMonth, endOfMonth),
-    (parentId === undefined ? db.children.list({
+  const childrenPromise = (parentId === undefined ? db.children.list({
       where: { active: true },
       include: {
         parents: {
@@ -75,7 +73,11 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
       },
     }) : db.parentLinks.list({ where: { parentId }, include: { child: true } }).then((links: { child: Child }[]) =>
       links.filter(link => link.child.active).map(({ child }) => ({ ...child, parents: [{ parent: { id: parentId } }] }))
-    )) as Promise<ReadonlyArray<LunchChildWithParentsRow>>,
+    )) as Promise<ReadonlyArray<LunchChildWithParentsRow>>;
+
+  const [schoolDays, children, attendance, excuses, noLunchDays, priceCents, payments] = await Promise.all([
+    getSchoolDaysInRange(startOfMonth, endOfMonth),
+    childrenPromise,
     db.attendance.list({
       where: {
         date: {
@@ -84,7 +86,11 @@ export async function loadLunchOverview(month: string, parentId?: string): Promi
         },
       },
     }) as Promise<ReadonlyArray<Attendance>>,
-    getExcusesOverlapping({ from: startOfMonth, to: endOfMonth }),
+    parentId === undefined
+      ? getExcusesOverlapping({ from: startOfMonth, to: endOfMonth })
+      : childrenPromise.then(children => Promise.all(children.map(child =>
+          getExcusesOverlapping({ childId: child.id, from: startOfMonth, to: endOfMonth }),
+        )).then(groups => groups.flat())),
     db.noLunchDays.list({
       where: { date: { gte: startOfMonth, lte: endOfMonth } },
     }) as Promise<ReadonlyArray<NoLunchDay>>,

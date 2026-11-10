@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { areExcuseEndpointsOpen, ExcuseValidationError, validateExcuseDates } from "./excuse-rules";
 import { getExcuseDayPartForRange } from "./excuse-input";
+import { validateExcuseReason } from "./excuse-reason";
 import { getLateDays, type CoveringExcuse } from "./excuse-coverage";
 import { getSchoolDaysInRange } from "./school-days";
 import { sendExcuseNotification } from "./slack";
@@ -73,6 +74,7 @@ export async function createExcuse(
     readonly kind?: ExcuseKind;
   },
 ): Promise<Excuse> {
+  validateExcuseReason(reason);
   // Validate dates
   const validation = validateExcuseDates(fromDate, toDate);
   if (!validation.valid) {
@@ -300,6 +302,7 @@ export async function updateExcuse(
   },
   userId: string
 ): Promise<Excuse> {
+  if (updates.reason !== undefined) validateExcuseReason(updates.reason);
   const current = await db.excuses.get({
     where: { id: excuseId },
   });
@@ -541,6 +544,7 @@ export async function createParentExcuses(
   },
   schoolDays: ReadonlyArray<Date>,
 ): Promise<Excuse[]> {
+  validateExcuseReason(input.reason);
   const validation = validateExcuseDates(input.fromDate, input.toDate);
   if (!validation.valid) throw new Error(validation.error);
   const result = await db.excuses.createParentBatch(input);

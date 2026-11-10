@@ -6,6 +6,7 @@ import { toDayDateKey } from "@/lib/day-date";
 import { randomUUID } from "node:crypto";
 import { getDbUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseExcuseReason } from "@/lib/excuse-reason";
 import {
   UserRole,
   Presence,
@@ -407,7 +408,7 @@ async function createParentRecord(formData: FormData, kind: "EXCUSE" | "MAKEUP")
     fromDate,
     toDate,
   );
-  const reason = typeof reasonValue === "string" ? reasonValue.trim() || null : null;
+  const reason = parseExcuseReason(reasonValue);
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
   if (!areExcuseEndpointsOpen(fromDate, toDate, schoolDays)) {
     throw new ExcuseValidationError(kind === "MAKEUP" ? "Začátek i konec náhrady musí být v den, kdy je Habitat otevřený." : CLOSED_EXCUSE_ENDPOINT_ERROR);
@@ -518,7 +519,7 @@ export const editParentExcuse = async (
       {
         fromDate: parseExcuseDate(input.fromDate),
         toDate: parseExcuseDate(input.toDate),
-        reason: input.reason.trim() || null,
+        reason: parseExcuseReason(input.reason),
         dayPart:
           input.dayPart === undefined
             ? undefined

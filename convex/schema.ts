@@ -133,6 +133,7 @@ export default defineSchema({
     .index("by_child_id", { fields: ["childId"] })
     .index("by_from_date", { fields: ["fromDate"] })
     .index("by_child_from_date", { fields: ["childId", "fromDate"] })
+    .index("by_child_submitted_at", { fields: ["childId", "submittedAt"] })
     .index("by_submitted_by_id", { fields: ["submittedById"] })
     .index("by_submitted_at", { fields: ["submittedAt"] }),
 

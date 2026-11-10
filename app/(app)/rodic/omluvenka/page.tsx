@@ -1,5 +1,6 @@
 "use client";
 
+import { EXCUSE_REASON_MAX_LENGTH } from "@/lib/excuse-reason";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -354,6 +355,8 @@ export default function NewExcusePage() {
             </div>}
 
             <Textarea
+              maxLength={EXCUSE_REASON_MAX_LENGTH}
+              hint={`Nejvýše ${EXCUSE_REASON_MAX_LENGTH} znaků.`}
               label={isMakeup ? "Poznámka (volitelné)" : "Důvod (volitelné)"}
               value={reason}
               onChange={(e) => setReason(e.target.value)}

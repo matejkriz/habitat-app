@@ -1,5 +1,6 @@
 "use client";
 
+import { EXCUSE_REASON_MAX_LENGTH } from "@/lib/excuse-reason";
 import { useState, type FormEvent } from "react";
 import { DayPartSelector } from "@/components/excuses/day-part-selector";
 import { Button } from "@/components/ui/button";
@@ -152,6 +153,8 @@ export function ExcuseEditor({ excuse, onSave, onDelete }: ExcuseEditorProps) {
         />
       ) : null}
       <Textarea
+        maxLength={EXCUSE_REASON_MAX_LENGTH}
+        hint={`Nejvýše ${EXCUSE_REASON_MAX_LENGTH} znaků.`}
         label={isMakeup ? "Poznámka" : "Důvod"}
         value={reason}
         onChange={(event) => setReason(event.target.value)}

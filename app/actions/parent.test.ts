@@ -90,6 +90,17 @@ describe("submitExcuse", () => {
     );
   });
 
+  it.each([submitExcuse, submitMakeup])("rejects an oversized reason before any batch write", async (submit) => {
+    const form = makeFormData();
+    form.set("reason", "x".repeat(501));
+    await expect(submit(form)).resolves.toEqual({
+      success: false,
+      error: "Důvod nebo poznámka může mít nejvýše 500 znaků.",
+    });
+    expect(mocks.createParentExcuses).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("creates one excuse for every selected child", async () => {
     const result = await submitExcuse(makeFormData());
     if (!result.success) throw new Error(result.error);

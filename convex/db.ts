@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { validateExcuseReason } from "../lib/excuse-reason";
 import { DEFAULT_ATTENDANCE_START_DATE, parseAttendanceStartDate } from "../lib/attendance-start";
 import { hasChildStartedAttendance, requireChildAttendanceStarted } from "./attendanceStart";
 import { mutation, query, type QueryCtx } from "./_generated/server";
@@ -270,6 +271,67 @@ export const getParentChild = query({
   },
 });
 
+const excuseDateRange = v.object({
+  gte: v.optional(v.number()),
+  lte: v.optional(v.number()),
+});
+
+export const listChildExcuses = query({
+  args: {
+    secret: v.string(),
+    childId: v.string(),
+    fromDate: v.optional(excuseDateRange),
+    submittedAt: v.optional(excuseDateRange),
+    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    take: v.optional(v.number()),
+  },
+  returns: v.array(v.any()),
+  handler: async ({ db }, args) => {
+    requireServerSecret(args.secret);
+    if (args.take !== undefined && (!Number.isSafeInteger(args.take) || args.take < 0)) {
+      throw new Error("Neplatný počet omluvenek.");
+    }
+    for (const range of [args.fromDate, args.submittedAt]) {
+      if (range && Object.values(range).some(value => value !== undefined && !Number.isFinite(value))) {
+        throw new Error("Neplatné datum.");
+      }
+      if (range?.gte !== undefined && range.lte !== undefined && range.gte > range.lte) {
+        return [];
+      }
+    }
+
+    // The parent's recent list reads only this child's newest index entries.
+    // Without an explicit sort, preserve the original insertion order.
+    let matches = args.order
+      ? db.query("excuses").withIndex("by_child_submitted_at", query => {
+          const child = query.eq("childId", args.childId);
+          const { gte, lte } = args.submittedAt ?? {};
+          if (gte !== undefined && lte !== undefined) {
+            return child.gte("submittedAt", gte).lte("submittedAt", lte);
+          }
+          if (gte !== undefined) return child.gte("submittedAt", gte);
+          if (lte !== undefined) return child.lte("submittedAt", lte);
+          return child;
+        }).order(args.order)
+      : db.query("excuses").withIndex("by_child_id", query =>
+          query.eq("childId", args.childId));
+
+    // Apply all predicates before take, including the unsorted query's range.
+    for (const field of ["fromDate", "submittedAt"] as const) {
+      const range = args[field];
+      if (range?.gte !== undefined) {
+        const lower = range.gte;
+        matches = matches.filter(query => query.gte(query.field(field), lower));
+      }
+      if (range?.lte !== undefined) {
+        const upper = range.lte;
+        matches = matches.filter(query => query.lte(query.field(field), upper));
+      }
+    }
+    return args.take === undefined ? matches.collect() : matches.take(args.take);
+  },
+});
+
 export const listExcusesOverlapping = query({
   args: {
     secret: v.string(),
@@ -356,6 +418,7 @@ export const insert = mutation({
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
     const value = { ...args.value };
+    if (args.table === "excuses") validateExcuseReason(value.reason ?? null);
     if (args.table === "children") {
       validateAttendanceDays(value.attendanceDays);
       value.attendanceStartDate = parseAttendanceStartDate(value.attendanceStartDate === undefined ? DEFAULT_ATTENDANCE_START_DATE : value.attendanceStartDate);
@@ -376,6 +439,8 @@ export const createExcuse = mutation({
   handler: async ({ db }, args) => {
     requireServerSecret(args.secret);
     const value = args.value;
+
+    validateExcuseReason(value.reason);
 
     const child = await db
       .query("children")
@@ -439,6 +504,7 @@ export const patchById = mutation({
     }
 
     if (args.table === "excuses") {
+      if ("reason" in args.patch) validateExcuseReason(args.patch.reason);
       const previous = current as Doc<"excuses">;
       // Give each saved revision a distinct key, including concurrent edits.
       await db.patch(previous._id, {

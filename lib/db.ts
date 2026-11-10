@@ -425,6 +425,21 @@ const matchesDateFilter = (date: number, value: unknown): boolean => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object";
 
+const excuseDateRange = (value: unknown): { gte?: number; lte?: number } | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (value instanceof Date || typeof value === "number" || typeof value === "string") {
+    const timestamp = toTimestamp(value);
+    return { gte: timestamp, lte: timestamp };
+  }
+  if (isRecord(value)) {
+    return {
+      ...(value.gte !== undefined ? { gte: toTimestamp(value.gte) } : {}),
+      ...(value.lte !== undefined ? { lte: toTimestamp(value.lte) } : {}),
+    };
+  }
+  throw new Error("Neplatné datum.");
+};
+
 const assertFound = <T>(value: T | null | undefined, message: string): T => {
   if (!value) {
     throw new Error(message);
@@ -1014,9 +1029,32 @@ export const db: any = {
     },
 
     list: async (args: ListArgs = {}) => {
-      const excuses = (await listTable<RawExcuse>("excuses")).map(fromRawExcuse);
-      const children = (await listTable<RawChild>("children")).map(fromRawChild);
-      const users = (await listTable<RawUser>("users")).map(fromRawUser);
+      const childId = typeof args.where?.childId === "string" && args.where.childId
+        ? args.where.childId : undefined;
+      const orderBy = args.orderBy as Record<string, unknown> | undefined;
+      const rawExcuses = childId
+        ? await convexQuery(api.db.listChildExcuses, {
+            secret: getServerSecret(),
+            childId,
+            fromDate: excuseDateRange(args.where?.fromDate),
+            submittedAt: excuseDateRange(args.where?.submittedAt),
+            order: orderBy?.submittedAt ? (orderBy.submittedAt === "desc" ? "desc" : "asc") : undefined,
+            take: args.take,
+          }) as ReadonlyArray<RawExcuse>
+        : await listTable<RawExcuse>("excuses");
+      const excuses = rawExcuses.map(fromRawExcuse);
+      const children = childId
+        ? args.include?.child && excuses.length
+          ? [await getById<RawChild>("children", childId)].filter((child): child is RawChild => child !== null).map(fromRawChild)
+          : []
+        : (await listTable<RawChild>("children")).map(fromRawChild);
+      const users = childId
+        ? args.include?.submittedBy
+          ? (await Promise.all([...new Set(excuses.map(excuse => excuse.submittedById))]
+              .map(id => getById<RawUser>("users", id))))
+              .filter((user): user is RawUser => user !== null).map(fromRawUser)
+          : []
+        : (await listTable<RawUser>("users")).map(fromRawUser);
 
       let filtered = excuses.filter((excuse) => {
         const where = args.where;
@@ -1034,7 +1072,6 @@ export const db: any = {
         return true;
       });
 
-      const orderBy = args.orderBy as Record<string, unknown> | undefined;
       if (orderBy && isRecord(orderBy) && orderBy.submittedAt) {
         filtered = [...filtered].sort(
           (a, b) =>

@@ -1,5 +1,6 @@
 "use client";
 
+import { EXCUSE_REASON_MAX_LENGTH } from "@/lib/excuse-reason";
 import { useCallback, useEffect, useState } from "react";
 import {
   createDirectorExcuse,
@@ -389,6 +390,8 @@ export default function ExcuseManagementPage() {
                 />
               </div>
               <Textarea
+                maxLength={EXCUSE_REASON_MAX_LENGTH}
+                hint={`Nejvýše ${EXCUSE_REASON_MAX_LENGTH} znaků.`}
                 label="Důvod (volitelné)"
                 name="reason"
                 placeholder="Např. nemoc, rodinné důvody…"

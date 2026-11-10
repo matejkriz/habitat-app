@@ -10,6 +10,7 @@ export type { LunchOverview } from "@/lib/lunch-overview";
 
 import { getDbUser, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseExcuseReason } from "@/lib/excuse-reason";
 import { getPresenceLabel } from "@/lib/presence-label";
 import {
   UserRole,
@@ -433,7 +434,9 @@ export async function createDirectorExcuse(
   const reasonValue = formData.get("reason");
   let cancelLunch: boolean;
   let requestedDayPart: ExcuseDayPart;
+  let reason: string | null;
   try {
+    reason = parseExcuseReason(reasonValue);
     requestedDayPart = parseExcuseDayPart(formData.get("dayPart"));
     cancelLunch = parseCancelLunchChoice(formData.get("cancelLunch"));
   } catch (error) {
@@ -482,8 +485,6 @@ export async function createDirectorExcuse(
     toDate,
   );
 
-  const reason =
-    typeof reasonValue === "string" ? reasonValue.trim() || null : null;
   const schoolDays = await getSchoolDaysInRange(fromDate, toDate);
   if (!areExcuseEndpointsOpen(fromDate, toDate, schoolDays)) {
     return { success: false, error: CLOSED_EXCUSE_ENDPOINT_ERROR };
@@ -595,7 +596,7 @@ export async function editExcuse(excuseId: string, input: ExcuseEditInput) {
       {
         fromDate: parseExcuseDate(input.fromDate),
         toDate: parseExcuseDate(input.toDate),
-        reason: input.reason.trim() || null,
+        reason: parseExcuseReason(input.reason),
         dayPart:
           input.dayPart === undefined
             ? undefined

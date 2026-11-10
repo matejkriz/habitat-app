@@ -582,6 +582,20 @@ describe("createDirectorExcuse", () => {
     mocks.sendExcuseNotification.mockResolvedValue(undefined);
   });
 
+  it("rejects an oversized director reason before writing or notifying", async () => {
+    const form = new FormData();
+    form.set("childId", "tobias");
+    form.set("fromDate", "2026-08-19");
+    form.set("toDate", "2026-08-19");
+    form.set("reason", "x".repeat(501));
+    await expect(createDirectorExcuse(form)).resolves.toEqual({
+      success: false,
+      error: "Důvod nebo poznámka může mít nejvýše 500 znaků.",
+    });
+    expect(mocks.excusesCreate).not.toHaveBeenCalled();
+    expect(mocks.sendExcuseNotification).not.toHaveBeenCalled();
+  });
+
   it("creates an already approved excuse regardless of the date", async () => {
     const formData = new FormData();
     formData.set("childId", "tobias");

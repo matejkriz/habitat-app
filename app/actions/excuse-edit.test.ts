@@ -43,6 +43,7 @@ for (const [role, action] of [["DIRECTOR", editExcuse], ["PARENT", editParentExc
       [{ fromDate: "2026-02-31" }, "Zadejte platné datum."],
       [{ fromDate: "2026-09-12", toDate: "2026-09-10" }, "Datum konce nesmí být před datem začátku."],
       [{ dayPart: "INVALID" }, "Neplatná část dne."],
+      [{ reason: "x".repeat(501) }, "Důvod nebo poznámka může mít nejvýše 500 znaků."],
     ])("returns a safe validation result for %j without saving or notifying", async (changes, error) => {
       await expect(action(excuse.id, { ...input, ...changes })).resolves.toEqual({ success: false, error });
       expect(mocks.update).not.toHaveBeenCalled();
