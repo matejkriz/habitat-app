@@ -1,114 +1,85 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const actions = vi.hoisted(() => ({
-  getCalendarSubscriptionLinks: vi.fn(),
-  rotateCalendarSubscriptionLinks: vi.fn(),
-  revokeCalendarSubscriptionLinks: vi.fn(),
-}));
-vi.mock("@/app/actions/calendar-subscriptions", () => actions);
-
+const getLinks = vi.hoisted(() => vi.fn());
+vi.mock("@/app/actions/calendar-subscriptions", () => ({ getCalendarSubscriptionLinks: getLinks }));
 import { CalendarSubscriptions } from "./calendar-subscriptions";
 
 const links = {
-  habitat: "https://app.habitatzbraslav.cz/api/calendars/personal-token/habitat.ics",
-  jidelnicek: "https://app.habitatzbraslav.cz/api/calendars/personal-token/jidelnicek.ics",
-};
-const newLinks = {
-  habitat: links.habitat.replace("personal-token", "new-personal-token"),
-  jidelnicek: links.jidelnicek.replace("personal-token", "new-personal-token"),
+  habitat: "https://app.example/api/calendars/personal-token/habitat.ics",
+  jidelnicek: "https://app.example/api/calendars/personal-token/jidelnicek.ics",
 };
 const writeText = vi.fn();
+const button = (name: string) => screen.getByRole("button", { name: `Kopírovat odkaz na kalendář ${name}` });
 
 beforeEach(() => {
   vi.resetAllMocks();
-  actions.getCalendarSubscriptionLinks.mockResolvedValue(links);
-  actions.rotateCalendarSubscriptionLinks.mockResolvedValue(newLinks);
-  actions.revokeCalendarSubscriptionLinks.mockResolvedValue(undefined);
+  getLinks.mockResolvedValue(links);
   writeText.mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
-  vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
+  vi.stubGlobal("ClipboardItem", undefined);
 });
+afterEach(() => vi.unstubAllGlobals());
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
-
-async function openLinks() {
-  render(<CalendarSubscriptions />);
-  fireEvent.click(screen.getByRole("button", { name: "Zobrazit odběrové odkazy" }));
-  await screen.findByRole("textbox", { name: "Odkaz na kalendář Habitat" });
-}
-
-describe("calendar subscriptions", () => {
-  it("creates links only on request and offers distinct read-only subscriptions", async () => {
-    let resolveLinks!: (value: typeof links) => void;
-    actions.getCalendarSubscriptionLinks.mockImplementation(() => new Promise(resolve => { resolveLinks = resolve; }));
+describe("calendar copy buttons", () => {
+  it("shows two buttons immediately, copies the chosen URLs and reuses the retrieved links", async () => {
     render(<CalendarSubscriptions />);
-    expect(actions.getCalendarSubscriptionLinks).not.toHaveBeenCalled();
-    const button = screen.getByRole("button", { name: "Zobrazit odběrové odkazy" });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    expect(actions.getCalendarSubscriptionLinks).toHaveBeenCalledTimes(1);
-    expect(button).toHaveProperty("disabled", true);
-    await act(async () => resolveLinks(links));
-
-    expect(screen.getByRole("textbox", { name: "Odkaz na kalendář Habitat" })).toHaveProperty("value", links.habitat);
-    expect(screen.getByRole("textbox", { name: "Odkaz na kalendář Habitat jídelníček" })).toHaveProperty("value", links.jidelnicek);
-    expect(screen.getAllByRole("link", { name: "Apple Kalendář" }).map(link => link.getAttribute("href"))).toEqual([
-      links.habitat.replace("https:", "webcal:"), links.jidelnicek.replace("https:", "webcal:"),
-    ]);
-    expect(screen.getByText(/Odběr neobsahuje docházku ani omluvenky dětí/)).toBeTruthy();
-    expect(screen.getByText(/Změny se mohou projevit se zpožděním/)).toBeTruthy();
+    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(button("Habitat").textContent).toBe("Habitat");
+    expect(button("Habitat jídelníček").textContent).toBe("Habitat jídelníček");
+    expect(getLinks).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    fireEvent.click(button("Habitat"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(links.habitat));
+    await waitFor(() => expect(button("Habitat").textContent).toBe("Zkopírováno"));
+    fireEvent.click(button("Habitat jídelníček"));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(links.jidelnicek));
+    await waitFor(() => expect(button("Habitat jídelníček").textContent).toBe("Zkopírováno"));
+    expect(getLinks).toHaveBeenCalledTimes(1);
   });
 
-  it("allows retry after a load failure without exposing the server error", async () => {
-    actions.getCalendarSubscriptionLinks.mockRejectedValueOnce(new Error("internal secret must stay hidden"));
+  it("starts clipboard permission handling before the server responds, for Safari", async () => {
+    let resolveLinks!: (value: typeof links) => void;
+    getLinks.mockImplementation(() => new Promise(resolve => { resolveLinks = resolve; }));
+    class DeferredClipboardItem {
+      constructor(readonly data: Record<string, Promise<Blob>>) {}
+    }
+    const write = vi.fn(async (items: DeferredClipboardItem[]) => {
+      await items[0].data["text/plain"];
+    });
+    vi.stubGlobal("ClipboardItem", DeferredClipboardItem);
+    vi.stubGlobal("navigator", { clipboard: { write } });
     render(<CalendarSubscriptions />);
-    fireEvent.click(screen.getByRole("button", { name: "Zobrazit odběrové odkazy" }));
-    expect(await screen.findByRole("alert")).not.toHaveProperty("textContent", expect.stringContaining("internal secret"));
-    fireEvent.click(screen.getByRole("button", { name: "Zobrazit odběrové odkazy" }));
-    await screen.findByRole("textbox", { name: "Odkaz na kalendář Habitat" });
+    fireEvent.click(button("Habitat"));
+    fireEvent.click(button("Habitat"));
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(getLinks).toHaveBeenCalledTimes(1);
+    expect(button("Habitat jídelníček")).toHaveProperty("disabled", true);
+    await act(async () => resolveLinks(links));
+    expect(await (await write.mock.calls[0][0][0].data["text/plain"]).text()).toBe(links.habitat);
+    expect(button("Habitat").textContent).toBe("Zkopírováno");
+  });
+
+  it("retries a failed link request without exposing server details", async () => {
+    getLinks.mockRejectedValueOnce(new Error("internal server details"));
+    render(<CalendarSubscriptions />);
+    fireEvent.click(button("Habitat"));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Odkaz se nepodařilo zkopírovat.");
+    await waitFor(() => expect(button("Habitat")).toHaveProperty("disabled", false));
+    fireEvent.click(button("Habitat"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(links.habitat));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("copies the chosen feed and keeps its URL selectable when clipboard access fails", async () => {
-    await openLinks();
-    fireEvent.click(screen.getByRole("button", { name: "Kopírovat odkaz: Habitat jídelníček" }));
-    expect(await screen.findByRole("status")).toHaveProperty("textContent", "Odkaz na kalendář Habitat jídelníček je zkopírovaný.");
-    expect(writeText).toHaveBeenLastCalledWith(links.jidelnicek);
-
+  it("offers a selected URL only when clipboard access is denied", async () => {
     writeText.mockRejectedValueOnce(new Error("NotAllowedError"));
-    fireEvent.click(screen.getByRole("button", { name: "Kopírovat odkaz: Habitat" }));
-    expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("ručně"));
-    const input = screen.getByRole("textbox", { name: "Odkaz na kalendář Habitat" });
+    render(<CalendarSubscriptions />);
+    fireEvent.click(button("Habitat jídelníček"));
+    const input = await screen.findByRole("textbox", { name: "Odkaz na kalendář Habitat jídelníček" });
+    expect(input).toHaveProperty("value", links.jidelnicek);
     expect(input).toHaveProperty("readOnly", true);
-    expect(input).toHaveProperty("value", links.habitat);
-  });
-
-  it("requires confirmation before rotating both links and explains re-subscription", async () => {
-    await openLinks();
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
-    fireEvent.click(screen.getByRole("button", { name: "Obnovit oba odkazy" }));
-    expect(actions.rotateCalendarSubscriptionLinks).not.toHaveBeenCalled();
-    expect(screen.getByRole("textbox", { name: "Odkaz na kalendář Habitat" })).toHaveProperty("value", links.habitat);
-
-    fireEvent.click(screen.getByRole("button", { name: "Obnovit oba odkazy" }));
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "Odkaz na kalendář Habitat" })).toHaveProperty("value", newLinks.habitat));
-    expect(screen.getByRole("textbox", { name: "Odkaz na kalendář Habitat jídelníček" })).toHaveProperty("value", newLinks.jidelnicek);
-    expect(screen.getByRole("status")).toHaveProperty("textContent", expect.stringContaining("přidejte oba kalendáře"));
-  });
-
-  it("keeps working links after failed revocation, then hides them only after success", async () => {
-    await openLinks();
-    actions.revokeCalendarSubscriptionLinks.mockRejectedValueOnce(new Error("temporary failure"));
-    fireEvent.click(screen.getByRole("button", { name: "Zneplatnit oba odkazy" }));
-    await screen.findByRole("alert");
-    expect(screen.getByRole("textbox", { name: "Odkaz na kalendář Habitat" })).toHaveProperty("value", links.habitat);
-    fireEvent.click(screen.getByRole("button", { name: "Zneplatnit oba odkazy" }));
-    await screen.findByRole("button", { name: "Zobrazit odběrové odkazy" });
-    expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.getByRole("status")).toHaveProperty("textContent", expect.stringContaining("zneplatněné"));
+    expect(document.activeElement).toBe(input);
+    expect(input).toHaveProperty("selectionStart", 0);
+    expect(input).toHaveProperty("selectionEnd", links.jidelnicek.length);
   });
 });

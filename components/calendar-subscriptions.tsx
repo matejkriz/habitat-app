@@ -1,137 +1,91 @@
 "use client";
 
-import { useId, useRef, useState, useTransition } from "react";
-import {
-  getCalendarSubscriptionLinks,
-  revokeCalendarSubscriptionLinks,
-  rotateCalendarSubscriptionLinks,
-} from "@/app/actions/calendar-subscriptions";
+import { useEffect, useRef, useState } from "react";
+import { getCalendarSubscriptionLinks } from "@/app/actions/calendar-subscriptions";
 import { Button } from "@/components/ui/button";
 
+type Calendar = "habitat" | "jidelnicek";
 type SubscriptionLinks = { habitat: string; jidelnicek: string };
-type Operation = "open" | "rotate" | "revoke";
-
 const calendars = [
-  { key: "habitat", name: "Habitat", description: "Společný program a události Habitatu." },
-  { key: "jidelnicek", name: "Habitat jídelníček", description: "Jídla objednaná pro Habitat." },
+  { key: "habitat", name: "Habitat" },
+  { key: "jidelnicek", name: "Habitat jídelníček" },
 ] as const;
 
-const linkClassName = "rounded text-sm font-semibold text-sage-dark underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold";
-
 export function CalendarSubscriptions() {
-  const headingId = useId();
-  const [links, setLinks] = useState<SubscriptionLinks | null>(null);
-  const [message, setMessage] = useState("");
+  const links = useRef<Promise<SubscriptionLinks> | null>(null);
+  const copying = useRef(false);
+  const [pending, setPending] = useState<Calendar | null>(null);
+  const [copied, setCopied] = useState<Calendar | null>(null);
   const [error, setError] = useState("");
-  const [pending, startTransition] = useTransition();
-  const [operation, setOperation] = useState<Operation>("open");
-  const saving = useRef(false);
+  const [fallback, setFallback] = useState<{ name: string; url: string } | null>(null);
 
-  function updateLinks(nextOperation: Operation) {
-    if (saving.current) return;
-    if (nextOperation === "rotate" && !window.confirm(
-      "Obnovit odkazy obou kalendářů? Dosavadní odkazy přestanou fungovat a oba kalendáře si budete muset přidat znovu.",
-    )) return;
-    if (nextOperation === "revoke" && !window.confirm(
-      "Zneplatnit odkazy obou kalendářů? Vaše kalendářová aplikace už přes ně nenačte další aktualizace.",
-    )) return;
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(null), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
-    saving.current = true;
-    setOperation(nextOperation);
+  async function copyLink(calendar: typeof calendars[number]) {
+    if (copying.current) return;
+    copying.current = true;
+    setPending(calendar.key);
+    setCopied(null);
     setError("");
-    setMessage("");
-    startTransition(async () => {
-      try {
-        if (nextOperation === "revoke") {
-          await revokeCalendarSubscriptionLinks();
-          setLinks(null);
-          setMessage("Odkazy obou kalendářů jsou zneplatněné. Již stažené události můžete odstranit ve své kalendářové aplikaci.");
-        } else {
-          setLinks(await (nextOperation === "rotate"
-            ? rotateCalendarSubscriptionLinks()
-            : getCalendarSubscriptionLinks()));
-          if (nextOperation === "rotate") {
-            setMessage("Odkazy jsou obnovené. Odeberte původní odběry a přidejte oba kalendáře pomocí nových odkazů.");
-          }
-        }
-      } catch {
-        setError("Odkazy se nepodařilo změnit. Zkuste akci znovu.");
-      } finally {
-        saving.current = false;
-      }
+    setFallback(null);
+    const request = links.current ??= getCalendarSubscriptionLinks().catch(error => {
+      links.current = null;
+      throw error;
     });
-  }
-
-  async function copyLink(name: string, url: string) {
-    setError("");
-    setMessage("");
     try {
-      await navigator.clipboard.writeText(url);
-      setMessage(`Odkaz na kalendář ${name} je zkopírovaný.`);
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        // Start the clipboard write during the click, preserving Safari's user gesture
+        // while the server action retrieves the personal subscription URL.
+        const data = request.then(value => new Blob([value[calendar.key]], { type: "text/plain" }));
+        void data.catch(() => {});
+        await navigator.clipboard.write([new ClipboardItem({ "text/plain": data })]);
+      } else {
+        await navigator.clipboard.writeText((await request)[calendar.key]);
+      }
+      setCopied(calendar.key);
     } catch {
-      setError("Kopírování se nepodařilo. Označte a zkopírujte odkaz z pole u kalendáře ručně.");
+      setError("Odkaz se nepodařilo zkopírovat.");
+      try {
+        setFallback({ name: calendar.name, url: (await request)[calendar.key] });
+      } catch {
+        // A failed server action is retried on the next click.
+      }
+    } finally {
+      copying.current = false;
+      setPending(null);
     }
   }
 
   return (
-    <section aria-labelledby={headingId} aria-busy={pending} className="rounded-xl border border-cream-dark bg-white p-4 sm:p-5">
-      <h2 id={headingId} className="font-semibold text-charcoal">Odebírat v mém kalendáři</h2>
-      <p className="mt-1 text-sm text-charcoal-light">
-        Přidejte si společný program a jídelníček Habitatu do svého kalendáře pouze pro čtení.
-        Odběr neobsahuje docházku ani omluvenky dětí.
-      </p>
-      <p className="mt-1 text-sm text-charcoal-light">
-        Kalendáře se aktualizují automaticky. Změny se mohou projevit se zpožděním podle vaší kalendářové aplikace.
-      </p>
-
-      {links ? (
-        <div className="mt-4 space-y-4">
-          {calendars.map(calendar => {
-            const url = links[calendar.key];
-            return (
-              <div key={calendar.key} className="min-w-0 rounded-lg bg-cream/50 p-3">
-                <h3 className="font-semibold text-charcoal">{calendar.name}</h3>
-                <p className="mt-1 text-sm text-charcoal-light">{calendar.description}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-3">
-                  <a href={url.replace(/^https?:/, "webcal:")} className={linkClassName}>Apple Kalendář</a>
-                  <Button type="button" variant="ghost" size="sm" disabled={pending}
-                    aria-label={`Kopírovat odkaz: ${calendar.name}`}
-                    onClick={() => void copyLink(calendar.name, url)}>Kopírovat odkaz</Button>
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-charcoal-light">
-                  <details>
-                    <summary className="w-fit cursor-pointer rounded font-semibold text-charcoal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold">Google Kalendář</summary>
-                    <p className="mt-2">Zkopírujte odkaz a na počítači otevřete <a className={linkClassName}
-                      href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl" target="_blank" rel="noreferrer">přidání kalendáře z adresy URL</a>. Vložte odkaz a zvolte Přidat kalendář. Odběr se pak zobrazí i v mobilní aplikaci.</p>
-                  </details>
-                  <details>
-                    <summary className="w-fit cursor-pointer rounded font-semibold text-charcoal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold">Outlook</summary>
-                    <p className="mt-2">Zkopírujte odkaz. V Outlooku otevřete Kalendář → Přidat kalendář → Přihlásit se k odběru z webu a vložte odkaz.</p>
-                  </details>
-                </div>
-                <label className="mt-3 block text-xs text-charcoal-light">
-                  Odběrový odkaz pro {calendar.name}
-                  <input readOnly value={url} aria-label={`Odkaz na kalendář ${calendar.name}`}
-                    onFocus={event => event.currentTarget.select()}
-                    className="mt-1 block w-full min-w-0 rounded border border-cream-dark bg-white px-2 py-2 text-sm text-charcoal focus:outline-2 focus:outline-gold" />
-                </label>
-              </div>
-            );
-          })}
-          <p className="text-xs text-charcoal-light">Odkazy jsou osobní. Každý, kdo je získá, může číst tyto společné kalendáře. Obnovení nebo zneplatnění se týká obou vašich odkazů.</p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" size="sm" disabled={pending} isLoading={pending && operation === "rotate"}
-              onClick={() => updateLinks("rotate")}>Obnovit oba odkazy</Button>
-            <Button type="button" variant="ghost" size="sm" className="text-red-700" disabled={pending} isLoading={pending && operation === "revoke"}
-              onClick={() => updateLinks("revoke")}>Zneplatnit oba odkazy</Button>
-          </div>
-        </div>
-      ) : (
-        <Button type="button" variant="outline" size="sm" className="mt-3" isLoading={pending}
-          onClick={() => updateLinks("open")}>Zobrazit odběrové odkazy</Button>
-      )}
-      {message ? <p role="status" className="mt-3 text-sm text-sage-dark">{message}</p> : null}
-      {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
-    </section>
+    <div>
+      <div role="group" aria-label="Kalendáře k odběru" className="flex flex-wrap gap-2">
+        {calendars.map(calendar => (
+          <Button key={calendar.key} type="button" variant="outline" size="sm"
+            aria-label={`Kopírovat odkaz na kalendář ${calendar.name}`}
+            title={`Kopírovat odkaz na kalendář ${calendar.name}`}
+            disabled={pending !== null} isLoading={pending === calendar.key}
+            onClick={() => void copyLink(calendar)}>
+            {pending !== calendar.key ? (
+              <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+              </svg>
+            ) : null}
+            {copied === calendar.key ? "Zkopírováno" : calendar.name}
+          </Button>
+        ))}
+        <span role="status" className="sr-only">{copied ? "Odkaz na kalendář je zkopírovaný." : ""}</span>
+      </div>
+      {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
+      {fallback ? (
+        <input readOnly value={fallback.url} aria-label={`Odkaz na kalendář ${fallback.name}`}
+          ref={input => { if (input) { input.focus(); input.select(); } }}
+          onFocus={event => event.currentTarget.select()}
+          className="mt-2 block w-full min-w-0 rounded border border-cream-dark bg-white px-2 py-2 text-sm text-charcoal focus:outline-2 focus:outline-gold" />
+      ) : null}
+    </div>
   );
 }

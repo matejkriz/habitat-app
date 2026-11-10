@@ -13,15 +13,20 @@ async function editor(page: Page) {
 }
 async function links(page: Page, path: string) {
   await page.goto(path);
-  await page.getByRole("button", { name: "Zobrazit odběrové odkazy" }).click();
-  const program = page.getByRole("textbox", { name: "Odkaz na kalendář Habitat", exact: true });
-  const meals = page.getByRole("textbox", { name: "Odkaz na kalendář Habitat jídelníček", exact: true });
-  await expect(program).toBeVisible();
-  return { habitat: await program.inputValue(), jidelnicek: await meals.inputValue() };
+  return { habitat: await copyLink(page, "Habitat"), jidelnicek: await copyLink(page, "Habitat jídelníček") };
 }
 
-test("shared calendar subscriptions update, cancel, rotate and revoke without a browser session", async ({ page }) => {
+async function copyLink(page: Page, calendar: string) {
+  const button = page.getByRole("button", { name: `Kopírovat odkaz na kalendář ${calendar}`, exact: true });
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(button).toHaveText("Zkopírováno");
+  return page.evaluate(() => navigator.clipboard.readText());
+}
+
+test("shared calendar copy buttons provide stable feeds that update and cancel without a browser session", async ({ page, context }) => {
   test.setTimeout(120_000);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const anonymous = await request.newContext({ storageState: { cookies: [], origins: [] } });
   const programMarker = `CalendarProgram${Date.now()}`;
   const mealMarker = `CalendarMeal${Date.now()}`;
@@ -55,8 +60,7 @@ test("shared calendar subscriptions update, cancel, rotate and revoke without a 
     expect(parent.habitat).not.toBe(staff.habitat);
     expect(await (await anonymous.get(parent.habitat)).text()).toBe(await initial.text());
     await page.reload();
-    await page.getByRole("button", { name: "Zobrazit odběrové odkazy" }).click();
-    await expect(page.getByRole("textbox", { name: "Odkaz na kalendář Habitat", exact: true })).toHaveValue(parent.habitat);
+    expect(await copyLink(page, "Habitat")).toBe(parent.habitat);
 
     await persona(page, "director-bohumil");
     fields = await editor(page);
@@ -71,20 +75,6 @@ test("shared calendar subscriptions update, cancel, rotate and revoke without a 
     expect(event).toContain("SEQUENCE:1");
     expect(await (await anonymous.get(parent.jidelnicek)).text()).toContain("STATUS:CANCELLED");
 
-    await persona(page, "parent-roza");
-    await links(page, "/rodic");
-    page.once("dialog", dialog => void dialog.accept());
-    await page.getByRole("button", { name: "Obnovit oba odkazy" }).click();
-    const program = page.getByRole("textbox", { name: "Odkaz na kalendář Habitat", exact: true });
-    await expect(program).not.toHaveValue(parent.habitat);
-    const rotated = await program.inputValue();
-    expect((await anonymous.get(parent.habitat, { headers: { "If-None-Match": initial.headers().etag } })).status()).toBe(404);
-    expect((await anonymous.get(rotated)).status()).toBe(200);
-    expect((await anonymous.get(staff.habitat)).status()).toBe(200);
-    page.once("dialog", dialog => void dialog.accept());
-    await page.getByRole("button", { name: "Zneplatnit oba odkazy" }).click();
-    await expect(page.getByRole("button", { name: "Zobrazit odběrové odkazy" })).toBeVisible();
-    expect((await anonymous.get(rotated)).status()).toBe(404);
   } finally {
     await anonymous.dispose();
     await persona(page, "director-bohumil");

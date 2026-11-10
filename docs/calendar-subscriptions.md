@@ -1,7 +1,9 @@
 # Odběry kalendářů
 
-Pod kalendářem rodičů i zaměstnanců je možnost **Odebírat v mém kalendáři**.
-Po zobrazení odkazů si lze přidat dva společné kalendáře pouze pro čtení:
+Pod kalendářem rodičů i zaměstnanců jsou rovnou dvě tlačítka s ikonou kalendáře.
+Kliknutí zkopíruje příslušný odběrový odkaz do schránky a tlačítko krátce zobrazí
+**Zkopírováno**. Nezobrazuje se další vysvětlení ani správa odběrů. Oba společné
+kalendáře jsou pouze pro čtení:
 
 - **Habitat**: názvy programu dne a mimořádná uzavření z `closedDays`.
 - **Habitat jídelníček**: skutečně objednaná jídla uložená synchronizací v aplikaci.
@@ -21,7 +23,8 @@ Jde o odběr URL; jednorázový import staženého souboru nepřebírá budoucí
 Každý uživatel má vlastní dvojici odkazů, ale obsah je společný pro Habitat.
 Držitel odkazu smí číst daný feed bez WorkOS session. Odkazy se nevytvářejí
 při pouhém renderování stránky a nejsou ukládány do browser storage.
-Obnovení zneplatní oba předchozí odkazy; uživatel si musí odběry přidat znovu.
+Serverové akce pro obnovení a zneplatnění zůstávají dostupné, ale nejsou součástí
+tohoto UI. Obnovení zneplatní oba předchozí odkazy; uživatel si musí odběry přidat znovu.
 Zneplatnění nebo odstranění uživatele zastaví další načítání. Dříve stažené
 události může být potřeba odstranit v klientovi.
 
@@ -30,7 +33,7 @@ HMAC identifikátor podpisového klíče. Token se
 odvozuje HMAC-SHA256 z nonce a stávajícího serverového `PUSH_INTERNAL_SECRET`
 s odděleným účelovým prefixem. Není potřeba nová proměnná. Secret se do URL
 ani klienta neposílá. Změna tohoto interního secretu zneplatní původní odkazy;
-při dalším zobrazení odběrových odkazů se automaticky vytvoří nová dvojice.
+při dalším kopírování odběrového odkazu se automaticky vytvoří nová dvojice.
 Odběrové URL jsou přístupové údaje: nevkládat do sdílených logů nebo reportů.
 
 ## Publikování a výpadky
