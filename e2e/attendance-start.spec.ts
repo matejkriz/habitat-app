@@ -111,7 +111,13 @@ test("child starts on the selected date across director, teacher, parent, and lu
     if (created) {
       await persona(page, "director-bohumil");
       await page.goto("/reditel/deti");
+      await childCard.getByRole("button", { name: childName, exact: true }).click();
       await childCard.getByRole("button", { name: "Deaktivovat", exact: true }).click();
+      await page.getByRole("dialog", { name: "Deaktivovat dítě?", exact: true })
+        .getByRole("button", { name: "Deaktivovat dítě", exact: true }).click();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      const detailsToggle = childCard.getByRole("button", { name: childName, exact: true });
+      if (await detailsToggle.getAttribute("aria-expanded") !== "true") await detailsToggle.click();
       await expect(childCard.getByText("Neaktivní", { exact: true })).toBeVisible();
     }
   }

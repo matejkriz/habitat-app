@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChildrenManagementPage from "./page";
 
@@ -24,6 +24,10 @@ describe("ChildrenManagementPage", () => {
   afterEach(cleanup);
   beforeEach(() => {
     vi.clearAllMocks();
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+    mocks.toggleChildActive.mockReset();
+    mocks.toggleChildActive.mockResolvedValue(undefined);
     mocks.getAllChildrenWithParents.mockResolvedValue([
       {
         id: "anna",
@@ -200,16 +204,21 @@ describe("ChildrenManagementPage", () => {
   });
   it("edits a child's fund contribution", async () => {
     render(<ChildrenManagementPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Upravit fond Anna Malá" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upravit fond Anna Malá" }));
     fireEvent.change(screen.getByLabelText("Posláno do fondu (Kč)"), { target: { value: "1500" } });
     fireEvent.click(screen.getByRole("button", { name: "Uložit fond" }));
     await waitFor(() => expect(mocks.updateChild).toHaveBeenCalledWith("anna", { fundSent: 1500 }));
     expect(await screen.findByText(/Zůstatek:.*1\s*500/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "neexistuje" } });
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "" } });
+    expect(screen.getByText(/Zůstatek:.*1\s*500/)).toBeTruthy();
   });
 
   it("invites a new parent from the child card when no parents exist", async () => {
     render(<ChildrenManagementPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Pozvat rodiče Anna Malá" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pozvat rodiče Anna Malá" }));
     expect(document.activeElement).toBe(screen.getByLabelText("E-mail rodiče"));
     fireEvent.change(screen.getByLabelText("E-mail rodiče"), { target: { value: invitedParent.email } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat pozvánku" }));
@@ -225,7 +234,8 @@ describe("ChildrenManagementPage", () => {
   it("keeps the assignment and retries failed delivery without duplicating the parent", async () => {
     mocks.inviteParentToChild.mockResolvedValueOnce({ parent: invitedParent, emailSent: false });
     render(<ChildrenManagementPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Pozvat rodiče Anna Malá" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pozvat rodiče Anna Malá" }));
     fireEvent.change(screen.getByLabelText("E-mail rodiče"), { target: { value: invitedParent.email } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat pozvánku" }));
 
@@ -243,7 +253,8 @@ describe("ChildrenManagementPage", () => {
   it("shows invitation errors and leaves the email available for correction", async () => {
     mocks.inviteParentToChild.mockRejectedValueOnce(new Error("Tento účet není rodičovský účet."));
     render(<ChildrenManagementPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Pozvat rodiče Anna Malá" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pozvat rodiče Anna Malá" }));
     fireEvent.change(screen.getByLabelText("E-mail rodiče"), { target: { value: invitedParent.email } });
     fireEvent.click(screen.getByRole("button", { name: "Odeslat pozvánku" }));
 
@@ -257,7 +268,8 @@ describe("ChildrenManagementPage", () => {
     let finish!: (result: { parent: typeof invitedParent; emailSent: boolean }) => void;
     mocks.inviteParentToChild.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
     render(<ChildrenManagementPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Pozvat rodiče Anna Malá" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pozvat rodiče Anna Malá" }));
     fireEvent.change(screen.getByLabelText("E-mail rodiče"), { target: { value: invitedParent.email } });
     const submit = screen.getByRole("button", { name: "Odeslat pozvánku" }) as HTMLButtonElement;
     fireEvent.click(submit);
@@ -297,7 +309,8 @@ describe("ChildrenManagementPage", () => {
     mocks.getAllParents.mockResolvedValueOnce([invitedParent]);
     mocks.assignParentToChild.mockResolvedValueOnce(undefined);
     render(<ChildrenManagementPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Přiřadit rodiče" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Přiřadit rodiče" }));
     fireEvent.change(screen.getByLabelText("Vyberte rodiče"), { target: { value: invitedParent.id } });
     fireEvent.click(screen.getByRole("button", { name: "Přiřadit" }));
 
@@ -306,25 +319,95 @@ describe("ChildrenManagementPage", () => {
     expect(mocks.inviteParentToChild).not.toHaveBeenCalled();
   });
 
-});
+  it("filters names without accents and sorts both sections by Czech surname or start date", async () => {
+    const child = { gender: "FEMALE", active: true, doesNotTakeLunch: false, parents: [] };
+    mocks.getAllChildrenWithParents.mockResolvedValue([
+      { ...child, id: "z", firstName: "Žofie", lastName: "Žížalka", attendanceStartDate: "2026-08-01" },
+      { ...child, id: "c", firstName: "Cyril", lastName: "Cibulka", attendanceStartDate: "2026-10-01" },
+      { ...child, id: "b", firstName: "Božena", lastName: "Červená" },
+      { ...child, id: "a", firstName: "Adam", lastName: "Červený", active: false, attendanceStartDate: "2026-07-01" },
+    ]);
+    render(<ChildrenManagementPage />);
+    await screen.findByRole("button", { name: "Žofie Žížalka" });
+    const names = () => screen.getAllByRole("button").filter(button => button.hasAttribute("aria-controls") && button.getAttribute("aria-controls")?.startsWith("child-details-")).map(button => button.textContent);
+    expect(names()).toEqual(["Cyril Cibulka", "Božena Červená", "Žofie Žížalka", "Adam Červený"]);
+    fireEvent.change(screen.getByLabelText("Řadit podle"), { target: { value: "surname-desc" } });
+    expect(names()).toEqual(["Žofie Žížalka", "Božena Červená", "Cyril Cibulka", "Adam Červený"]);
+    fireEvent.change(screen.getByLabelText("Řadit podle"), { target: { value: "start-asc" } });
+    expect(names()).toEqual(["Žofie Žížalka", "Božena Červená", "Cyril Cibulka", "Adam Červený"]);
+    fireEvent.change(screen.getByLabelText("Řadit podle"), { target: { value: "start-desc" } });
+    expect(names()).toEqual(["Cyril Cibulka", "Božena Červená", "Žofie Žížalka", "Adam Červený"]);
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "  CERVEN  " } });
+    expect(names()).toEqual(["Božena Červená", "Adam Červený"]);
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "zizalka ZOFIE" } });
+    expect(names()).toEqual(["Žofie Žížalka"]);
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "neexistuje" } });
+    expect(screen.queryByRole("button", { name: /^Upravit / })).toBeNull();
+    expect(screen.getByText("Vyhledávání neodpovídají žádné aktivní děti.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "" } });
+    expect(names()).toHaveLength(4);
+  });
 
-it("keeps each child's action locked while other rows finish", async () => {
-  const child = { firstName: "Anna", lastName: "Malá", gender: "FEMALE", active: true, doesNotTakeLunch: false, parents: [] };
-  mocks.getAllChildrenWithParents.mockResolvedValue([{ ...child, id: "a" }, { ...child, id: "b", firstName: "Eva" }]);
-  let finishA!: () => void;
-  let finishB!: () => void;
-  mocks.toggleChildActive.mockImplementation((id: string) => new Promise<void>(resolve => {
-    if (id === "a") finishA = resolve; else finishB = resolve;
-  }));
-  render(<ChildrenManagementPage />);
-  const buttons = await screen.findAllByRole("button", { name: /Deaktivovat/ });
-  fireEvent.click(buttons[0]);
-  fireEvent.click(buttons[1]);
-  expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
-  expect((buttons[1] as HTMLButtonElement).disabled).toBe(true);
-  await act(async () => finishB());
-  expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(buttons[0]);
-  expect(mocks.toggleChildActive).toHaveBeenCalledTimes(2);
-  await act(async () => finishA());
+  it("collapses each child's details independently and shows parent names and emails", async () => {
+    const child = { lastName: "Malá", gender: "FEMALE", active: true, doesNotTakeLunch: false, parents: [{ id: "p", name: "Petra Malá", email: "petra@example.cz" }] };
+    mocks.getAllChildrenWithParents.mockResolvedValue([{ ...child, id: "anna", firstName: "Anna" }, { ...child, id: "eva", firstName: "Eva" }]);
+    render(<ChildrenManagementPage />);
+    const anna = await screen.findByRole("button", { name: "Anna Malá" });
+    const eva = screen.getByRole("button", { name: "Eva Malá" });
+    expect(anna.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Pozvat rodiče Anna Malá" })).toBeNull();
+    fireEvent.click(anna);
+    expect(anna.getAttribute("aria-expanded")).toBe("true");
+    expect(eva.getAttribute("aria-expanded")).toBe("false");
+    const details = document.getElementById(anna.getAttribute("aria-controls")!)!;
+    expect(within(details).getByText("Petra Malá")).toBeTruthy();
+    expect(within(details).getByText("petra@example.cz")).toBeTruthy();
+    fireEvent.click(eva);
+    fireEvent.click(anna);
+    expect(eva.getAttribute("aria-expanded")).toBe("true");
+    expect(anna.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Upravit Anna Malá" }));
+    expect(anna.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText("Jméno dítěte")).toBeTruthy();
+  });
+
+  it("requires confirmation, supports cancellation, and locks deactivation while saving", async () => {
+    let finish!: () => void;
+    mocks.toggleChildActive.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deaktivovat" }));
+    let dialog = screen.getByRole("dialog", { name: "Deaktivovat dítě?" });
+    expect(dialog.textContent).toContain("Anna Malá");
+    expect(mocks.toggleChildActive).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Zrušit" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mocks.toggleChildActive).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Deaktivovat" }));
+    dialog = screen.getByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: "Deaktivovat dítě" }) as HTMLButtonElement;
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(confirm.disabled).toBe(true);
+    expect((within(dialog).getByRole("button", { name: "Zrušit" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mocks.toggleChildActive).toHaveBeenCalledExactlyOnceWith("anna", false);
+    await act(async () => finish());
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByText("Neaktivní děti (1)")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Aktivovat" }));
+    await waitFor(() => expect(mocks.toggleChildActive).toHaveBeenLastCalledWith("anna", true));
+  });
+
+  it("keeps the confirmation open on failure and permits retry", async () => {
+    mocks.toggleChildActive.mockRejectedValueOnce(new Error("Uložení selhalo."));
+    render(<ChildrenManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Anna Malá" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deaktivovat" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Deaktivovat dítě" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Uložení selhalo.");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Deaktivovat dítě" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(mocks.toggleChildActive).toHaveBeenCalledTimes(2);
+  });
 });

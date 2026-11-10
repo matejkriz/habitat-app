@@ -10,7 +10,9 @@ type Parent = ChildWithParents["parents"][number];
 export function InviteParent({
   child,
   onInvited,
+  children,
 }: {
+  children?: React.ReactNode;
   child: ChildWithParents;
   onInvited: (parent: Parent) => void;
 }) {
@@ -52,26 +54,30 @@ export function InviteParent({
 
   return (
     <div className="mt-3">
-      <Button
-        ref={triggerRef}
-        type="button"
-        size="sm"
-        variant="outline"
-        aria-label={`Pozvat rodiče ${child.firstName} ${child.lastName}`}
-        aria-expanded={isOpen}
-        aria-controls={formId}
-        disabled={isSending}
-        onClick={() => {
-          setIsOpen(!isOpen);
-          setError("");
-          setConfirmation("");
-        }}
-      >
-        <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-        Pozvat rodiče
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          ref={triggerRef}
+          type="button"
+          size="sm"
+          className="min-h-10"
+          variant="outline"
+          aria-label={`Pozvat rodiče ${child.firstName} ${child.lastName}`}
+          aria-expanded={isOpen}
+          aria-controls={formId}
+          disabled={isSending}
+          onClick={() => {
+            setIsOpen(!isOpen);
+            setError("");
+            setConfirmation("");
+          }}
+        >
+          <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          Pozvat rodiče
+        </Button>
+        {children}
+      </div>
 
       {isOpen && (
         <form id={formId} onSubmit={send} className="mt-3 max-w-lg space-y-3 rounded-lg border border-sage/20 bg-white p-4">

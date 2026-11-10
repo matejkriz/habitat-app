@@ -22,6 +22,7 @@ import {
   Badge,
   Toggle,
 } from "@/components/ui";
+import { DeactivateChildDialog } from "./deactivate-child-dialog";
 import { ChildFund } from "./child-fund";
 import { InviteParent } from "./invite-parent";
 import type { ChildGender } from "@/lib/types";
@@ -38,6 +39,19 @@ export default function ChildrenManagementPage() {
   const [children, setChildren] = useState<ChildWithParents[]>([]);
   const [parents, setParents] = useState<Parent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("surname-asc");
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set());
+  const [deactivatingChild, setDeactivatingChild] = useState<ChildWithParents | null>(null);
+  const [toggleError, setToggleError] = useState("");
+
+  const expandChild = (id: string) => setExpandedIds(ids => new Set(ids).add(id));
+  const toggleExpanded = (id: string) => setExpandedIds(ids => {
+    const next = new Set(ids);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // New child form
   const [isNewChildFormOpen, setIsNewChildFormOpen] = useState(false);
@@ -126,10 +140,8 @@ export default function ChildrenManagementPage() {
       setChildren((prev) => [
         ...prev,
         { ...newChild, parents: [] },
-      ].sort((a, b) => {
-        if (a.active !== b.active) return a.active ? -1 : 1;
-        return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
-      }));
+      ]);
+      expandChild(newChild.id);
       setNewFirstName("");
       setNewLastName("");
       setNewGender("");
@@ -146,6 +158,7 @@ export default function ChildrenManagementPage() {
   };
 
   const handleStartEdit = (child: ChildWithParents) => {
+    expandChild(child.id);
     setEditingChildId(child.id);
     setEditError("");
     setEditAttendanceStartDate(getAttendanceStartDate(child));
@@ -179,24 +192,19 @@ export default function ChildrenManagementPage() {
         attendanceStartDate: editAttendanceStartDate,
       });
       setChildren((prev) =>
-        prev
-          .map((c) =>
-            c.id === editingChildId
-              ? {
-                  ...c,
-                  firstName: editFirstName,
-                  lastName: editLastName,
-                  gender: editGender,
-                  doesNotTakeLunch: editDoesNotTakeLunch,
-                  attendanceDays: editAttendanceDays,
-                  attendanceStartDate: editAttendanceStartDate,
-                }
-              : c
-          )
-          .sort((a, b) => {
-            if (a.active !== b.active) return a.active ? -1 : 1;
-            return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
-          })
+        prev.map((c) =>
+          c.id === editingChildId
+            ? {
+                ...c,
+                firstName: editFirstName,
+                lastName: editLastName,
+                gender: editGender,
+                doesNotTakeLunch: editDoesNotTakeLunch,
+                attendanceDays: editAttendanceDays,
+                attendanceStartDate: editAttendanceStartDate,
+              }
+            : c
+        )
       );
       handleCancelEdit();
     } catch (err) {
@@ -208,19 +216,17 @@ export default function ChildrenManagementPage() {
 
   const handleToggleActive = async (childId: string, currentActive: boolean) => {
     if (togglingIds.has(childId)) return;
+    setToggleError("");
     setTogglingIds(ids => new Set(ids).add(childId));
     try {
       await toggleChildActive(childId, !currentActive);
       setChildren((prev) =>
-        prev
-          .map((c) => (c.id === childId ? { ...c, active: !currentActive } : c))
-          .sort((a, b) => {
-            if (a.active !== b.active) return a.active ? -1 : 1;
-            return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
-          })
+        prev.map((c) => (c.id === childId ? { ...c, active: !currentActive } : c))
       );
+      return true;
     } catch (err) {
-      console.error("Failed to toggle child status:", err);
+      setToggleError(err instanceof Error ? err.message : "Nepodařilo se změnit stav dítěte.");
+      return false;
     } finally {
       setTogglingIds(ids => {
         const next = new Set(ids);
@@ -310,8 +316,21 @@ export default function ChildrenManagementPage() {
     return parents.filter((p) => !assignedParentIds.has(p.id));
   };
 
-  const activeChildren = children.filter((c) => c.active);
-  const inactiveChildren = children.filter((c) => !c.active);
+  const normalizeName = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("cs-CZ").trim();
+  const searchTerms = normalizeName(search).split(/\s+/).filter(Boolean);
+  const visibleChildren = children
+    .filter(child => searchTerms.every(term => normalizeName(`${child.firstName} ${child.lastName}`).includes(term)))
+    .sort((a, b) => {
+      const surnameOrder = a.lastName.localeCompare(b.lastName, "cs") || a.firstName.localeCompare(b.firstName, "cs");
+      if (sortBy === "surname-desc") return -surnameOrder;
+      if (sortBy.startsWith("start-")) {
+        const dateOrder = getAttendanceStartDate(a).localeCompare(getAttendanceStartDate(b));
+        return (sortBy === "start-desc" ? -dateOrder : dateOrder) || surnameOrder;
+      }
+      return surnameOrder;
+    });
+  const activeChildren = visibleChildren.filter((c) => c.active);
+  const inactiveChildren = visibleChildren.filter((c) => !c.active);
 
   return (
     <div className="space-y-6">
@@ -432,8 +451,36 @@ export default function ChildrenManagementPage() {
         </CardContent>
       </Card>
 
+      <Card className="p-4 sm:p-6">
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
+          <Input
+            id="children-search"
+            type="search"
+            label="Vyhledat dítě"
+            placeholder="Jméno nebo příjmení"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+          />
+          <Select
+            id="children-sort"
+            label="Řadit podle"
+            value={sortBy}
+            onChange={event => setSortBy(event.target.value)}
+            className="pr-8"
+            options={[
+              { value: "surname-asc", label: "Příjmení A–Z" },
+              { value: "surname-desc", label: "Příjmení Z–A" },
+              { value: "start-asc", label: "Nástup od nejstaršího" },
+              { value: "start-desc", label: "Nástup od nejnovějšího" },
+            ]}
+          />
+        </div>
+        {!isLoading && <p className="mt-3 text-sm text-charcoal-light" aria-live="polite">Zobrazeno {visibleChildren.length} z {children.length} dětí</p>}
+      </Card>
+      {toggleError && !deactivatingChild && <p role="alert" className="text-sm text-coral-dark">{toggleError}</p>}
+
       {/* Children list */}
-      <Card>
+      <Card className="p-4 sm:p-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <svg
@@ -459,7 +506,7 @@ export default function ChildrenManagementPage() {
             </div>
           ) : activeChildren.length === 0 ? (
             <p className="text-charcoal-light text-center py-8">
-              Žádné aktivní děti
+              {searchTerms.length ? "Vyhledávání neodpovídají žádné aktivní děti." : "Žádné aktivní děti"}
             </p>
           ) : (
             <div className="space-y-3">
@@ -467,6 +514,8 @@ export default function ChildrenManagementPage() {
                 <ChildRow
                   key={child.id}
                   child={child}
+                  isExpanded={expandedIds.has(child.id)}
+                  onToggleExpanded={() => toggleExpanded(child.id)}
                   isEditing={editingChildId === child.id}
                   editFirstName={editFirstName}
                   editLastName={editLastName}
@@ -487,10 +536,18 @@ export default function ChildrenManagementPage() {
                   onStartEdit={() => handleStartEdit(child)}
                   onCancelEdit={handleCancelEdit}
                   onSaveEdit={handleSaveEdit}
-                  onToggleActive={() => handleToggleActive(child.id, child.active)}
+                  onToggleActive={() => {
+                    if (child.active) {
+                      setToggleError("");
+                      setDeactivatingChild(child);
+                    } else {
+                      void handleToggleActive(child.id, child.active);
+                    }
+                  }}
                   onOpenAssignModal={() => handleOpenAssignModal(child.id)}
                   onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
                   onParentInvited={(parent) => handleParentInvited(child.id, parent)}
+                  onFundSaved={(fundSent) => setChildren(current => current.map(existing => existing.id === child.id ? { ...existing, fundSent } : existing))}
                 />
               ))}
             </div>
@@ -499,8 +556,8 @@ export default function ChildrenManagementPage() {
       </Card>
 
       {/* Inactive children */}
-      {inactiveChildren.length > 0 && (
-        <Card>
+      {children.some(child => !child.active) && (
+        <Card className="p-4 sm:p-6">
           <CardHeader>
             <CardTitle className="text-charcoal-light">
               Neaktivní děti ({inactiveChildren.length})
@@ -508,10 +565,13 @@ export default function ChildrenManagementPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
+              {inactiveChildren.length === 0 && <p className="py-8 text-center text-charcoal-light">Vyhledávání neodpovídají žádné neaktivní děti.</p>}
               {inactiveChildren.map((child) => (
                 <ChildRow
                   key={child.id}
                   child={child}
+                  isExpanded={expandedIds.has(child.id)}
+                  onToggleExpanded={() => toggleExpanded(child.id)}
                   isEditing={editingChildId === child.id}
                   editFirstName={editFirstName}
                   editLastName={editLastName}
@@ -532,16 +592,36 @@ export default function ChildrenManagementPage() {
                   onStartEdit={() => handleStartEdit(child)}
                   onCancelEdit={handleCancelEdit}
                   onSaveEdit={handleSaveEdit}
-                  onToggleActive={() => handleToggleActive(child.id, child.active)}
+                  onToggleActive={() => {
+                    if (child.active) {
+                      setToggleError("");
+                      setDeactivatingChild(child);
+                    } else {
+                      void handleToggleActive(child.id, child.active);
+                    }
+                  }}
                   onOpenAssignModal={() => handleOpenAssignModal(child.id)}
                   onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
                   onParentInvited={(parent) => handleParentInvited(child.id, parent)}
+                  onFundSaved={(fundSent) => setChildren(current => current.map(existing => existing.id === child.id ? { ...existing, fundSent } : existing))}
                   inactive
                 />
               ))}
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {deactivatingChild && (
+        <DeactivateChildDialog
+          child={deactivatingChild}
+          isSaving={togglingIds.has(deactivatingChild.id)}
+          error={toggleError}
+          onCancel={() => { setDeactivatingChild(null); setToggleError(""); }}
+          onConfirm={async () => {
+            if (await handleToggleActive(deactivatingChild.id, true)) setDeactivatingChild(null);
+          }}
+        />
       )}
 
       {/* Assign parent modal */}
@@ -614,6 +694,8 @@ export default function ChildrenManagementPage() {
 
 interface ChildRowProps {
   child: ChildWithParents;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
   isEditing: boolean;
   editFirstName: string;
   editLastName: string;
@@ -638,11 +720,14 @@ interface ChildRowProps {
   onOpenAssignModal: () => void;
   onRemoveParent: (parentId: string) => void;
   onParentInvited: (parent: Parent) => void;
+  onFundSaved: (fundSent: number | null) => void;
   inactive?: boolean;
 }
 
 function ChildRow({
   child,
+  isExpanded,
+  onToggleExpanded,
   isEditing,
   editFirstName,
   editLastName,
@@ -667,270 +752,216 @@ function ChildRow({
   onOpenAssignModal,
   onRemoveParent,
   onParentInvited,
+  onFundSaved,
   inactive,
 }: ChildRowProps) {
   return (
     <div
       className={`p-4 rounded-lg border ${
         inactive
-          ? "bg-cream/50 border-cream-dark opacity-70"
+          ? "bg-cream/50 border-cream-dark"
           : "bg-cream border-cream-dark"
       }`}
     >
-      {/* Child info and actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        {isEditing ? (
-          <div className="flex-1 space-y-3">
-            {editError && <p role="alert" className="text-sm text-coral">{editError}</p>}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={editFirstName}
-                onChange={(e) => setEditFirstName(e.target.value)}
-                className="sm:w-40"
-                placeholder="Jméno"
-              />
-              <Input
-                value={editLastName}
-                onChange={(e) => setEditLastName(e.target.value)}
-                className="sm:w-40"
-                placeholder="Příjmení"
-              />
-              <Select
-                value={editGender}
-                onChange={(e) => setEditGender(e.target.value as ChildGender | "")}
-                options={[
-                  { value: "", label: "-- Pohlaví --" },
-                  { value: "FEMALE", label: "Dívka" },
-                  { value: "MALE", label: "Chlapec" },
-                ]}
-                className="sm:w-36"
-                aria-label="Pohlaví"
-                required
-              />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={onSaveEdit}
-                  isLoading={isSavingEdit}
-                  disabled={!editGender || !editAttendanceStartDate}
-                >
-                  Uložit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={onCancelEdit}
-                  disabled={isSavingEdit}
-                >
-                  Zrušit
-                </Button>
-              </div>
-            </div>
-            <Input
-              id={`edit-child-attendance-start-${child.id}`}
-              label="Datum nástupu"
-              type="date"
-              value={editAttendanceStartDate}
-              onChange={(event) => setEditAttendanceStartDate(event.target.value)}
-              disabled={isSavingEdit}
-              required
-            />
-            <Toggle
-              label="Neodebírá obědy"
-              description="Omluvenky se schválí automaticky a dítě nebude v přehledu Obědy."
-              checked={editDoesNotTakeLunch}
-              onChange={(event) => setEditDoesNotTakeLunch(event.target.checked)}
-              disabled={isSavingEdit}
-            />
-            <fieldset>
-              <legend className="mb-2 text-sm font-semibold text-charcoal">Docházka</legend>
-              <div className="flex flex-wrap gap-2">
-                {["Pondělí", "Úterý", "Středa", "Čtvrtek"].map((label, index) => {
-                  const day = index + 1;
-                  const attends = editAttendanceDays.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      aria-pressed={attends}
-                      disabled={isSavingEdit}
-                      onClick={() => setEditAttendanceDays(attends
-                        ? editAttendanceDays.filter((value) => value !== day)
-                        : [...editAttendanceDays, day].sort())}
-                      className={`min-h-11 rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 ${attends
-                        ? "border-sage bg-sage/15 text-sage-dark"
-                        : "border-sky-200 bg-sky-50 text-sky-700"}`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-sm text-charcoal-light">Vyberte dny, kdy dítě pravidelně chodí do Habitatu.</p>
-            </fieldset>
-          </div>
-        ) : (
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <p className="font-medium text-charcoal">
-                {child.firstName} {child.lastName}
-              </p>
-              {child.gender === null && (
-                <Badge variant="excused" className="text-xs">
-                  Doplňte pohlaví
-                </Badge>
-              )}
-              {child.doesNotTakeLunch && (
-                <Badge variant="info" className="text-xs">
-                  Bez obědů
-                </Badge>
-              )}
-              {!child.active && (
-                <Badge variant="default" className="text-xs">
-                  Neaktivní
-                </Badge>
-              )}
-            </div>
-            <p className="mt-1 text-sm text-charcoal-light">Nástup: {parseDayDate(getAttendanceStartDate(child)).toLocaleDateString("cs-CZ")}</p>
-          </div>
-        )}
-
-        {!isEditing && (
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onStartEdit}
-              aria-label={`Upravit ${child.firstName} ${child.lastName}`}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-            </Button>
-            <Button size="sm" variant="outline" onClick={onOpenAssignModal}>
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                />
-              </svg>
-              <span className="hidden sm:inline ml-1">Přiřadit rodiče</span>
-            </Button>
-            <Button
-              size="sm"
-              variant={child.active ? "ghost" : "outline"}
-              onClick={onToggleActive}
-              isLoading={togglingIds.has(child.id)}
-              className={child.active ? "text-coral hover:bg-coral/10" : "text-sage"}
-            >
-              {child.active ? (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline ml-1">Deaktivovat</span>
-                </>
-              ) : (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline ml-1">Aktivovat</span>
-                </>
-              )}
-            </Button>
-          </div>
-        )}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          id={`child-toggle-${child.id}`}
+          aria-expanded={isExpanded}
+          aria-controls={`child-details-${child.id}`}
+          onClick={onToggleExpanded}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md text-left font-medium text-charcoal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+        >
+          <svg aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m9 5 7 7-7 7" />
+          </svg>
+          <span className="min-w-0 break-words">{child.firstName} {child.lastName}</span>
+        </button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-11 w-11 shrink-0 px-0"
+          onClick={onStartEdit}
+          disabled={isEditing}
+          aria-label={`Upravit ${child.firstName} ${child.lastName}`}
+        >
+          <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </Button>
       </div>
 
-      <ChildFund child={child} />
-
-      {/* Parents list */}
-      <div className="mt-3 pt-3 border-t border-cream-dark">
-        <p className="text-xs text-charcoal-light uppercase tracking-wide mb-2">
-          Přiřazení rodiče:
-        </p>
-        {child.parents.length === 0 ? (
-          <p className="text-sm text-charcoal-light italic">
-            Žádní přiřazení rodiče
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {child.parents.map((parent) => (
-              <div
-                key={parent.id}
-                className="flex items-center gap-1 bg-sage/10 px-2 py-1 rounded-md text-sm"
-              >
-                <span className="text-charcoal">
-                  {parent.name || parent.email || "Neznámý rodič"}
-                </span>
-                <button
-                  onClick={() => onRemoveParent(parent.id)}
-                  disabled={removingParents.has(`${child.id}:${parent.id}`)}
-                  aria-busy={removingParents.has(`${child.id}:${parent.id}`) || undefined}
-                  className="grid min-h-8 min-w-8 place-items-center rounded-md text-charcoal-light hover:bg-coral/10 hover:text-coral transition-colors disabled:opacity-50"
-                  title="Odebrat rodiče"
-                >
-                  {removingParents.has(`${child.id}:${parent.id}`) ? (
-                    <div className="w-3 h-3 border-2 border-coral border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg
-                      className="w-3 h-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  )}
-                </button>
+      <div id={`child-details-${child.id}`} hidden={!isExpanded}>
+        <div className="mt-3 space-y-3 border-t border-cream-dark pt-3">
+          {isEditing ? (
+            <div className="flex-1 space-y-3">
+              {editError && <p role="alert" className="text-sm text-coral">{editError}</p>}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <Input
+                  value={editFirstName}
+                  onChange={(e) => setEditFirstName(e.target.value)}
+                  aria-label="Jméno dítěte"
+                  placeholder="Jméno"
+                />
+                <Input
+                  value={editLastName}
+                  onChange={(e) => setEditLastName(e.target.value)}
+                  aria-label="Příjmení dítěte"
+                  placeholder="Příjmení"
+                />
+                <Select
+                  value={editGender}
+                  onChange={(e) => setEditGender(e.target.value as ChildGender | "")}
+                  options={[
+                    { value: "", label: "-- Pohlaví --" },
+                    { value: "FEMALE", label: "Dívka" },
+                    { value: "MALE", label: "Chlapec" },
+                  ]}
+                  aria-label="Pohlaví"
+                  required
+                />
+                <div className="flex flex-wrap gap-2 sm:col-span-2 xl:col-span-3">
+                  <Button
+                    size="sm"
+                    onClick={onSaveEdit}
+                    isLoading={isSavingEdit}
+                    disabled={!editGender || !editAttendanceStartDate}
+                  >
+                    Uložit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onCancelEdit}
+                    disabled={isSavingEdit}
+                  >
+                    Zrušit
+                  </Button>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-        <InviteParent child={child} onInvited={onParentInvited} />
+              <Input
+                id={`edit-child-attendance-start-${child.id}`}
+                label="Datum nástupu"
+                type="date"
+                value={editAttendanceStartDate}
+                onChange={(event) => setEditAttendanceStartDate(event.target.value)}
+                disabled={isSavingEdit}
+                required
+              />
+              <Toggle
+                label="Neodebírá obědy"
+                description="Omluvenky se schválí automaticky a dítě nebude v přehledu Obědy."
+                checked={editDoesNotTakeLunch}
+                onChange={(event) => setEditDoesNotTakeLunch(event.target.checked)}
+                disabled={isSavingEdit}
+              />
+              <fieldset>
+                <legend className="mb-2 text-sm font-semibold text-charcoal">Docházka</legend>
+                <div className="flex flex-wrap gap-2">
+                  {["Pondělí", "Úterý", "Středa", "Čtvrtek"].map((label, index) => {
+                    const day = index + 1;
+                    const attends = editAttendanceDays.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        aria-pressed={attends}
+                        disabled={isSavingEdit}
+                        onClick={() => setEditAttendanceDays(attends
+                          ? editAttendanceDays.filter((value) => value !== day)
+                          : [...editAttendanceDays, day].sort())}
+                        className={`min-h-11 rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 ${attends
+                          ? "border-sage bg-sage/15 text-sage-dark"
+                          : "border-sky-200 bg-sky-50 text-sky-700"}`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-sm text-charcoal-light">Vyberte dny, kdy dítě pravidelně chodí do Habitatu.</p>
+              </fieldset>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-charcoal-light">Nástup: {parseDayDate(getAttendanceStartDate(child)).toLocaleDateString("cs-CZ")}</p>
+              {child.gender === null && <Badge variant="excused" className="text-xs">Doplňte pohlaví</Badge>}
+              {child.doesNotTakeLunch && <Badge variant="info" className="text-xs">Bez obědů</Badge>}
+              {!child.active && <Badge variant="default" className="text-xs">Neaktivní</Badge>}
+            </div>
+          )}
+        </div>
+
+        <ChildFund child={child} onSaved={onFundSaved} />
+
+        {/* Parents list */}
+        <div className="mt-3 pt-3 border-t border-cream-dark">
+          <p className="text-xs text-charcoal-light uppercase tracking-wide mb-2">
+            Přiřazení rodiče:
+          </p>
+          {child.parents.length === 0 ? (
+            <p className="text-sm text-charcoal-light italic">
+              Žádní přiřazení rodiče
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {child.parents.map((parent) => (
+                <div
+                  key={parent.id}
+                  className="flex min-w-0 items-center justify-between gap-2 bg-sage/10 px-3 py-2 rounded-md text-sm"
+                >
+                  <div className="min-w-0 break-words">
+                    <p className="font-medium text-charcoal">{parent.name || "Rodič bez jména"}</p>
+                    <p className="text-charcoal-light [overflow-wrap:anywhere]">{parent.email || "E-mail není uveden"}</p>
+                  </div>
+                  <button
+                    onClick={() => onRemoveParent(parent.id)}
+                    disabled={removingParents.has(`${child.id}:${parent.id}`)}
+                    aria-busy={removingParents.has(`${child.id}:${parent.id}`) || undefined}
+                    className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-md text-charcoal-light hover:bg-coral/10 hover:text-coral transition-colors disabled:opacity-50"
+                    aria-label={`Odebrat rodiče ${parent.name || parent.email || "bez jména"}`}
+                    title="Odebrat rodiče"
+                  >
+                    {removingParents.has(`${child.id}:${parent.id}`) ? (
+                      <div className="w-3 h-3 border-2 border-coral border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <InviteParent child={child} onInvited={onParentInvited}>
+            <Button type="button" size="sm" variant="outline" className="min-h-10" onClick={onOpenAssignModal}>
+              Přiřadit rodiče
+            </Button>
+          </InviteParent>
+        </div>
+        <div className="mt-4 border-t border-cream-dark pt-3">
+          <Button
+            type="button"
+            size="sm"
+            variant={child.active ? "ghost" : "outline"}
+            className={`min-h-10 ${child.active ? "text-coral-dark hover:bg-coral/10" : "text-sage-dark"}`}
+            onClick={onToggleActive}
+            isLoading={togglingIds.has(child.id)}
+          >
+            {child.active ? "Deaktivovat" : "Aktivovat"}
+          </Button>
+        </div>
       </div>
     </div>
   );
