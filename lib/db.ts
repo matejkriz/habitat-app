@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { calendarSigningKeyId } from "./calendar-subscription-token";
 import { getAttendanceStartDate, parseAttendanceStartDate } from "./attendance-start";
 import { ConvexHttpClient } from "convex/browser";
 import { getFunctionName, type FunctionReference } from "convex/server";
@@ -1354,6 +1355,15 @@ export const db: any = {
         secret: getServerSecret(),
         ...args,
       }),
+  },
+
+  calendarSubscriptions: {
+    upsert: async (args: { userId: string; nonce: string; tokenHash: string; rotate: boolean }) =>
+      await convexMutation(api.calendarFeeds.upsertSubscription, { secret: getServerSecret(), signingKeyId: calendarSigningKeyId(), ...args }),
+    revoke: async (userId: string) =>
+      await convexMutation(api.calendarFeeds.revokeSubscription, { secret: getServerSecret(), userId }),
+    readFeed: async (tokenHash: string, calendar: "habitat" | "jidelnicek") =>
+      await convexMutation(api.calendarFeeds.readFeed, { secret: getServerSecret(), signingKeyId: calendarSigningKeyId(), tokenHash, calendar }),
   },
 
   notifications: {

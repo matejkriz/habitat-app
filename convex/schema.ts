@@ -17,6 +17,27 @@ const excuseStatus = v.union(
 const auditAction = v.union(v.literal("CREATE"), v.literal("UPDATE"), v.literal("DELETE"));
 
 export default defineSchema({
+  calendarSubscriptions: defineTable({
+    userId: v.string(),
+    nonce: v.string(),
+    tokenHash: v.string(),
+    signingKeyId: v.string(),
+    updatedAt: v.number(),
+  }).index("by_user", { fields: ["userId"] })
+    .index("by_token_hash", { fields: ["tokenHash"] }),
+
+  // Published revisions retain cancellations even if the original record is deleted.
+  calendarFeedEvents: defineTable({
+    calendar: v.union(v.literal("habitat"), v.literal("jidelnicek")),
+    id: v.string(),
+    date: v.string(),
+    summary: v.string(),
+    description: v.optional(v.string()),
+    updatedAt: v.number(),
+    sequence: v.number(),
+    cancelled: v.boolean(),
+  }).index("by_calendar_date", { fields: ["calendar", "date"] }),
+
   mealSyncState: defineTable({
     key: v.string(),
     lastAttemptAt: v.number(),
