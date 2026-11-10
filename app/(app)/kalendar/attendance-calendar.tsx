@@ -154,7 +154,7 @@ function CalendarDayButton({
           {day.isLunchCancelled && (
             <span
               title="Bez oběda"
-              className="grid size-7 place-items-center rounded-full bg-charcoal/10 text-charcoal-light"
+              className="grid size-5 shrink-0 place-items-center rounded-full bg-charcoal/10 text-charcoal-light sm:size-7"
             >
               <NoLunchIcon />
             </span>
@@ -213,10 +213,16 @@ function CalendarDayButton({
           </div>
         </div>
       )}
-      <span className="mt-auto block w-full truncate pt-2 text-[11px] font-semibold leading-4 text-charcoal sm:text-xs" title={day.name ?? undefined}>
-        {day.name || "\u00a0"}
-      </span>
-      <DayMeal meal={day.meal} mealCount={canManageDetails ? day.mealCount : undefined} compact className="mt-1" />
+      {day.name && (
+        <span className="mt-2 w-full line-clamp-2 break-words text-[11px] font-semibold leading-4 text-charcoal sm:text-xs" title={day.name}>
+          {day.name}
+        </span>
+      )}
+      {(day.meal?.trim() || (canManageDetails && day.mealCount != null)) && (
+        <span className="mt-auto block w-full pt-3">
+          <DayMeal meal={day.meal} mealCount={canManageDetails ? day.mealCount : undefined} layout="calendar" />
+        </span>
+      )}
     </button>
   );
 }

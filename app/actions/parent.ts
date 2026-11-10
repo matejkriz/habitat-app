@@ -344,7 +344,7 @@ export const getChildCalendarMonth = async (childId: string, month: string) => {
     closedDays: closedDays.map((day) => day.date),
   }).map(day => {
     const details = detailsByDate.get(day.date);
-    return { ...day, name: details?.name ?? null, meal: details?.meal ?? null };
+    return { ...day, name: details?.name ?? null, meal: child?.doesNotTakeLunch ? null : details?.meal ?? null };
   });
 };
 

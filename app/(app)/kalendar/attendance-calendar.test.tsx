@@ -410,7 +410,7 @@ describe("AttendanceCalendar month limit", () => {
   const name = "Jarmark a výlet na velmi vzdálený hrad s dlouhým názvem";
   const days = buildAttendanceCalendar({ month: new Date(2026, 7, 1), today: new Date(2026, 7, 3), children, attendance: [], excuses: [], closedDays: [], noLunchDays: [] });
   render(<AttendanceCalendar startMonthKey={null} initialMonth={{ monthKey: "2026-08", totalChildren: 2, days: days.map(day => ({ ...day, name: day.dateKey === "2026-08-04" ? name : null })) }} />);
-  const event = screen.getAllByText(name).find(element => element.className.includes("truncate"));
+  const event = screen.getAllByText(name).find(element => element.closest("button"));
   expect(event).toBeTruthy();
   fireEvent.click(event!.closest("button")!);
   expect(within(screen.getByRole("dialog")).getByText(name)).toBeTruthy();
