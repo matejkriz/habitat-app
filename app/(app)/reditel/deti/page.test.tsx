@@ -371,6 +371,43 @@ describe("ChildrenManagementPage", () => {
     expect(screen.getByLabelText("Jméno dítěte")).toBeTruthy();
   });
 
+  it("expands and collapses all active and inactive children even while the list is filtered", async () => {
+    const child = { lastName: "Malá", gender: "FEMALE", doesNotTakeLunch: false, parents: [] };
+    mocks.getAllChildrenWithParents.mockResolvedValue([
+      { ...child, id: "anna", firstName: "Anna", active: true },
+      { ...child, id: "eva", firstName: "Eva", active: false },
+    ]);
+    render(<ChildrenManagementPage />);
+    const anna = await screen.findByRole("button", { name: "Anna Malá" });
+    expect(screen.getByRole("button", { name: "Eva Malá" }).getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(anna);
+    expect(screen.getByRole("button", { name: "Rozbalit vše" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rozbalit vše" }));
+    expect(screen.getByRole("button", { name: "Sbalit vše" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "" } });
+    for (const name of ["Anna Malá", "Eva Malá"]) {
+      expect(screen.getByRole("button", { name }).getAttribute("aria-expanded")).toBe("true");
+    }
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "Eva" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sbalit vše" }));
+    fireEvent.change(screen.getByLabelText("Vyhledat dítě"), { target: { value: "" } });
+    for (const name of ["Anna Malá", "Eva Malá"]) {
+      expect(screen.getByRole("button", { name }).getAttribute("aria-expanded")).toBe("false");
+    }
+    expect(screen.getByRole("button", { name: "Rozbalit vše" })).toBeTruthy();
+  });
+
+  it("disables the bulk toggle while loading and when there are no children", async () => {
+    let finish!: (children: []) => void;
+    mocks.getAllChildrenWithParents.mockReturnValueOnce(new Promise<[]>(resolve => { finish = resolve; }));
+    render(<ChildrenManagementPage />);
+    expect((screen.getByRole("button", { name: "Rozbalit vše" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => finish([]));
+    expect(screen.getByText("Zobrazeno 0 z 0 dětí")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Rozbalit vše" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("requires confirmation, supports cancellation, and locks deactivation while saving", async () => {
     let finish!: () => void;
     mocks.toggleChildActive.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));

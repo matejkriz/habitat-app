@@ -331,6 +331,11 @@ export default function ChildrenManagementPage() {
     });
   const activeChildren = visibleChildren.filter((c) => c.active);
   const inactiveChildren = visibleChildren.filter((c) => !c.active);
+  const allChildrenExpanded = children.length > 0 && children.every(child => expandedIds.has(child.id));
+
+  const toggleAllExpanded = () => {
+    setExpandedIds(allChildrenExpanded ? new Set() : new Set(children.map(child => child.id)));
+  };
 
   return (
     <div className="space-y-6">
@@ -452,6 +457,9 @@ export default function ChildrenManagementPage() {
       </Card>
 
       <Card className="p-4 sm:p-6">
+        <CardHeader>
+          <h2 className="text-xl font-bold text-charcoal">Seznam dětí</h2>
+        </CardHeader>
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
           <Input
             id="children-search"
@@ -475,142 +483,158 @@ export default function ChildrenManagementPage() {
             ]}
           />
         </div>
-        {!isLoading && <p className="mt-3 text-sm text-charcoal-light" aria-live="polite">Zobrazeno {visibleChildren.length} z {children.length} dětí</p>}
-      </Card>
-      {toggleError && !deactivatingChild && <p role="alert" className="text-sm text-coral-dark">{toggleError}</p>}
-
-      {/* Children list */}
-      <Card className="p-4 sm:p-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <svg
-              className="w-5 h-5 text-sage"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-              />
+        <div className="mt-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-cream-dark pb-4">
+          <p className="text-sm text-charcoal-light" aria-live="polite">
+            {isLoading ? "Načítání dětí…" : `Zobrazeno ${visibleChildren.length} z ${children.length} dětí`}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            disabled={isLoading || children.length === 0}
+            onClick={toggleAllExpanded}
+          >
+            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={allChildrenExpanded ? "m7 10 5-5 5 5M7 19l5-5 5 5" : "m7 5 5 5 5-5M7 14l5 5 5-5"} />
             </svg>
-            Aktivní děti ({activeChildren.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin h-8 w-8 border-4 border-gold border-t-transparent rounded-full" />
-            </div>
-          ) : activeChildren.length === 0 ? (
-            <p className="text-charcoal-light text-center py-8">
-              {searchTerms.length ? "Vyhledávání neodpovídají žádné aktivní děti." : "Žádné aktivní děti"}
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {activeChildren.map((child) => (
-                <ChildRow
-                  key={child.id}
-                  child={child}
-                  isExpanded={expandedIds.has(child.id)}
-                  onToggleExpanded={() => toggleExpanded(child.id)}
-                  isEditing={editingChildId === child.id}
-                  editFirstName={editFirstName}
-                  editLastName={editLastName}
-                  editGender={editGender}
-                  editDoesNotTakeLunch={editDoesNotTakeLunch}
-                  editAttendanceStartDate={editAttendanceStartDate}
-                  setEditAttendanceStartDate={setEditAttendanceStartDate}
-                  editError={editError}
-                  editAttendanceDays={editAttendanceDays}
-                  setEditAttendanceDays={setEditAttendanceDays}
-                  setEditFirstName={setEditFirstName}
-                  setEditLastName={setEditLastName}
-                  setEditGender={setEditGender}
-                  setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
-                  isSavingEdit={isSavingEdit}
-                  togglingIds={togglingIds}
-                  removingParents={removingParents}
-                  onStartEdit={() => handleStartEdit(child)}
-                  onCancelEdit={handleCancelEdit}
-                  onSaveEdit={handleSaveEdit}
-                  onToggleActive={() => {
-                    if (child.active) {
-                      setToggleError("");
-                      setDeactivatingChild(child);
-                    } else {
-                      void handleToggleActive(child.id, child.active);
-                    }
-                  }}
-                  onOpenAssignModal={() => handleOpenAssignModal(child.id)}
-                  onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
-                  onParentInvited={(parent) => handleParentInvited(child.id, parent)}
-                  onFundSaved={(fundSent) => setChildren(current => current.map(existing => existing.id === child.id ? { ...existing, fundSent } : existing))}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            {allChildrenExpanded ? "Sbalit vše" : "Rozbalit vše"}
+          </Button>
+        </div>
+        {toggleError && !deactivatingChild && <p role="alert" className="mb-4 text-sm text-coral-dark">{toggleError}</p>}
 
-      {/* Inactive children */}
-      {children.some(child => !child.active) && (
-        <Card className="p-4 sm:p-6">
+        <section aria-labelledby="active-children-title">
           <CardHeader>
-            <CardTitle className="text-charcoal-light">
-              Neaktivní děti ({inactiveChildren.length})
+            <CardTitle id="active-children-title" className="flex items-center gap-2 text-lg">
+              <svg
+                aria-hidden="true"
+                className="w-5 h-5 text-sage"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                />
+              </svg>
+              Aktivní děti ({activeChildren.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {inactiveChildren.length === 0 && <p className="py-8 text-center text-charcoal-light">Vyhledávání neodpovídají žádné neaktivní děti.</p>}
-              {inactiveChildren.map((child) => (
-                <ChildRow
-                  key={child.id}
-                  child={child}
-                  isExpanded={expandedIds.has(child.id)}
-                  onToggleExpanded={() => toggleExpanded(child.id)}
-                  isEditing={editingChildId === child.id}
-                  editFirstName={editFirstName}
-                  editLastName={editLastName}
-                  editGender={editGender}
-                  editDoesNotTakeLunch={editDoesNotTakeLunch}
-                  editAttendanceStartDate={editAttendanceStartDate}
-                  setEditAttendanceStartDate={setEditAttendanceStartDate}
-                  editError={editError}
-                  editAttendanceDays={editAttendanceDays}
-                  setEditAttendanceDays={setEditAttendanceDays}
-                  setEditFirstName={setEditFirstName}
-                  setEditLastName={setEditLastName}
-                  setEditGender={setEditGender}
-                  setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
-                  isSavingEdit={isSavingEdit}
-                  togglingIds={togglingIds}
-                  removingParents={removingParents}
-                  onStartEdit={() => handleStartEdit(child)}
-                  onCancelEdit={handleCancelEdit}
-                  onSaveEdit={handleSaveEdit}
-                  onToggleActive={() => {
-                    if (child.active) {
-                      setToggleError("");
-                      setDeactivatingChild(child);
-                    } else {
-                      void handleToggleActive(child.id, child.active);
-                    }
-                  }}
-                  onOpenAssignModal={() => handleOpenAssignModal(child.id)}
-                  onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
-                  onParentInvited={(parent) => handleParentInvited(child.id, parent)}
-                  onFundSaved={(fundSent) => setChildren(current => current.map(existing => existing.id === child.id ? { ...existing, fundSent } : existing))}
-                  inactive
-                />
-              ))}
-            </div>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin h-8 w-8 border-4 border-gold border-t-transparent rounded-full" />
+              </div>
+            ) : activeChildren.length === 0 ? (
+              <p className="text-charcoal-light text-center py-8">
+                {searchTerms.length ? "Vyhledávání neodpovídají žádné aktivní děti." : "Žádné aktivní děti"}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {activeChildren.map((child) => (
+                  <ChildRow
+                    key={child.id}
+                    child={child}
+                    isExpanded={expandedIds.has(child.id)}
+                    onToggleExpanded={() => toggleExpanded(child.id)}
+                    isEditing={editingChildId === child.id}
+                    editFirstName={editFirstName}
+                    editLastName={editLastName}
+                    editGender={editGender}
+                    editDoesNotTakeLunch={editDoesNotTakeLunch}
+                    editAttendanceStartDate={editAttendanceStartDate}
+                    setEditAttendanceStartDate={setEditAttendanceStartDate}
+                    editError={editError}
+                    editAttendanceDays={editAttendanceDays}
+                    setEditAttendanceDays={setEditAttendanceDays}
+                    setEditFirstName={setEditFirstName}
+                    setEditLastName={setEditLastName}
+                    setEditGender={setEditGender}
+                    setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
+                    isSavingEdit={isSavingEdit}
+                    togglingIds={togglingIds}
+                    removingParents={removingParents}
+                    onStartEdit={() => handleStartEdit(child)}
+                    onCancelEdit={handleCancelEdit}
+                    onSaveEdit={handleSaveEdit}
+                    onToggleActive={() => {
+                      if (child.active) {
+                        setToggleError("");
+                        setDeactivatingChild(child);
+                      } else {
+                        void handleToggleActive(child.id, child.active);
+                      }
+                    }}
+                    onOpenAssignModal={() => handleOpenAssignModal(child.id)}
+                    onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
+                    onParentInvited={(parent) => handleParentInvited(child.id, parent)}
+                    onFundSaved={(fundSent) => setChildren(current => current.map(existing => existing.id === child.id ? { ...existing, fundSent } : existing))}
+                  />
+                ))}
+              </div>
+            )}
           </CardContent>
-        </Card>
-      )}
+        </section>
+
+        {/* Inactive children */}
+        {children.some(child => !child.active) && (
+          <section aria-labelledby="inactive-children-title" className="mt-6 border-t border-cream-dark pt-6">
+            <CardHeader>
+              <CardTitle id="inactive-children-title" className="text-lg text-charcoal-light">
+                Neaktivní děti ({inactiveChildren.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {inactiveChildren.length === 0 && <p className="py-8 text-center text-charcoal-light">Vyhledávání neodpovídají žádné neaktivní děti.</p>}
+                {inactiveChildren.map((child) => (
+                  <ChildRow
+                    key={child.id}
+                    child={child}
+                    isExpanded={expandedIds.has(child.id)}
+                    onToggleExpanded={() => toggleExpanded(child.id)}
+                    isEditing={editingChildId === child.id}
+                    editFirstName={editFirstName}
+                    editLastName={editLastName}
+                    editGender={editGender}
+                    editDoesNotTakeLunch={editDoesNotTakeLunch}
+                    editAttendanceStartDate={editAttendanceStartDate}
+                    setEditAttendanceStartDate={setEditAttendanceStartDate}
+                    editError={editError}
+                    editAttendanceDays={editAttendanceDays}
+                    setEditAttendanceDays={setEditAttendanceDays}
+                    setEditFirstName={setEditFirstName}
+                    setEditLastName={setEditLastName}
+                    setEditGender={setEditGender}
+                    setEditDoesNotTakeLunch={setEditDoesNotTakeLunch}
+                    isSavingEdit={isSavingEdit}
+                    togglingIds={togglingIds}
+                    removingParents={removingParents}
+                    onStartEdit={() => handleStartEdit(child)}
+                    onCancelEdit={handleCancelEdit}
+                    onSaveEdit={handleSaveEdit}
+                    onToggleActive={() => {
+                      if (child.active) {
+                        setToggleError("");
+                        setDeactivatingChild(child);
+                      } else {
+                        void handleToggleActive(child.id, child.active);
+                      }
+                    }}
+                    onOpenAssignModal={() => handleOpenAssignModal(child.id)}
+                    onRemoveParent={(parentId) => handleRemoveParent(parentId, child.id)}
+                    onParentInvited={(parent) => handleParentInvited(child.id, parent)}
+                    onFundSaved={(fundSent) => setChildren(current => current.map(existing => existing.id === child.id ? { ...existing, fundSent } : existing))}
+                    inactive
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </section>
+        )}
+      </Card>
 
       {deactivatingChild && (
         <DeactivateChildDialog
