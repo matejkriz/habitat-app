@@ -7,7 +7,10 @@ import { validateCrowns } from "@/lib/day-details";
 
 const crowns = (value: number) => `${new Intl.NumberFormat("cs-CZ").format(value)} Kč`;
 
-export function ChildFund({ child }: { child: ChildWithParents }) {
+export function ChildFund({ child, onSaved }: {
+  child: ChildWithParents;
+  onSaved: (fundSent: number | null) => void;
+}) {
   const [fundSent, setFundSent] = useState(child.fundSent ?? null);
   const [amount, setAmount] = useState(fundSent?.toString() ?? "");
   const [editing, setEditing] = useState(false);
@@ -26,6 +29,7 @@ export function ChildFund({ child }: { child: ChildWithParents }) {
       setSaving(true);
       await updateChild(child.id, { fundSent: value });
       setFundSent(value);
+      onSaved(value);
       setEditing(false);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Fond se nepodařilo uložit.");
