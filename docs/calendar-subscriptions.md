@@ -1,9 +1,12 @@
 # Odběry kalendářů
 
-Pod kalendářem rodičů i zaměstnanců jsou rovnou dvě tlačítka s ikonou kalendáře.
-Kliknutí zkopíruje příslušný odběrový odkaz do schránky a tlačítko krátce zobrazí
-**Zkopírováno**. Nezobrazuje se další vysvětlení ani správa odběrů. Oba společné
-kalendáře jsou pouze pro čtení:
+Pod kalendářem rodičů i zaměstnanců jsou dvě tlačítka **Odebírat události** a
+**Odebírat jídelníček**. Každé otevře nabídku Apple Kalendář, Google Kalendář,
+Outlook a záložní kopírování odkazu. Apple spouští `webcal:`, Google a Outlook
+otevřou webové přidání odběru s předvyplněnou URL. Tato aplikace nedostává
+potvrzení dokončeného přidání v cílové službě. Google může na mobilu vyžadovat
+přidání ve webovém rozhraní na počítači. Správa a obnova odkazů není součástí UI.
+Oba společné kalendáře jsou pouze pro čtení:
 
 - **Habitat**: názvy programu dne a mimořádná uzavření z `closedDays`.
 - **Habitat jídelníček**: skutečně objednaná jídla uložená synchronizací v aplikaci.

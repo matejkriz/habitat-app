@@ -17,10 +17,11 @@ async function links(page: Page, path: string) {
 }
 
 async function copyLink(page: Page, calendar: string) {
-  const button = page.getByRole("button", { name: `Kopírovat odkaz na kalendář ${calendar}`, exact: true });
+  await page.getByRole("button", { name: calendar === "Habitat" ? "Odebírat události" : "Odebírat jídelníček", exact: true }).click();
+  const button = page.getByRole("button", { name: "Kopírovat odkaz", exact: true });
   await expect(button).toBeEnabled();
   await button.click();
-  await expect(button).toHaveText("Zkopírováno");
+  await expect(page.getByRole("button", { name: "Zkopírováno", exact: true })).toBeVisible();
   return page.evaluate(() => navigator.clipboard.readText());
 }
 
@@ -28,7 +29,7 @@ test("shared calendar copy buttons provide stable feeds that update and cancel w
   test.setTimeout(120_000);
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const anonymous = await request.newContext({ storageState: { cookies: [], origins: [] } });
-  const programMarker = `CalendarProgram${Date.now()}`;
+  const programMarker = `CalendarProgram ${Date.now()}`;
   const mealMarker = `CalendarMeal${Date.now()}`;
   const privateMarker = `CalendarPrivate${Date.now()}`;
   await persona(page, "director-bohumil");
