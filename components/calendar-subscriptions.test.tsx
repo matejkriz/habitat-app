@@ -27,6 +27,8 @@ describe("calendar subscription choices", () => {
     expect(outlook.searchParams.get("url")).toBe(links.habitat);
     expect(outlook.searchParams.get("name")).toBe("Habitat");
     expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Odebírat jídelníček" }));
+    expect(screen.queryByRole("link")).toBeNull();
     await open("Odebírat jídelníček");
     expect(screen.getByRole("link", { name: "Apple Kalendář" }).getAttribute("href")).toBe(links.jidelnicek.replace("https:", "webcal:"));
     expect(getLinks).toHaveBeenCalledTimes(1);
@@ -40,6 +42,21 @@ describe("calendar subscription choices", () => {
     expect(screen.queryByRole("link")).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Odebírat události" }));
     await open(); fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+  it("anchors the menu to its trigger and closes on either trigger instead of switching feeds", async () => {
+    render(<CalendarSubscriptions />);
+    const events = screen.getByRole("button", { name: "Odebírat události" });
+    const meals = screen.getByRole("button", { name: "Odebírat jídelníček" });
+    vi.spyOn(meals, "getBoundingClientRect").mockReturnValue({ left: 240, bottom: 144 } as DOMRect);
+    await open("Odebírat jídelníček");
+    const menu = screen.getByRole("group", { name: "Odběr kalendáře Habitat jídelníček" });
+    expect(menu.style.left).toBe("240px");
+    expect(menu.style.top).toBe("144px");
+    expect(meals.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(events);
+    expect(screen.queryByRole("link")).toBeNull();
+    await open(); fireEvent.click(events);
     expect(screen.queryByRole("link")).toBeNull();
   });
   it("allows retry after link loading fails", async () => {

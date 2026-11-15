@@ -13,10 +13,21 @@ async function editor(page: Page) {
 }
 async function links(page: Page, path: string) {
   await page.goto(path);
+  const events = page.getByRole("button", { name: "Odebírat události", exact: true });
+  const meals = page.getByRole("button", { name: "Odebírat jídelníček", exact: true });
+  await events.click();
+  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toBeVisible();
+  await meals.click();
+  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveCount(0);
+  await meals.click();
+  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toBeVisible();
+  await meals.click();
+  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveCount(0);
   return { habitat: await copyLink(page, "Habitat"), jidelnicek: await copyLink(page, "Habitat jídelníček") };
 }
 
 async function copyLink(page: Page, calendar: string) {
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: calendar === "Habitat" ? "Odebírat události" : "Odebírat jídelníček", exact: true }).click();
   const button = page.getByRole("button", { name: "Kopírovat odkaz", exact: true });
   await expect(button).toBeEnabled();
