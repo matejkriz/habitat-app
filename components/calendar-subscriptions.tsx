@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getCalendarSubscriptionLinks } from "@/app/actions/calendar-subscriptions";
+import { CalendarProviderIcon } from "@/components/calendar-provider-icon";
 import { Button } from "@/components/ui/button";
 
 type Calendar = "habitat" | "jidelnicek";
@@ -117,7 +118,7 @@ export function CalendarSubscriptions() {
   const url = active && readyLinks ? readyLinks[active] : null;
   // Google recognizes external subscriptions through the webcal scheme in cid.
   const webcalUrl = url?.replace(/^https?:/, "webcal:") ?? "";
-  const optionClass = "flex min-h-11 w-full items-center rounded-lg px-3 py-2 text-left text-sm text-charcoal hover:bg-cream-dark focus-visible:outline-2 focus-visible:outline-gold";
+  const optionClass = "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-charcoal hover:bg-cream-dark focus-visible:outline-2 focus-visible:outline-gold";
 
   return (
     <div ref={container} className="relative w-fit max-w-full">
@@ -141,11 +142,11 @@ export function CalendarSubscriptions() {
           className="absolute z-30 mt-2 w-72 max-w-[calc(100vw-3rem)] rounded-xl bg-white p-2 shadow-lg">
           {loading ? <p role="status" className="px-3 py-2 text-sm text-charcoal-light">Načítání odkazů…</p> : null}
           {!loading && url ? <>
-            <a className={optionClass} href={webcalUrl}>Apple Kalendář</a>
+            <a className={optionClass} href={webcalUrl}><CalendarProviderIcon provider="apple" />Apple Kalendář</a>
             <a className={optionClass} target="_blank" rel="noreferrer"
-              href={`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(webcalUrl)}`}>Google Kalendář</a>
+              href={`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(webcalUrl)}`}><CalendarProviderIcon provider="google" />Google Kalendář</a>
             <a className={optionClass} target="_blank" rel="noreferrer"
-              href={`https://outlook.live.com/calendar/0/addfromweb/?url=${encodeURIComponent(url)}&name=${encodeURIComponent(calendar.name)}`}>Outlook</a>
+              href={`https://outlook.live.com/calendar/0/addfromweb/?url=${encodeURIComponent(url)}&name=${encodeURIComponent(calendar.name)}`}><CalendarProviderIcon provider="outlook" />Outlook</a>
             <button type="button" disabled={pending !== null} className={`${optionClass} mt-1 border-t border-cream-dark`}
               onClick={() => void copyLink(calendar)}>{copied === calendar.key ? "Zkopírováno" : "Kopírovat odkaz"}</button>
           </> : null}
