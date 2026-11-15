@@ -119,16 +119,16 @@ export function CalendarSubscriptions() {
 
   return (
     <div ref={container} className="relative w-fit max-w-full">
-      <div role="group" aria-label="Kalendáře k odběru" className="flex flex-wrap gap-2">
+      <div role="group" aria-label="Kalendáře k odběru" className="flex gap-2">
         {calendars.map(calendar => (
-          <Button key={calendar.key} type="button" variant="outline" size="sm" className={`min-h-11 text-charcoal ${active === calendar.key ? "bg-cream-dark" : ""}`}
+          <Button key={calendar.key} type="button" variant="outline" size="sm" className={`min-h-11 flex-1 whitespace-normal text-charcoal ${active === calendar.key ? "bg-cream-dark" : ""}`}
             aria-expanded={active === calendar.key}
             aria-controls={active === calendar.key ? `calendar-options-${calendar.key}` : undefined}
             onClick={event => void openCalendar(calendar.key, event.currentTarget)}>
             <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
             </svg>
-            {calendar.label}
+            <span className="min-w-0 text-left leading-tight">{calendar.label}</span>
             <svg aria-hidden="true" className={`h-3 w-3 ${active === calendar.key ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
           </Button>
         ))}

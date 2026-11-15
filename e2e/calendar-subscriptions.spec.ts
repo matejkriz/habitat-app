@@ -15,8 +15,11 @@ async function links(page: Page, path: string) {
   await page.goto(path);
   const events = page.getByRole("button", { name: "Odebírat události", exact: true });
   const meals = page.getByRole("button", { name: "Odebírat jídelníček", exact: true });
+  await page.setViewportSize({ width: 320, height: 900 });
   await events.click();
   await expect(page.getByRole("link", { name: "Apple Kalendář" })).toBeVisible();
+  expect((await meals.boundingBox())!.y).toBe((await events.boundingBox())!.y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   await meals.click();
   await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveCount(0);
   await meals.click();
