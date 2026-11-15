@@ -22,13 +22,14 @@ describe("calendar subscription choices", () => {
     await open();
     expect(screen.getByRole("link", { name: "Apple Kalendář" }).getAttribute("href")).toBe(links.habitat.replace("https:", "webcal:"));
     const google = new URL(screen.getByRole("link", { name: "Google Kalendář" }).getAttribute("href")!);
-    expect(google.searchParams.get("cid")).toBe(links.habitat);
+    expect(google.searchParams.get("cid")).toBe(links.habitat.replace("https:", "webcal:"));
     const outlook = new URL(screen.getByRole("link", { name: "Outlook" }).getAttribute("href")!);
     expect(outlook.searchParams.get("url")).toBe(links.habitat);
     expect(outlook.searchParams.get("name")).toBe("Habitat");
     expect(writeText).not.toHaveBeenCalled();
     await open("Odebírat jídelníček");
     expect(screen.getByRole("link", { name: "Apple Kalendář" }).getAttribute("href")).toBe(links.jidelnicek.replace("https:", "webcal:"));
+    expect(new URL(screen.getByRole("link", { name: "Google Kalendář" }).getAttribute("href")!).searchParams.get("cid")).toBe(links.jidelnicek.replace("https:", "webcal:"));
     expect(getLinks).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Kopírovat odkaz" }));
     await screen.findByRole("button", { name: "Zkopírováno" });

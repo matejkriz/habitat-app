@@ -15,9 +15,24 @@ async function links(page: Page, path: string) {
   await page.goto(path);
   const events = page.getByRole("button", { name: "Odebírat události", exact: true });
   const meals = page.getByRole("button", { name: "Odebírat jídelníček", exact: true });
+  for (const width of [320, 390, 470, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const button of [events, meals]) {
+      const fits = await button.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const label = element.querySelector("span")!.getBoundingClientRect();
+        return label.top >= bounds.top + 8 && label.bottom <= bounds.bottom - 8 &&
+          element.scrollWidth <= element.clientWidth && bounds.height >= 44;
+      });
+      expect(fits).toBe(true);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
   await page.setViewportSize({ width: 320, height: 900 });
   await events.click();
   await expect(page.getByRole("link", { name: "Apple Kalendář" })).toBeVisible();
+  const googleUrl = new URL((await page.getByRole("link", { name: "Google Kalendář" }).getAttribute("href"))!);
+  expect(googleUrl.searchParams.get("cid")).toBe((await page.getByRole("link", { name: "Apple Kalendář" }).getAttribute("href"))!);
   expect((await meals.boundingBox())!.y).toBe((await events.boundingBox())!.y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   await meals.click();

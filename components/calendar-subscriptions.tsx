@@ -115,13 +115,15 @@ export function CalendarSubscriptions() {
 
   const calendar = calendars.find(item => item.key === active);
   const url = active && readyLinks ? readyLinks[active] : null;
+  // Google recognizes external subscriptions through the webcal scheme in cid.
+  const webcalUrl = url?.replace(/^https?:/, "webcal:") ?? "";
   const optionClass = "flex min-h-11 w-full items-center rounded-lg px-3 py-2 text-left text-sm text-charcoal hover:bg-cream-dark focus-visible:outline-2 focus-visible:outline-gold";
 
   return (
     <div ref={container} className="relative w-fit max-w-full">
       <div role="group" aria-label="Kalendáře k odběru" className="flex gap-2">
         {calendars.map(calendar => (
-          <Button key={calendar.key} type="button" variant="outline" size="sm" className={`min-h-11 flex-1 whitespace-normal text-charcoal ${active === calendar.key ? "bg-cream-dark" : ""}`}
+          <Button key={calendar.key} type="button" variant="outline" size="sm" className={`h-auto min-h-11 flex-auto whitespace-normal py-2 text-charcoal ${active === calendar.key ? "bg-cream-dark" : ""}`}
             aria-expanded={active === calendar.key}
             aria-controls={active === calendar.key ? `calendar-options-${calendar.key}` : undefined}
             onClick={event => void openCalendar(calendar.key, event.currentTarget)}>
@@ -139,9 +141,9 @@ export function CalendarSubscriptions() {
           className="absolute z-30 mt-2 w-72 max-w-[calc(100vw-3rem)] rounded-xl bg-white p-2 shadow-lg">
           {loading ? <p role="status" className="px-3 py-2 text-sm text-charcoal-light">Načítání odkazů…</p> : null}
           {!loading && url ? <>
-            <a className={optionClass} href={url.replace(/^https?:/, "webcal:")}>Apple Kalendář</a>
+            <a className={optionClass} href={webcalUrl}>Apple Kalendář</a>
             <a className={optionClass} target="_blank" rel="noreferrer"
-              href={`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(url)}`}>Google Kalendář</a>
+              href={`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(webcalUrl)}`}>Google Kalendář</a>
             <a className={optionClass} target="_blank" rel="noreferrer"
               href={`https://outlook.live.com/calendar/0/addfromweb/?url=${encodeURIComponent(url)}&name=${encodeURIComponent(calendar.name)}`}>Outlook</a>
             <button type="button" disabled={pending !== null} className={`${optionClass} mt-1 border-t border-cream-dark`}
