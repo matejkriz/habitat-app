@@ -21,9 +21,13 @@ async function links(page: Page, path: string) {
   expect((await meals.boundingBox())!.y).toBe((await events.boundingBox())!.y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   await meals.click();
-  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Odběr kalendáře Habitat jídelníček", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveAttribute("href", /jidelnicek\.ics$/);
+  await events.click();
+  await expect(page.getByRole("group", { name: "Odběr kalendáře Habitat", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveAttribute("href", /habitat\.ics$/);
   await meals.click();
-  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveAttribute("href", /jidelnicek\.ics$/);
   await meals.click();
   await expect(page.getByRole("link", { name: "Apple Kalendář" })).toHaveCount(0);
   return { habitat: await copyLink(page, "Habitat"), jidelnicek: await copyLink(page, "Habitat jídelníček") };

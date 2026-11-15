@@ -59,7 +59,7 @@ export function CalendarSubscriptions() {
 
   async function openCalendar(calendar: Calendar, button: HTMLButtonElement) {
     trigger.current = button;
-    if (active) { setActive(null); return; }
+    if (active === calendar) { setActive(null); return; }
     setAnchor(menuAnchor(button, container.current!));
     setActive(calendar);
     setError("");
