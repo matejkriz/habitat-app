@@ -1,4 +1,5 @@
 import { DayReportsSection } from "@/components/overview/day-reports";
+import { CalendarSubscriptions } from "@/components/calendar-subscriptions";
 import { DayMeal } from "@/components/days/day-meal";
 import { ParentLunchSection, ParentTripFundSection } from "@/components/overview/parent-overviews";
 import { Suspense } from "react";
@@ -219,13 +220,16 @@ async function CalendarCard({
   const days = await getChildCalendarMonth(childId, month);
 
   return (
-    <AttendanceCalendar
-      childId={childId}
-      childName={childName}
-      childGender={childGender}
-      month={month}
-      days={days}
-    />
+    <div className="space-y-4">
+      <AttendanceCalendar
+        childId={childId}
+        childName={childName}
+        childGender={childGender}
+        month={month}
+        days={days}
+      />
+      <CalendarSubscriptions />
+    </div>
   );
 }
 

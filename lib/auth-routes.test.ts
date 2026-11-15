@@ -16,6 +16,10 @@ describe("WorkOS unauthenticated routes", () => {
     expect(UNAUTHENTICATED_PATHS).toContain("/api/version");
   });
 
+  it("allows calendar services to fetch bearer URL feeds without a browser session", () => {
+    expect(UNAUTHENTICATED_PATHS).toContain("/api/calendars/:path*");
+  });
+
   it("uses Next.js matcher syntax for nested webhook routes", () => {
     expect(UNAUTHENTICATED_PATHS).toContain("/api/webhooks/:path*");
     expect(UNAUTHENTICATED_PATHS).not.toContain("/api/webhooks/**");
